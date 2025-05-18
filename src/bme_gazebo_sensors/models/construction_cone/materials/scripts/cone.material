@@ -1,0 +1,14 @@
+material Cone/Image
+{
+    technique
+    {
+        pass
+        {
+            texture_unit
+            {
+                texture Construction_Cone_Diffuse.png
+            }
+        }
+    }
+}
+

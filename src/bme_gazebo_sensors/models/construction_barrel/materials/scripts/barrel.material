@@ -1,0 +1,14 @@
+material Barrel/Image
+{
+    technique
+    {
+        pass
+        {
+            texture_unit
+            {
+                texture Construction_Barrel_Diffuse.png
+            }
+        }
+    }
+}
+

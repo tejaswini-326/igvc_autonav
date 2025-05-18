@@ -1,2 +1,58 @@
-**/.DS_Store
-**/Thumbs.db
+# Object files
+*.o
+*.obj
+
+# Compiled binary files
+*.exe
+*.out
+*.app
+*.a
+*.lib
+*.so
+*.dll
+
+# Build directories
+/build
+/build-*/
+
+/install
+/log
+/assets
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# IDE-specific
+*.user
+*.userprefs
+*.suo
+*.ncb
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.VC.opendb
+
+# Code::Blocks
+*.depend
+*.layout
+
+# QtCreator
+*.pro.user
+*.qbs.user
+*.creator.*
+*.autosave
+
+# VSCode
+.vscode/
+
+# Backup files
+*~
+*.swp
+*.bak
+*.tmp
+
+# Logs
+*.log
