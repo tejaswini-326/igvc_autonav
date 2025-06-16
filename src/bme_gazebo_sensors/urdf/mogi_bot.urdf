@@ -34,42 +34,42 @@
     <collision name='collision'>
       <origin xyz="0 0 0" rpy=" 0 0 0"/> 
       <geometry>
-        <box size="3.2 1.6 .8"/>
+        <box size="1.6 .8 .4"/>
       </geometry>
     </collision>
 
     <visual name='base_link_visual'>
       <origin xyz="0 0 0" rpy=" 0 0 0"/>
       <geometry>
-        <mesh filename="package://bme_gazebo_sensors/meshes/mogi_bot.dae" scale="8 8 8"/>
+        <mesh filename="package://bme_gazebo_sensors/meshes/mogi_bot.dae" scale="4 4 4"/>
       </geometry>
     </visual>
 
     <collision name='rear_caster_collision'>
-      <origin xyz="-1.2 0 -0.4" rpy=" 0 0 0"/>
+      <origin xyz="-0.6 0 -0.2" rpy=" 0 0 0"/>
       <geometry>
-        <sphere radius="0.3992"/>
+        <sphere radius="0.19975"/>
       </geometry>
     </collision>
 
     <visual name='rear_caster_visual'>
-      <origin xyz="-1.2 0 -0.4" rpy=" 0 0 0"/>
+      <origin xyz="-0.6 0 -0.2" rpy=" 0 0 0"/>
       <geometry>
-        <sphere radius="0.4"/>
+        <sphere radius="0.2"/>
       </geometry>
     </visual>
 
     <collision name='front_caster_collision'>
-      <origin xyz="1.2 0 -0.4" rpy=" 0 0 0"/>
+      <origin xyz="0.6 0 -0.2" rpy=" 0 0 0"/>
       <geometry>
-        <sphere radius="0.3992"/>
+        <sphere radius="0.19975"/>
       </geometry>
     </collision>
 
     <visual name='front_caster_visual'>
-      <origin xyz="1.2 0 -0.4" rpy=" 0 0 0"/>
+      <origin xyz="0.6 0 -0.2" rpy=" 0 0 0"/>
       <geometry>
-        <sphere radius="0.4"/>
+        <sphere radius="0.2"/>
       </geometry>
     </visual>
 
@@ -77,7 +77,7 @@
 
   <!-- STEP 3 - Wheels -->
   <joint type="continuous" name="left_wheel_joint">
-    <origin xyz="0 1.2 0" rpy="0 0 0"/>
+    <origin xyz="0 0.6 0" rpy="0 0 0"/>
     <child link="left_wheel"/>
     <parent link="base_link"/>
     <axis xyz="0 1 0" rpy="0 0 0"/>
@@ -99,20 +99,20 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 1.5707 1.5707"/> 
       <geometry>
-        <cylinder radius=".8" length=".4"/>
+        <cylinder radius=".4" length=".2"/>
       </geometry>
     </collision>
 
     <visual name='left_wheel_visual'>
       <origin xyz="0 0 0" rpy="0 1.5707 1.5707"/>
       <geometry>
-        <mesh filename = "package://bme_gazebo_sensors/meshes/wheel.dae" scale="8 8 8"/>
+        <mesh filename = "package://bme_gazebo_sensors/meshes/wheel.dae" scale="4 4 4"/>
       </geometry>
     </visual>
   </link>
 
   <joint type="continuous" name="right_wheel_joint">
-    <origin xyz="0 -1.2 0" rpy="0 0 0"/>
+    <origin xyz="0 -0.6 0" rpy="0 0 0"/>
     <child link="right_wheel"/>
     <parent link="base_link"/>
     <axis xyz="0 1 0" rpy="0 0 0"/>
@@ -134,14 +134,14 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 1.5707 1.5707"/> 
       <geometry>
-        <cylinder radius=".8" length=".4"/>
+        <cylinder radius=".4" length=".2"/>
       </geometry>
     </collision>
 
     <visual name='right_wheel_visual'>
       <origin xyz="0 0 0" rpy="0 1.5707 1.5707"/>
       <geometry>
-        <mesh filename = "package://bme_gazebo_sensors/meshes/wheel.dae" scale="8 8 8"/>
+        <mesh filename = "package://bme_gazebo_sensors/meshes/wheel.dae" scale="4 4 4"/>
       </geometry>
     </visual>
   </link>
@@ -172,7 +172,7 @@
 
     <!-- STEP 7 - Camera -->
   <joint type="fixed" name="camera_joint">
-    <origin xyz="1.8 0 0.6" rpy="0 0 0"/>
+    <origin xyz="0.9 0 0.3" rpy="0 0 0"/>
     <child link="camera_link"/>
     <parent link="base_link"/>
     <axis xyz="0 1 0" />
@@ -193,14 +193,14 @@
     <collision name='collision'>
       <origin xyz="0 0 0" rpy="0 0 0"/> 
       <geometry>
-        <box size=".24 .24 .24"/>
+        <box size=".12 .12 .12"/>
       </geometry>
     </collision>
 
     <visual name='camera_link_visual'>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <box size=".24 .24 .24"/>
+        <box size=".12 .12 .12"/>
       </geometry>
     </visual>
   </link>
@@ -217,7 +217,7 @@
 
     <!-- STEP 10 - Lidar -->
   <joint type="fixed" name="scan_joint">
-    <origin xyz="0.0 0 1.2" rpy="0 0 0"/>
+    <origin xyz="0.0 0 0.6" rpy="0 0 0"/>
     <child link="scan_link"/>
     <parent link="base_link"/>
     <axis xyz="0 1 0" rpy="0 0 0"/>
@@ -236,14 +236,14 @@
     <collision name='collision'>
       <origin xyz="0 0 0" rpy="0 0 0"/> 
       <geometry>
-        <box size=".8 .8 .8"/>
+        <box size=".4 .4 .4"/>
       </geometry>
     </collision>
 
     <visual name='scan_link_visual'>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename = "package://bme_gazebo_sensors/meshes/lidar.dae" scale="8 8 8"/>
+        <mesh filename = "package://bme_gazebo_sensors/meshes/lidar.dae" scale="4 4 4"/>
       </geometry>
     </visual>
   </link>
@@ -253,7 +253,7 @@
   </gazebo>
 
   <joint type="fixed" name="camera_optical_joint">
-    <origin xyz="0 0 0" rpy="-1.5707 0 -1.5707"/>
+    <origin xyz="0 0 0" rpy="-0.78535 0 -0.78535"/>
     <child link="camera_link_optical"/>
     <parent link="camera_link"/>
   </joint>
