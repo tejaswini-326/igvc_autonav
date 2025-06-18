@@ -59,7 +59,7 @@ class WhitePointImageVisualizer(Node):
                 abs(b - avg_color) < color_balance_threshold):
 
                 # Ground level filtering
-                if -1.5 < z < -0.5:  # Adjusted range
+                if -1.3 < z < -0.7:  # Adjusted range
                     white_img[row, col] = (255, 255, 255)
                     white_ground_points.append([x, y, z])  # Store x,y,z coordinates
 
