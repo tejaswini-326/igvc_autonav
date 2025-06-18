@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # lane_follow_node.py
 import rclpy
 from rclpy.node import Node
@@ -11,22 +12,18 @@ class LaneFollowNode(Node):
         self.sub = self.create_subscription(PointCloud2, '/igvc/lane_mask', self.pc_callback, 10)
         self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
         
-        # Simple parameters
-        self.robot_width = 0.6  # Robot width in meters (adjust for your robot)
-        self.safety_margin = 0.2  # Extra space from lane lines
-        
     def pc_callback(self, msg):
         points = list(pc2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True))
         if not points:
             return
 
-        # Only look at points in front of the robot (x > 0) and within reasonable distance
-        front_points = [p for p in points if 0.5 < p[0] < 3.0]
+        # Only look at points in front of the robot
+        front_points = [p for p in points if 0.5 < p[0] < 2.5]
         
-        if len(front_points) < 10:
-            # Not enough points, move straight slowly
+        if len(front_points) < 5:
+            # Not enough points, stop
             cmd = Twist()
-            cmd.linear.x = 0.2
+            cmd.linear.x = 0.0
             cmd.angular.z = 0.0
             self.pub.publish(cmd)
             return
@@ -34,113 +31,110 @@ class LaneFollowNode(Node):
         # Get y-coordinates (lateral positions)
         y_coords = [p[1] for p in front_points]
         
-        # Find the closest white line on the left and right of the robot
-        left_line = self.find_closest_line_on_left(y_coords)
-        right_line = self.find_closest_line_on_right(y_coords)
+        # Find all distinct line positions
+        line_positions = self.find_line_positions(y_coords)
         
-        # Calculate steering based on lane boundaries
-        cmd = Twist()
-        cmd.linear.x = 0.4  # Forward speed
-        
-        if left_line is not None and right_line is not None:
-            # We can see both lane boundaries
-            lane_center = (left_line + right_line) / 2.0
-            error = lane_center - 0.0  # Robot is at y=0
-            cmd.angular.z = -error * 0.8  # Simple proportional control
-            
-            self.get_logger().info(f'Both lines: L={left_line:.2f}, R={right_line:.2f}, Center={lane_center:.2f}')
-            
-        elif left_line is not None:
-            # Only see left boundary, stay at safe distance from it
-            target_position = left_line + (self.robot_width/2 + self.safety_margin)
-            error = target_position - 0.0
-            cmd.angular.z = -error * 0.6
-            
-            self.get_logger().info(f'Left line only: {left_line:.2f}, target: {target_position:.2f}')
-            
-        elif right_line is not None:
-            # Only see right boundary, stay at safe distance from it
-            target_position = right_line - (self.robot_width/2 + self.safety_margin)
-            error = target_position - 0.0
-            cmd.angular.z = -error * 0.6
-            
-            self.get_logger().info(f'Right line only: {right_line:.2f}, target: {target_position:.2f}')
-            
-        else:
-            # Can't see any clear boundaries, go straight
+        if len(line_positions) < 2:
+            # Need at least 2 lines to define a lane
+            cmd = Twist()
+            cmd.linear.x = 0.3
             cmd.angular.z = 0.0
-            self.get_logger().warn('No clear lane boundaries detected')
+            self.pub.publish(cmd)
+            self.get_logger().warn(f'Only found {len(line_positions)} lines')
+            return
         
-        # Limit angular velocity for safety
-        cmd.angular.z = max(-0.5, min(0.5, cmd.angular.z))
+        # Find the lane we should be in (the one closest to robot center)
+        lane_center = self.find_current_lane_center(line_positions)
         
+        if lane_center is not None:
+            # Steer towards lane center
+            error = lane_center - 0.0  # Robot is at y=0
+            
+            cmd = Twist()
+            cmd.linear.x = 0.4
+            cmd.angular.z = -error * 1.0  # Simple proportional control
+            
+            # Limit turning
+            cmd.angular.z = max(-0.6, min(0.6, cmd.angular.z))
+            
+            self.get_logger().info(f'Lines at: {line_positions}, Lane center: {lane_center:.2f}, Error: {error:.2f}')
+        else:
+            # Fallback - go straight
+            cmd = Twist()
+            cmd.linear.x = 0.3
+            cmd.angular.z = 0.0
+            self.get_logger().warn('Could not determine lane center')
+            
         self.pub.publish(cmd)
 
-    def find_closest_line_on_left(self, y_coords):
-        """Find the closest white line to the left of the robot (negative y)"""
-        left_points = [y for y in y_coords if y < -0.1]  # Points to the left
-        if not left_points:
-            return None
+    def find_line_positions(self, y_coords):
+        """Find positions of white lines by clustering y-coordinates"""
+        if len(y_coords) < 3:
+            return []
         
-        # Group nearby points and find the rightmost (closest to robot) cluster
-        left_points.sort(reverse=True)  # Sort from closest to farthest
+        # Sort coordinates
+        y_sorted = sorted(y_coords)
         
-        # Simple clustering: find the largest group of points close together
-        clusters = []
-        current_cluster = [left_points[0]]
+        # Group points that are close together (within 20cm)
+        groups = []
+        current_group = [y_sorted[0]]
         
-        for i in range(1, len(left_points)):
-            if abs(left_points[i] - left_points[i-1]) < 0.3:  # Points within 30cm
-                current_cluster.append(left_points[i])
+        for i in range(1, len(y_sorted)):
+            if abs(y_sorted[i] - y_sorted[i-1]) < 1:  # 20cm threshold
+                current_group.append(y_sorted[i])
             else:
-                if len(current_cluster) >= 5:  # At least 5 points for a valid line
-                    clusters.append(current_cluster)
-                current_cluster = [left_points[i]]
+                if len(current_group) >= 3:  # Need at least 3 points for a line
+                    groups.append(current_group)
+                current_group = [y_sorted[i]]
         
-        if len(current_cluster) >= 5:
-            clusters.append(current_cluster)
+        # Don't forget the last group
+        if len(current_group) >= 3:
+            groups.append(current_group)
         
-        if not clusters:
-            return None
+        # Calculate average position of each group (line)
+        line_positions = []
+        for group in groups:
+            avg_pos = sum(group) / len(group)
+            line_positions.append(avg_pos)
         
-        # Return the average position of the closest (rightmost) cluster
-        closest_cluster = clusters[0]  # First cluster is closest due to sorting
-        return sum(closest_cluster) / len(closest_cluster)
+        return sorted(line_positions)
     
-    def find_closest_line_on_right(self, y_coords):
-        """Find the closest white line to the right of the robot (positive y)"""
-        right_points = [y for y in y_coords if y > 0.1]  # Points to the right
-        if not right_points:
+    def find_current_lane_center(self, line_positions):
+        """Find which lane the robot should be in and return its center"""
+        if len(line_positions) < 2:
             return None
         
-        # Group nearby points and find the leftmost (closest to robot) cluster
-        right_points.sort()  # Sort from closest to farthest
+        # Find the pair of lines that the robot is currently between
+        # or should be between (closest to robot's current position y=0)
         
-        # Simple clustering
-        clusters = []
-        current_cluster = [right_points[0]]
+        best_lane_center = None
+        min_distance_to_robot = float('inf')
         
-        for i in range(1, len(right_points)):
-            if abs(right_points[i] - right_points[i-1]) < 0.3:  # Points within 30cm
-                current_cluster.append(right_points[i])
-            else:
-                if len(current_cluster) >= 5:  # At least 5 points for a valid line
-                    clusters.append(current_cluster)
-                current_cluster = [right_points[i]]
+        # Check all possible lane pairs
+        for i in range(len(line_positions) - 1):
+            left_line = line_positions[i]
+            right_line = line_positions[i + 1]
+            
+            lane_center = (left_line + right_line) / 2.0
+            distance_to_robot = abs(lane_center - 0.0)
+            
+            # Check if robot is between these lines or very close
+            if (left_line <= 0.0 <= right_line) or distance_to_robot < min_distance_to_robot:
+                min_distance_to_robot = distance_to_robot
+                best_lane_center = lane_center
         
-        if len(current_cluster) >= 5:
-            clusters.append(current_cluster)
-        
-        if not clusters:
-            return None
-        
-        # Return the average position of the closest (leftmost) cluster
-        closest_cluster = clusters[0]  # First cluster is closest due to sorting
-        return sum(closest_cluster) / len(closest_cluster)
+        return best_lane_center
 
 def main():
     rclpy.init()
     node = LaneFollowNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
