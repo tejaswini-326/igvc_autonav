@@ -25,6 +25,11 @@ class LaneOverlayNode(Node):
             10
         )
 
+        self.mask_pub = self.create_publisher(
+            Image,
+            '/lane_overlay/mask',
+            10
+        )
         # Parameters for lane detection
         self.roi_height_ratio = 0.69  # Focus on bottom 50% of image
         self.get_logger().info("Lane Overlay Node initialized - focusing on bottom half of image")
@@ -113,7 +118,8 @@ class LaneOverlayNode(Node):
         # Publish the processed image
         output_msg = self.bridge.cv2_to_imgmsg(blended, encoding='bgr8')
         self.image_pub.publish(output_msg)
-
+        mask_msg = self.bridge.cv2_to_imgmsg(full_mask, encoding='mono8')
+        self.mask_pub.publish(mask_msg)
         # Display the result
         cv2.imshow("Lane Overlay", blended)
         
@@ -123,7 +129,7 @@ class LaneOverlayNode(Node):
         cv2.waitKey(1)
 
     def update_roi_ratio(self, new_ratio):
-        """Method to dynamically adjust ROI if needed"""
+        # """Method to dynamically adjust ROI if needed"""
         self.roi_height_ratio = max(0.1, min(1.0, new_ratio))
         self.get_logger().info(f"ROI height ratio updated to: {self.roi_height_ratio}")
 
