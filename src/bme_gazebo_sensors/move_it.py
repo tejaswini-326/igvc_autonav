@@ -19,6 +19,7 @@ class WhitePointImageVisualizer(Node):
             10
         )
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+<<<<<<< HEAD:src/bme_gazebo_sensors/move_forward.py
 
     def publish(self, cmd):
         self.cmd_pub.publish(cmd)
@@ -48,6 +49,8 @@ class WhitePointImageVisualizer(Node):
 
         cv2.imshow("Target", white_img)
         cv2.waitKey(1)  
+=======
+>>>>>>> 9f520484835f25ae9d58cd5ede787c4e58a453f0:src/bme_gazebo_sensors/move_it.py
 
     def pointcloud_callback(self, msg):
         height = msg.height
