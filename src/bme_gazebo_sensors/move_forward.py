@@ -18,7 +18,36 @@ class WhitePointImageVisualizer(Node):
             self.pointcloud_callback,
             10
         )
-        self.cmd_pu b = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+
+    def publish(self, cmd):
+        self.cmd_pub.publish(cmd)
+        print('')
+
+    def debug_time_yo_yo_yo(self, x, y, msg, img, centers):
+        self.get_logger().info(f"DEBUG")
+        height = msg.height
+        width = msg.width
+
+        white_img = img
+        index = 0
+        for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
+            px, py, pz, rgb = point
+            if abs(px - x) < 0.02 and abs(py - y) < 0.02:
+                row = index // width
+                col = index % width
+                cv2.circle(white_img, (col, row), 5, (0, 0, 255), -1)
+            for label, center in centers:
+                cx = center[0]
+                cy = center[1]
+                if abs(px - cx) < 0.02 and abs(py - cy) < 0.02:
+                    row = index // width
+                    col = index % width
+                    cv2.circle(white_img, (col, row), 5, (255, 0, 0), -1)
+            index += 1
+
+        cv2.imshow("Target", white_img)
+        cv2.waitKey(1)  
 
     def pointcloud_callback(self, msg):
         height = msg.height
@@ -32,7 +61,6 @@ class WhitePointImageVisualizer(Node):
             x, y, z, rgb = point
             row = index // width
             col = index % width
-            index += 1
 
             # Skip invalid points
             if rgb is None or math.isnan(x) or math.isnan(y) or math.isnan(z):
@@ -48,7 +76,7 @@ class WhitePointImageVisualizer(Node):
             b = rgb_int & 0xFF
 
             # Improved white detection
-            white_threshold = 120  # Increased threshold
+            white_threshold = 100  # Increased threshold
             color_balance_threshold = 25  # Colors should be similar for true white
             
             # Check if pixel is white (high intensity + balanced RGB)
@@ -62,6 +90,7 @@ class WhitePointImageVisualizer(Node):
                 if -1.5 < z < -0.5:  # Adjusted range
                     white_img[row, col] = (255, 255, 255)
                     white_ground_points.append([x, y, z])  # Store x,y,z coordinates
+            index += 1
 
         self.get_logger().info(f"White ground points: {len(white_ground_points)}")
 
@@ -113,17 +142,13 @@ class WhitePointImageVisualizer(Node):
             cluster_size = len(cluster_points)
             
             # Filter out very small clusters
-            if cluster_size < 15:
+            if cluster_size < 10:
                 self.get_logger().info(f"Cluster {label} too small ({cluster_size} points), skipping")
                 continue
                 
             center = np.mean(cluster_points, axis=0)
             std_dev = np.std(cluster_points, axis=0)
             
-            # Filter out clusters that are too spread out (likely noise)
-            if std_dev[0] > 0.5 or std_dev[1] > 0.5:
-                self.get_logger().info(f"Cluster {label} too spread out (std: {std_dev}), skipping")
-                continue
             
             centers.append((label, center))
             cluster_info.append({
@@ -135,26 +160,26 @@ class WhitePointImageVisualizer(Node):
             
             self.get_logger().info(f"Valid cluster {label}: center=({center[0]:.2f}, {center[1]:.2f}), size={cluster_size}, std=({std_dev[0]:.2f}, {std_dev[1]:.2f})")
 
+        cmd = Twist()
         # Lane detection logic (processing only, no visualization)
-        if len(centers) >= 2:
+        if len(centers) == 2:
             centers.sort(key=lambda c: c[1][0])  # sort by x coordinate
             left_lane = centers[0][1]   # leftmost cluster
             right_lane = centers[-1][1]  # rightmost cluster
 
-            # Validate lane separation
             lane_separation = abs(right_lane[0] - left_lane[0])
             self.get_logger().info(f"Lane separation: {lane_separation:.2f}m")
             self.get_logger().info(f"Left lane: ({left_lane[0]:.2f}, {left_lane[1]:.2f})")
             self.get_logger().info(f"Right lane: ({right_lane[0]:.2f}, {right_lane[1]:.2f})")
             
             target = (left_lane + right_lane) / 2
+            self.debug_time_yo_yo_yo(target[0], target[1], msg, white_img, centers)
             self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
 
             # Compute direction to target
             angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target
 
             # Move toward target
-            cmd = Twist()
             cmd.linear.x = 0.3  # Forward speed
 
             # Small angle threshold to avoid jitter
@@ -165,13 +190,49 @@ class WhitePointImageVisualizer(Node):
                 cmd.angular.z = 0.0
                 self.get_logger().info("Target straight ahead")
 
-            self.cmd_pub.publish(cmd)
+            self.publish(cmd)
+
+        if len(centers) >= 3:
+            centers.sort(key=lambda c: c[1][0])  # sort by x coordinate
+
+            right_lane = centers[0][1]
+            middle_lane = centers[1][1]
+            left_lane = centers[2][1]
+
+            target = (middle_lane + right_lane) / 2
+
+            lane_separation = abs(right_lane[0] - left_lane[0])
+            self.get_logger().info(f"Lane separation: {lane_separation:.2f}m")
+            self.get_logger().info(f"Left lane: ({left_lane[0]:.2f}, {left_lane[1]:.2f})")
+            self.get_logger().info(f"Right lane: ({right_lane[0]:.2f}, {right_lane[1]:.2f})")
+
+            self.debug_time_yo_yo_yo(target[0], target[1], msg, white_img, centers)
+            self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
+
+            # Compute direction to target
+            angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target
+
+            # Move toward target
+            cmd.linear.x = 0.3  # Forward speed
+
+            # Small angle threshold to avoid jitter
+            if abs(angle_to_target) > 0.05:
+                cmd.angular.z = angle_to_target  # Steer towards target
+                self.get_logger().info(f"Turning: angle to target = {math.degrees(angle_to_target):.2f}°")
+            else:
+                cmd.angular.z = 0.0
+                self.get_logger().info("Target straight ahead")
+
+            self.publish(cmd)
 
         
         elif len(centers) == 1:
             self.get_logger().info("Only one lane cluster found")
             single_lane = centers[0][1]
+            self.debug_time_yo_yo_yo(0, 0, msg, white_img, centers)
             self.get_logger().info(f"Single lane at: ({single_lane[0]:.2f}, {single_lane[1]:.2f})")
+
+            self.publish(cmd)
         else:
             self.get_logger().warn("No valid clusters found for lane detection")
 
