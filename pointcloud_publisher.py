@@ -1,29 +1,36 @@
 #!/usr/bin/env python3
 """
 Subscribe to /camera/points, print a quick summary, rotate the cloud, and
-re-publish it on /igvc/transformed_pointcloud.
+re-publish it on /igvc/transformed_pointcloud, keeping RGB values.
 """
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs_py.point_cloud2 as pc2
 import numpy as np
-from itertools import islice
 
-# # -90° rotation along Y
-# ROT_MATRIX = np.array([[0, 0, -1],
-#                        [0, 1, 0],
-#                        [1, 0, 0]], dtype=np.float32)
+from std_msgs.msg import Header
 
-# # -90° rotation along X
-# ROT_MATRIX = np.array([[1, 0, 0],
-#                        [0, 0, 1],
-#                        [0, -1, 0]], dtype=np.float32)
+import struct
 
-# -90° rotation along Z
-ROT_MATRIX = np.array([[1, 0, 0],
-                       [0, 0, 1],
-                       [0, -1, 1]], dtype=np.float32)
+# -90° rotation along Y
+ROT_MATRIX_X = np.array([[0, 0, -1],
+                         [0, 1, 0],
+                         [1, 0, 0]], dtype=np.float32)
+
+# -90° rotation along X
+ROT_MATRIX_Y = np.array([[1, 0, 0],
+                         [0, 0, 1],
+                         [0, -1, 0]], dtype=np.float32)
+
+# +90° rotation along Z
+ROT_MATRIX_Z = np.array([[0, -1, 0],
+                         [1, 0, 0],
+                         [0, 0, 1]], dtype=np.float32)
+
+ROT_MATRIX = ROT_MATRIX_Z @ ROT_MATRIX_Z @ ROT_MATRIX_X @ ROT_MATRIX_X @ ROT_MATRIX_Y @ ROT_MATRIX_Z
+
+i = 0
 
 class PointCloudRotator(Node):
     def __init__(self):
@@ -34,25 +41,8 @@ class PointCloudRotator(Node):
         self.publisher = self.create_publisher(PointCloud2,
                                                "/igvc/transformed_pointcloud", 10)
 
-    # ------------------------------------------------------------------ helpers
-    @staticmethod
-    def _transform_xyz(points_np: np.ndarray) -> np.ndarray:
-        """Apply fixed 3×3 rotation to an (N, 3) float32 array."""
-        return (ROT_MATRIX @ points_np.T).T
-
-    @staticmethod
-    def _first_finite(points_iter, n=5):
-        """Yield first n finite XYZ triples for human-readable peek."""
-        for x, y, z in points_iter:
-            if np.isfinite(x) and np.isfinite(y) and np.isfinite(z):
-                yield x, y, z
-                n -= 1
-                if n == 0:
-                    break
-
-    # ------------------------------------------------------------------- main
     def _callback(self, msg: PointCloud2):
-        # -------- console peek (unchanged) ------------------------------------
+        global i
         hdr = msg.header
         self.get_logger().info(
             f"[{hdr.stamp.sec}.{hdr.stamp.nanosec:09d}] "
@@ -60,24 +50,36 @@ class PointCloudRotator(Node):
             f'fields={[f.name for f in msg.fields]}'
         )
 
-        # sample five points for the log
-        # pts_preview = pc2.read_points(msg, ("x", "y", "z"), skip_nans=True)
-        # for i, (x, y, z) in enumerate(pts_preview):
-        #     self.get_logger().info(f"  p{i}: ({x:.3f}, {y:.3f}, {z:.3f})")
-        # self.get_logger().info("—" * 20)
-
-        # -------- full transform & publish ------------------------------------
-        pts_np = np.array([(x, y, z)
-                        for x, y, z in pc2.read_points(
-                            msg, ("x", "y", "z"), skip_nans=True)],
-                        dtype=np.float32)               # <--  fix here
-        if pts_np.size == 0:
+        # Read x, y, z, rgb from incoming cloud
+        pts = list(pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=True))
+        if len(pts) == 0:
             return
 
-        pts_rot = (ROT_MATRIX @ pts_np.T).T
-        out_cloud = pc2.create_cloud_xyz32(hdr, pts_rot)
-        self.publisher.publish(out_cloud)
+        xyz = np.array([[x, y, z] for x, y, z, _ in pts], dtype=np.float32)
+        rgb = [rgb_val for _, _, _, rgb_val in pts]
 
+        # Apply rotation to xyz
+        rotated_xyz = (ROT_MATRIX @ xyz.T).T
+
+        # Re-pack into (x, y, z, rgb) tuples
+        rotated_pts = [(x, y, z, rgb[i]) for i, (x, y, z) in enumerate(rotated_xyz)]
+
+        if i == 0:
+            print("Sample point before:", pts[0])
+            print("Sample point after:", rotated_pts[0])
+            i += 1
+
+        # Define fields for x, y, z, rgb
+        fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='rgb', offset=12, datatype=PointField.FLOAT32, count=1),
+        ]
+
+        # Create new cloud with RGB preserved
+        cloud_out = pc2.create_cloud(hdr, fields, rotated_pts)
+        self.publisher.publish(cloud_out)
 
 
 def main(args=None):
