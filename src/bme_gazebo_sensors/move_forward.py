@@ -18,7 +18,7 @@ class WhitePointImageVisualizer(Node):
             self.pointcloud_callback,
             10
         )
-        self.cmd_pu b = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
 
     def pointcloud_callback(self, msg):
         height = msg.height
