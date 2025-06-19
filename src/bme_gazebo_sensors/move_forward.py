@@ -25,60 +25,67 @@ class WhitePointImageVisualizer(Node):
         self.last_cmd = Twist()
         self.last_cmd.linear.x = 0.3
         self.last_cmd.angular.z = 0.0
-        self.which_lane = 'left'
+
+        # Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
+        self.which_lane = 'right'
 
     def publish(self, cmd, target=None):
         # if obstacle detected publish other command velocity other than current cmd_vel or else publish the cmd_vel below
         self.cmd_pub.publish(cmd)
-        print('')
+        return
 
     def debug_time_yo_yo_yo(self, x, y, msg, img, centers):
-        self.get_logger().info(f"DEBUG")
-        height = msg.height
-        width = msg.width
+        # self.get_logger().info(f"DEBUG")
+        # height = msg.height
+        # width = msg.width
 
-        white_img = img
-        index = 0
-        for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
-            px, py, pz, rgb = point
-            if abs(px - x) < 0.02 and abs(py - y) < 0.02:
-                row = index // width
-                col = index % width
-                cv2.circle(white_img, (col, row), 5, (0, 0, 255), -1)
-            for label, center in centers:
-                cx = center[0]
-                cy = center[1]
-                if abs(px - cx) < 0.02 and abs(py - cy) < 0.02:
-                    row = index // width
-                    col = index % width
-                    cv2.circle(white_img, (col, row), 5, (255, 0, 0), -1)
-                    text = f"({cx:.2f}, {cy:.2f})"
-                    cv2.putText(
-                        white_img, text, (col + 10, row - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA
-                    )
-            index += 1
+        # white_img = img
+        # index = 0
+        # for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
+        #     px, py, pz, rgb = point
+        #     if abs(px - x) < 0.02 and abs(py - y) < 0.02:
+        #         row = index // width
+        #         col = index % width
+        #         cv2.circle(white_img, (col, row), 5, (0, 0, 255), -1)
+        #     for label, center in centers:
+        #         cx = center[0]
+        #         cy = center[1]
+        #         if abs(px - cx) < 0.02 and abs(py - cy) < 0.02:
+        #             row = index // width
+        #             col = index % width
+        #             cv2.circle(white_img, (col, row), 5, (255, 0, 0), -1)
+        #             text = f"({cx:.2f}, {cy:.2f})"
+        #             cv2.putText(
+        #                 white_img, text, (col + 10, row - 10),
+        #                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA
+        #             )
+        #     index += 1
 
-        cv2.imshow("Target", white_img)
-        cv2.waitKey(1)  
-    def calculate_normal_velocity(self, target, msg, white_img, centers, cmd):
-
+        # cv2.imshow("Target", white_img)
+        # cv2.waitKey(1) 
+        return
+         
+    def calculate_normal_velocity(self, target, msg, white_img, centers):
+        cmd = Twist()
         self.debug_time_yo_yo_yo(target[0], target[1], msg, white_img, centers)
 
         # Compute direction to target
-        angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target
+        angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
 
         # Move toward target
         cmd.linear.x = 0.3  # Forward speed
-
+    
         # Small angle threshold to avoid jitter
         if abs(angle_to_target) > 0.05:
             cmd.angular.z = angle_to_target  # Steer towards target
+            if abs(angle_to_target) > 0.4:
+                cmd.linear.x = 0.1
             self.get_logger().info(f"Turning: angle to target = {math.degrees(angle_to_target):.2f}°")
         else:
             cmd.angular.z = 0.0
             self.get_logger().info("Target straight ahead")
-
+        return cmd
+    
     def pointcloud_callback(self, msg):
         height = msg.height
         width = msg.width
@@ -201,7 +208,7 @@ class WhitePointImageVisualizer(Node):
             
             target = (left_lane + right_lane) / 2
             self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
-            self.calculate_normal_velocity(target, msg, white_img, centers, cmd)
+            cmd = self.calculate_normal_velocity(target, msg, white_img, centers)
             
             self.publish(cmd, target)
             self.last_cmd = cmd
@@ -217,7 +224,7 @@ class WhitePointImageVisualizer(Node):
 
             target = ((middle_lane + right_lane) / 2) if self.which_lane == 'right' else ((middle_lane + left_lane) / 2)
             self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
-            self.calculate_normal_velocity(target, msg, white_img, centers, cmd)
+            cmd = self.calculate_normal_velocity(target, msg, white_img, centers)
 
             self.publish(cmd, target)
             self.last_cmd = cmd
