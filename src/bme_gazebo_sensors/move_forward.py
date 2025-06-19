@@ -8,6 +8,8 @@ import cv2
 from sklearn.cluster import DBSCAN
 import math
 from geometry_msgs.msg import Twist
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point
 # x forward, y left, z upward
 
 
@@ -214,7 +216,7 @@ class WhitePointImageVisualizer(Node):
             self.last_cmd = cmd
             self.last_cmd.linear.x = 0.0
 
-        if len(centers) >= 3:
+        elif len(centers) >= 3:
             centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
             self.get_logger().info(f"{centers}")
 
@@ -230,14 +232,76 @@ class WhitePointImageVisualizer(Node):
             self.last_cmd = cmd
             self.last_cmd.linear.x = 0.0
         
-        elif len(centers) < 2:
+        elif len(centers) == 1:
             self.get_logger().info("Only one lane cluster found")
-            single_lane = centers[0][1]
-            self.debug_time_yo_yo_yo(0, 0, msg, white_img, centers)
-            self.get_logger().info(f"Single lane at: ({single_lane[0]:.2f}, {single_lane[1]:.2f})")
-            self.publish(self.last_cmd)
+            label, center = centers[0]
+            cluster_points = points_xy[labels == label]
+
+            if len(cluster_points) > 7:
+                x = cluster_points[:, 0]
+                y = cluster_points[:, 1]
+
+                # Fit parabola: y = ax^2 + bx + c
+                coeffs = np.polyfit(x, y, deg=2)
+                a, b, c = coeffs
+
+                # Estimate local slope at center of lane
+                x_center = np.mean(x)
+                slope = 2 * a * x_center + b
+                angle = math.atan(slope)
+
+                # Control command
+                cmd.linear.x = 0.2
+                cmd.angular.z = angle
+
+                self.get_logger().info(f"Curve-follow angle: {math.degrees(angle):.2f}°")
+
+                # Visualization marker
+                marker = Marker()
+                marker.header.frame_id = msg.header.frame_id
+                marker.header.stamp = self.get_clock().now().to_msg()
+                marker.ns = "fitted_lane"
+                marker.id = 0
+                marker.type = Marker.LINE_STRIP
+                marker.action = Marker.ADD
+                marker.scale.x = 0.05  # line width
+                marker.color.r = 1.0
+                marker.color.g = 0.0
+                marker.color.b = 1.0
+                marker.color.a = 1.0
+                marker.lifetime.sec = 0
+
+                # Plot fitted curve
+                x_vals = np.linspace(np.min(x), np.max(x), num=30)
+                for x_i in x_vals:
+                    y_i = a * x_i**2 + b * x_i + c
+
+                    # Safely determine z
+                    if cluster_points.shape[1] >= 3:
+                        z_i = np.mean(cluster_points[:, 2])
+                    else:
+                        z_i = 0.0  # Default height if Z not available
+
+                    pt = Point(x=x_i, y=y_i, z=z_i)
+                    marker.points.append(pt)
+
+                self.marker_pub.publish(marker)
+
+            else:
+                self.get_logger().warn("Not enough points to fit curve")
+                cmd.linear.x = 0.2
+                cmd.angular.z = 0.0
+
+            # Visual debugging and publishing control
+            self.debug_time_yo_yo_yo(center[0], center[1], msg, white_img, centers)
+            self.publish(cmd)
+
+
         else:
             self.get_logger().warn("No valid clusters found for lane detection")
+            
+        
+        
 
 
 def main(args=None):
