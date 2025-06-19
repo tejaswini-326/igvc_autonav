@@ -10,6 +10,8 @@ import math
 from geometry_msgs.msg import Twist
 # x forward, y left, z upward
 
+
+
 class WhitePointImageVisualizer(Node):
     def __init__(self):
         super().__init__('white_point_image_visualizer')
@@ -66,7 +68,6 @@ class WhitePointImageVisualizer(Node):
     def calculate_normal_velocity(self, target, msg, white_img, centers):
         cmd = Twist()
         self.debug_time_yo_yo_yo(target[0], target[1], msg, white_img, centers)
-        self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
 
         # Compute direction to target
         angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
