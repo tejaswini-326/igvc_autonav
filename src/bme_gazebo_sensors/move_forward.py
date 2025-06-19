@@ -10,6 +10,8 @@ import math
 from geometry_msgs.msg import Twist
 # x forward, y left, z upward
 
+
+
 class WhitePointImageVisualizer(Node):
     def __init__(self):
         super().__init__('white_point_image_visualizer')
@@ -23,6 +25,7 @@ class WhitePointImageVisualizer(Node):
         self.last_cmd = Twist()
         self.last_cmd.linear.x = 0.3
         self.last_cmd.angular.z = 0.0
+        self.which_lane = 'left'
 
     def publish(self, cmd, target=None):
         # if obstacle detected publish other command velocity other than current cmd_vel or else publish the cmd_vel below
@@ -61,7 +64,6 @@ class WhitePointImageVisualizer(Node):
     def calculate_normal_velocity(self, target, msg, white_img, centers, cmd):
 
         self.debug_time_yo_yo_yo(target[0], target[1], msg, white_img, centers)
-        self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
 
         # Compute direction to target
         angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target
@@ -198,7 +200,9 @@ class WhitePointImageVisualizer(Node):
             right_lane = centers[0][1]  # rightmost cluster
             
             target = (left_lane + right_lane) / 2
+            self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
             self.calculate_normal_velocity(target, msg, white_img, centers, cmd)
+            
             self.publish(cmd, target)
             self.last_cmd = cmd
             self.last_cmd.linear.x = 0.0
@@ -211,7 +215,8 @@ class WhitePointImageVisualizer(Node):
             middle_lane = centers[1][1]
             left_lane = centers[2][1]
 
-            target = (middle_lane + right_lane) / 2
+            target = ((middle_lane + right_lane) / 2) if self.which_lane == 'right' else ((middle_lane + left_lane) / 2)
+            self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
             self.calculate_normal_velocity(target, msg, white_img, centers, cmd)
 
             self.publish(cmd, target)
