@@ -27,7 +27,7 @@ class WhitePointImageVisualizer(Node):
         self.last_cmd.angular.z = 0.0
 
         # Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
-        self.which_lane = 'right'
+        self.which_lane = 'left'
 
     def publish(self, cmd, target=None):
         # if obstacle detected publish other command velocity other than current cmd_vel or else publish the cmd_vel below
@@ -35,34 +35,34 @@ class WhitePointImageVisualizer(Node):
         return
 
     def debug_time_yo_yo_yo(self, x, y, msg, img, centers):
-        # self.get_logger().info(f"DEBUG")
-        # height = msg.height
-        # width = msg.width
+        self.get_logger().info(f"DEBUG")
+        height = msg.height
+        width = msg.width
 
-        # white_img = img
-        # index = 0
-        # for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
-        #     px, py, pz, rgb = point
-        #     if abs(px - x) < 0.02 and abs(py - y) < 0.02:
-        #         row = index // width
-        #         col = index % width
-        #         cv2.circle(white_img, (col, row), 5, (0, 0, 255), -1)
-        #     for label, center in centers:
-        #         cx = center[0]
-        #         cy = center[1]
-        #         if abs(px - cx) < 0.02 and abs(py - cy) < 0.02:
-        #             row = index // width
-        #             col = index % width
-        #             cv2.circle(white_img, (col, row), 5, (255, 0, 0), -1)
-        #             text = f"({cx:.2f}, {cy:.2f})"
-        #             cv2.putText(
-        #                 white_img, text, (col + 10, row - 10),
-        #                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA
-        #             )
-        #     index += 1
+        white_img = img
+        index = 0
+        for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
+            px, py, pz, rgb = point
+            if abs(px - x) < 0.02 and abs(py - y) < 0.02:
+                row = index // width
+                col = index % width
+                cv2.circle(white_img, (col, row), 5, (0, 0, 255), -1)
+            for label, center in centers:
+                cx = center[0]
+                cy = center[1]
+                if abs(px - cx) < 0.02 and abs(py - cy) < 0.02:
+                    row = index // width
+                    col = index % width
+                    cv2.circle(white_img, (col, row), 5, (255, 0, 0), -1)
+                    text = f"({cx:.2f}, {cy:.2f})"
+                    cv2.putText(
+                        white_img, text, (col + 10, row - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA
+                    )
+            index += 1
 
-        # cv2.imshow("Target", white_img)
-        # cv2.waitKey(1) 
+        cv2.imshow("Target", white_img)
+        cv2.waitKey(1) 
         return
          
     def calculate_normal_velocity(self, target, msg, white_img, centers):
@@ -73,7 +73,7 @@ class WhitePointImageVisualizer(Node):
         angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
 
         # Move toward target
-        cmd.linear.x = 0.3  # Forward speed
+        cmd.linear.x = 0.5  # Forward speed
     
         # Small angle threshold to avoid jitter
         if abs(angle_to_target) > 0.05:
@@ -154,7 +154,7 @@ class WhitePointImageVisualizer(Node):
 
         # Better clustering parameters
         eps = 0.75  # Reduced eps for tighter clusters
-        min_samples = 8  # Increased min_samples to reduce noise
+        min_samples = 20  # Increased min_samples to reduce noise
         
         clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points_xy)
         labels = clustering.labels_
