@@ -8,6 +8,7 @@ import cv2
 from sklearn.cluster import DBSCAN
 import math
 from geometry_msgs.msg import Twist
+# x forward, y left, z upward
 
 class WhitePointImageVisualizer(Node):
     def __init__(self):
@@ -19,8 +20,12 @@ class WhitePointImageVisualizer(Node):
             10
         )
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.last_cmd = Twist()
+        self.last_cmd.linear.x = 0.3
+        self.last_cmd.angular.z = 0.0
 
-    def publish(self, cmd):
+    def publish(self, cmd, target=None):
+        # if obstacle detected publish other command velocity other than current cmd_vel or else publish the cmd_vel below
         self.cmd_pub.publish(cmd)
         print('')
 
@@ -44,10 +49,33 @@ class WhitePointImageVisualizer(Node):
                     row = index // width
                     col = index % width
                     cv2.circle(white_img, (col, row), 5, (255, 0, 0), -1)
+                    text = f"({cx:.2f}, {cy:.2f})"
+                    cv2.putText(
+                        white_img, text, (col + 10, row - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA
+                    )
             index += 1
 
         cv2.imshow("Target", white_img)
         cv2.waitKey(1)  
+    def calculate_normal_velocity(self, target, msg, white_img, centers, cmd):
+
+        self.debug_time_yo_yo_yo(target[0], target[1], msg, white_img, centers)
+        self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
+
+        # Compute direction to target
+        angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target
+
+        # Move toward target
+        cmd.linear.x = 0.3  # Forward speed
+
+        # Small angle threshold to avoid jitter
+        if abs(angle_to_target) > 0.05:
+            cmd.angular.z = angle_to_target  # Steer towards target
+            self.get_logger().info(f"Turning: angle to target = {math.degrees(angle_to_target):.2f}°")
+        else:
+            cmd.angular.z = 0.0
+            self.get_logger().info("Target straight ahead")
 
     def pointcloud_callback(self, msg):
         height = msg.height
@@ -95,8 +123,8 @@ class WhitePointImageVisualizer(Node):
         self.get_logger().info(f"White ground points: {len(white_ground_points)}")
 
         # Display only the white thresholded image
-        cv2.imshow("White Lane Clusters", white_img)
-        cv2.waitKey(1)
+        # cv2.imshow("White Lane Clusters", white_img)
+        # cv2.waitKey(1)
 
         if len(white_ground_points) < 10:  # Increased minimum threshold
             self.get_logger().warn("Not enough white points for clustering")
@@ -163,76 +191,39 @@ class WhitePointImageVisualizer(Node):
         cmd = Twist()
         # Lane detection logic (processing only, no visualization)
         if len(centers) == 2:
-            centers.sort(key=lambda c: c[1][0])  # sort by x coordinate
-            left_lane = centers[0][1]   # leftmost cluster
-            right_lane = centers[-1][1]  # rightmost cluster
+            centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
+            self.get_logger().info(f"{centers}")
 
-            lane_separation = abs(right_lane[0] - left_lane[0])
-            self.get_logger().info(f"Lane separation: {lane_separation:.2f}m")
-            self.get_logger().info(f"Left lane: ({left_lane[0]:.2f}, {left_lane[1]:.2f})")
-            self.get_logger().info(f"Right lane: ({right_lane[0]:.2f}, {right_lane[1]:.2f})")
+            left_lane = centers[1][1]   # leftmost cluster
+            right_lane = centers[0][1]  # rightmost cluster
             
             target = (left_lane + right_lane) / 2
-            self.debug_time_yo_yo_yo(target[0], target[1], msg, white_img, centers)
-            self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
-
-            # Compute direction to target
-            angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target
-
-            # Move toward target
-            cmd.linear.x = 0.3  # Forward speed
-
-            # Small angle threshold to avoid jitter
-            if abs(angle_to_target) > 0.05:
-                cmd.angular.z = angle_to_target  # Steer towards target
-                self.get_logger().info(f"Turning: angle to target = {math.degrees(angle_to_target):.2f}°")
-            else:
-                cmd.angular.z = 0.0
-                self.get_logger().info("Target straight ahead")
-
-            self.publish(cmd)
+            self.calculate_normal_velocity(target, msg, white_img, centers, cmd)
+            self.publish(cmd, target)
+            self.last_cmd = cmd
+            self.last_cmd.linear.x = 0.0
 
         if len(centers) >= 3:
-            centers.sort(key=lambda c: c[1][0])  # sort by x coordinate
+            centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
+            self.get_logger().info(f"{centers}")
 
             right_lane = centers[0][1]
             middle_lane = centers[1][1]
             left_lane = centers[2][1]
 
             target = (middle_lane + right_lane) / 2
+            self.calculate_normal_velocity(target, msg, white_img, centers, cmd)
 
-            lane_separation = abs(right_lane[0] - left_lane[0])
-            self.get_logger().info(f"Lane separation: {lane_separation:.2f}m")
-            self.get_logger().info(f"Left lane: ({left_lane[0]:.2f}, {left_lane[1]:.2f})")
-            self.get_logger().info(f"Right lane: ({right_lane[0]:.2f}, {right_lane[1]:.2f})")
-
-            self.debug_time_yo_yo_yo(target[0], target[1], msg, white_img, centers)
-            self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
-
-            # Compute direction to target
-            angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target
-
-            # Move toward target
-            cmd.linear.x = 0.3  # Forward speed
-
-            # Small angle threshold to avoid jitter
-            if abs(angle_to_target) > 0.05:
-                cmd.angular.z = angle_to_target  # Steer towards target
-                self.get_logger().info(f"Turning: angle to target = {math.degrees(angle_to_target):.2f}°")
-            else:
-                cmd.angular.z = 0.0
-                self.get_logger().info("Target straight ahead")
-
-            self.publish(cmd)
-
+            self.publish(cmd, target)
+            self.last_cmd = cmd
+            self.last_cmd.linear.x = 0.0
         
-        elif len(centers) == 1:
+        elif len(centers) < 2:
             self.get_logger().info("Only one lane cluster found")
             single_lane = centers[0][1]
             self.debug_time_yo_yo_yo(0, 0, msg, white_img, centers)
             self.get_logger().info(f"Single lane at: ({single_lane[0]:.2f}, {single_lane[1]:.2f})")
-
-            self.publish(cmd)
+            self.publish(self.last_cmd)
         else:
             self.get_logger().warn("No valid clusters found for lane detection")
 
