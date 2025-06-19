@@ -23,7 +23,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------------
     rviz_launch_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='true',
+        default_value='false',
         description='Whether to start RViz'
     )
     rviz_config_arg = DeclareLaunchArgument(
@@ -43,12 +43,12 @@ def generate_launch_description():
     )
     x_arg = DeclareLaunchArgument(
         'x',
-        default_value='-21',
+        default_value='-23',
         description='Initial X coordinate for robot spawn'
     )
     y_arg = DeclareLaunchArgument(
         'y',
-        default_value='2.8',
+        default_value='-2.0',
         description='Initial Y coordinate for robot spawn'
     )
     yaw_arg = DeclareLaunchArgument(
