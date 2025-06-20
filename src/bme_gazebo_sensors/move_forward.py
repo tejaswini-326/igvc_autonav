@@ -234,6 +234,11 @@ class WhitePointImageVisualizer(Node):
             self.last_cmd.linear.x = 0.0
         
         elif len(centers) == 1:
+            """
+            In case only one cluster is detected, this code will fir a parabola to the points in that clsuter and follow the curve.
+            It does this by following the center of the cluster and estimating the slope of the curve at that point. If enough points are not detected, 
+            it will simply move forward without turning.
+            """
             self.get_logger().info("Only one lane cluster found")
             label, center = centers[0]
             cluster_points = points_xy[labels == label]
