@@ -8,7 +8,7 @@ python3 -m venv ~/yolo_env
 
 2 - build your workspace, source it.
 
-<b>DO NOT BUILD IN VENV. IT WILL RUIN YOUR ROS INSTALLATION.<\b>
+<b>DO NOT BUILD IN VENV. IT WILL RUIN YOUR ROS INSTALLATION.</b>
 
 3- in a separate terminal start the virtual environment
 
