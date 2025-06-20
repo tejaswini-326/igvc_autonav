@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+
+# Detects object position and category using YOLO and Depth Image
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image, PointCloud2, CameraInfo, CompressedImage
+from std_msgs.msg import Header
+from geometry_msgs.msg import Point
+from object_detection.msg import ObjectData
+import cv2
+import numpy as np
+import sensor_msgs_py.point_cloud2 as pc2
+from ultralytics import YOLO
+from cv_bridge import CvBridge
+
+
+class ObjectDataNode(Node):
+    def __init__(self):
+        super().__init__('object_data_node')
+
+        # Subscribers
+        self.image_sub = self.create_subscription(Image, '/camera/image', self.image_callback, 10)
+        self.depth_sub = self.create_subscription(Image, '/camera/depth_image', self.depth_callback, 10)
+        self.pc_sub = self.create_subscription(PointCloud2, '/camera/points', self.pc_callback, 10)
+
+        # Publishers
+        self.object_pub = self.create_publisher(ObjectData, 'object_data', 10)
+        self.pc_pub = self.create_publisher(PointCloud2, 'object_pc', 10)
+        self.annotated_img_pub = self.create_publisher(CompressedImage, '/detected_object_img', 10)
+
+        # Model & Utils
+        self.bridge = CvBridge()
+        self.model = YOLO('/home/tejaswini/Desktop/abhiyaan/best.pt')
+        self.model.eval()
+        self.get_logger().info('YOLOv8 model loaded.')
+
+        # Depth & Camera info
+        self.depth_img = None
+        self.latest_image = None
+        self.latest_pc = None
+        self.fx = 102.7348185494929
+        self.fy = 102.7348185494929
+        self.cx = 160.0
+        self.cy = 120.0
+
+    def depth_callback(self, msg):
+        try:
+            self.depth_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1')
+        except Exception as e:
+            self.get_logger().error(f'Error converting depth image: {e}')
+
+    def pc_callback(self, msg):
+        self.latest_pc = msg
+
+    def image_callback(self, msg):
+        if self.depth_img is None:
+            self.get_logger().warn("No depth image received yet.")
+            return
+
+        try:
+            image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        except Exception as e:
+            self.get_logger().error(f'Error decoding image: {e}')
+            return
+
+        results = self.model(image)[0]
+        detections = results.boxes
+
+        if not detections or len(detections) == 0:
+            return
+        all_points = []
+        for box in detections:
+            xmin, ymin, xmax, ymax = map(int, box.xyxy[0].tolist())
+            cls_id = int(box.cls[0].item())
+            label = self.model.names[cls_id]
+            confidence = float(box.conf[0])
+
+            # Draw bounding box
+            cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+            text = f"{label} ({confidence:.2f})"
+            cv2.putText(image, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+            points_3d = self.get_points_from_depth(xmin, ymin, xmax, ymax)
+            self.get_logger().info(f"Detected '{label}' in bbox ({xmin},{ymin})→({xmax},{ymax}) with {len(points_3d)} points")
+
+            if len(points_3d) > 0:
+                all_points.extend(points_3d.tolist())
+                centroid = np.mean(points_3d, axis=0)
+                x, y, z = centroid
+                self.get_logger().info(f"{label}: Centroid X={x:.2f}, Y={y:.2f}, Z={z:.2f}")
+
+                msg = ObjectData()
+                msg.label = label
+                msg.position = Point(x=float(x), y=float(y), z=float(z))
+
+                if self.latest_pc:
+                    header = Header()
+                    header.stamp = self.get_clock().now().to_msg()
+                    header.frame_id = self.latest_pc.header.frame_id
+                    msg.pointcloud = pc2.create_cloud_xyz32(header, points_3d.tolist())
+                    #self.pc_pub.publish(msg.pointcloud)
+
+                self.object_pub.publish(msg)
+        if all_points:
+            header = Header()
+            header.stamp = self.get_clock().now().to_msg()
+            header.frame_id = self.latest_pc.header.frame_id
+            combined_pc = pc2.create_cloud_xyz32(header, all_points)
+            self.pc_pub.publish(combined_pc)
+
+
+        # Publish annotated image
+        annotated_msg = CompressedImage()
+        annotated_msg.header.stamp = self.get_clock().now().to_msg()
+        annotated_msg.header.frame_id = msg.header.frame_id if self.latest_pc else "camera_link"
+        annotated_msg.format = "jpeg"
+        annotated_msg.data = np.array(cv2.imencode('.jpg', image)[1]).tobytes()
+        self.annotated_img_pub.publish(annotated_msg)
+
+        cv2.imshow("YOLO 3D Detection", image)
+        cv2.waitKey(1)
+
+    def get_points_from_depth(self, xmin, ymin, xmax, ymax):
+        margin = 5
+        xmin += margin
+        xmax -= margin
+        ymin += margin
+        ymax -= margin
+
+        if self.depth_img is None:
+            return []
+
+        points = []
+        depth = self.depth_img
+        height, width = depth.shape
+
+        for v in range(ymin, ymax):
+            if not (0 <= v < height):
+                continue
+            for u in range(xmin, xmax):
+                if not (0 <= u < width):
+                    continue
+                z = depth[v, u]
+                if z == 0 or np.isnan(z):
+                    continue
+                x = (u - self.cx) * z / self.fx
+                y = (v - self.cy) * z / self.fy
+                points.append([z, -x, -y])
+
+        return np.array(points, dtype=np.float32)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ObjectDataNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+    cv2.destroyAllWindows()
+
+
+if __name__ == '__main__':
+    main()
