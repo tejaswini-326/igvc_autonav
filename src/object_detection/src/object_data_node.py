@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Detects object position and category using YOLO and Depth Image
+'''Description: This node integrates the object detection model with ROS, publishing labels, object position, an annotated image with bounding boxes and the point cloud of the object'''
 
 import rclpy
 from rclpy.node import Node
@@ -15,30 +15,31 @@ from ultralytics import YOLO
 from cv_bridge import CvBridge
 
 
-class ObjectDataNode(Node):
+class ObjectDataNode(Node): 
     def __init__(self):
         super().__init__('object_data_node')
 
-        # Subscribers
+        #subscribers to camera image, depth image and point cloud
         self.image_sub = self.create_subscription(Image, '/camera/image', self.image_callback, 10)
         self.depth_sub = self.create_subscription(Image, '/camera/depth_image', self.depth_callback, 10)
         self.pc_sub = self.create_subscription(PointCloud2, '/camera/points', self.pc_callback, 10)
 
-        # Publishers
+        #publishers to output custom message, object point cloud and image with predictions
         self.object_pub = self.create_publisher(ObjectData, 'object_data', 10)
         self.pc_pub = self.create_publisher(PointCloud2, 'object_pc', 10)
         self.annotated_img_pub = self.create_publisher(CompressedImage, '/detected_object_img', 10)
 
-        # Model & Utils
+        #model and utils
         self.bridge = CvBridge()
-        self.model = YOLO('/home/tejaswini/Desktop/abhiyaan/best.pt')
+        self.model = YOLO('/home/tejaswini/Desktop/abhiyaan/best.pt') #add model path here
         self.model.eval()
         self.get_logger().info('YOLOv8 model loaded.')
 
-        # Depth & Camera info
+        #initialising variables
         self.depth_img = None
         self.latest_image = None
         self.latest_pc = None
+        #camera intrinsics from urdf
         self.fx = 102.7348185494929
         self.fy = 102.7348185494929
         self.cx = 160.0
@@ -46,12 +47,12 @@ class ObjectDataNode(Node):
 
     def depth_callback(self, msg):
         try:
-            self.depth_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1')
+            self.depth_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1') #load and decode depth image
         except Exception as e:
             self.get_logger().error(f'Error converting depth image: {e}')
 
     def pc_callback(self, msg):
-        self.latest_pc = msg
+        self.latest_pc = msg #load and store latest point cloud
 
     def image_callback(self, msg):
         if self.depth_img is None:
@@ -59,38 +60,38 @@ class ObjectDataNode(Node):
             return
 
         try:
-            image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8') #load nad store latest camera image
         except Exception as e:
             self.get_logger().error(f'Error decoding image: {e}')
             return
 
-        results = self.model(image)[0]
-        detections = results.boxes
+        results = self.model(image)[0] #get labels and bounding boxes using model
+        detections = results.boxes #get bounding boxes
 
         if not detections or len(detections) == 0:
             return
         all_points = []
         for box in detections:
-            xmin, ymin, xmax, ymax = map(int, box.xyxy[0].tolist())
+            xmin, ymin, xmax, ymax = map(int, box.xyxy[0].tolist()) #get label, bounding box coords, and confidence of prediction
             cls_id = int(box.cls[0].item())
             label = self.model.names[cls_id]
             confidence = float(box.conf[0])
-
-            # Draw bounding box
+            
+            #drawing the bounding box
             cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
             text = f"{label} ({confidence:.2f})"
             cv2.putText(image, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-            points_3d = self.get_points_from_depth(xmin, ymin, xmax, ymax)
-            self.get_logger().info(f"Detected '{label}' in bbox ({xmin},{ymin})→({xmax},{ymax}) with {len(points_3d)} points")
+            points_3d = self.get_points_from_depth(xmin, ymin, xmax, ymax)  #load pointcloud of object within bounding box
+            self.get_logger().info(f"Detected '{label}' in bbox ({xmin},{ymin})→({xmax},{ymax}) with {len(points_3d)} points") #log data
 
-            if len(points_3d) > 0:
-                all_points.extend(points_3d.tolist())
-                centroid = np.mean(points_3d, axis=0)
+            if len(points_3d) > 0: 
+                all_points.extend(points_3d.tolist())  #all points stores combined pointcloud multiple objects
+                centroid = np.mean(points_3d, axis=0) #finding centroid of individual object
                 x, y, z = centroid
                 self.get_logger().info(f"{label}: Centroid X={x:.2f}, Y={y:.2f}, Z={z:.2f}")
 
-                msg = ObjectData()
+                msg = ObjectData() #create custom message with label, obj position and corresponding point cloud
                 msg.label = label
                 msg.position = Point(x=float(x), y=float(y), z=float(z))
 
@@ -101,7 +102,9 @@ class ObjectDataNode(Node):
                     msg.pointcloud = pc2.create_cloud_xyz32(header, points_3d.tolist())
                     #self.pc_pub.publish(msg.pointcloud)
 
-                self.object_pub.publish(msg)
+                self.object_pub.publish(msg) #publish the message
+
+        #publish combined point cloud
         if all_points:
             header = Header()
             header.stamp = self.get_clock().now().to_msg()
@@ -110,7 +113,7 @@ class ObjectDataNode(Node):
             self.pc_pub.publish(combined_pc)
 
 
-        # Publish annotated image
+        #publish annotated image
         annotated_msg = CompressedImage()
         annotated_msg.header.stamp = self.get_clock().now().to_msg()
         annotated_msg.header.frame_id = msg.header.frame_id if self.latest_pc else "camera_link"
@@ -118,24 +121,27 @@ class ObjectDataNode(Node):
         annotated_msg.data = np.array(cv2.imencode('.jpg', image)[1]).tobytes()
         self.annotated_img_pub.publish(annotated_msg)
 
+        #display annotated image for debug
         cv2.imshow("YOLO 3D Detection", image)
         cv2.waitKey(1)
 
+    #function to map points within bounding box to point cloud
     def get_points_from_depth(self, xmin, ymin, xmax, ymax):
+        #extending bounding box margins to include more points in case bb is too small
         margin = 5
         xmin += margin
         xmax -= margin
         ymin += margin
         ymax -= margin
 
-        if self.depth_img is None:
+        if self.depth_img is None: #check if corresponding depth image exists
             return []
 
         points = []
         depth = self.depth_img
         height, width = depth.shape
 
-        for v in range(ymin, ymax):
+        for v in range(ymin, ymax): #iterate through each point, check validity of data
             if not (0 <= v < height):
                 continue
             for u in range(xmin, xmax):
@@ -144,13 +150,13 @@ class ObjectDataNode(Node):
                 z = depth[v, u]
                 if z == 0 or np.isnan(z):
                     continue
-                x = (u - self.cx) * z / self.fx
+                x = (u - self.cx) * z / self.fx  #map points from 2d to 3d using camera intrinsics
                 y = (v - self.cy) * z / self.fy
-                points.append([z, -x, -y])
+                points.append([z, -x, -y]) #tranformed to align depth img with camera 
 
         return np.array(points, dtype=np.float32)
 
-
+#instantiation and spinning of the node
 def main(args=None):
     rclpy.init(args=args)
     node = ObjectDataNode()
