@@ -100,7 +100,32 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('rviz')),
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
+    
+    left_intersection_detector_node = Node(
+        package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
+        executable='left_inter_completion_detector',  # The name you specified in setup.py's entry_points
+        name='LeftIntersectionDetector',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
 
+    intersection_handler_node = Node(
+        package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
+        executable='intersection_handler',  # The name you specified in setup.py's entry_points
+        name='PointcloudLeftTurnDriver',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+
+    move_forward_node = Node(
+        package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
+        executable='move_forward',  # The name you specified in setup.py's entry_points
+        name='WhitePointImageVisualizer',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+
+    
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
     # ------------------------------------------------------------------------
@@ -118,6 +143,9 @@ def generate_launch_description():
         output="screen",
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
+    
+
+
 
     # ------------------------------------------------------------------------
     # Bridge common topics between ROS 2 and Gazebo
@@ -141,7 +169,7 @@ def generate_launch_description():
         output="screen",
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
-
+    
     # ------------------------------------------------------------------------
     # Image bridge for camera with compressed transport
     # ------------------------------------------------------------------------
@@ -242,5 +270,9 @@ def generate_launch_description():
     ld.add_action(trajectory_odom_topic_node)
     ld.add_action(trajectory_node)
     ld.add_action(robot_state_publisher_node)
+    ld.add_action(left_intersection_detector_node)
+    ld.add_action(intersection_handler_node)
+    ld.add_action(move_forward_node)
+
 
     return ld

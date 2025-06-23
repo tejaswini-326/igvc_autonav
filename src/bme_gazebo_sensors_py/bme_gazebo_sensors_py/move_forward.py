@@ -10,6 +10,7 @@ import math
 from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
+from std_msgs.msg import String
 # x forward, y left, z upward
 
 
@@ -25,13 +26,21 @@ class WhitePointImageVisualizer(Node):
         )
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
+        self.create_subscription(String, '/intersection', self.intersection_cb, 10)
         self.last_cmd = Twist()
         self.last_cmd.linear.x = 0.3
         self.last_cmd.angular.z = 0.0
+        self.active=False
 
         # Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
         self.which_lane = 'left'
-
+    def intersection_cb(self, msg):
+        if msg.data.lower() == "None":
+            self.active = True
+            self.get_logger().info("🟢 'None' received — move_forward activated.")
+        else:
+            self.active = False
+            
     def publish(self, cmd, target=None):
         # if obstacle detected publish other command velocity other than current cmd_vel or else publish the cmd_vel below
         self.cmd_pub.publish(cmd)
@@ -90,6 +99,8 @@ class WhitePointImageVisualizer(Node):
         return cmd
     
     def pointcloud_callback(self, msg):
+        if self.active is False:
+            return
         height = msg.height
         width = msg.width
 

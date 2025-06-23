@@ -11,16 +11,11 @@ import sensor_msgs_py.point_cloud2 as pc2
 import numpy as np
 from math import radians
 import struct
-import subprocess 
-import os
+from std_msgs.msg import String
 import cv2
-import signal
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
-#from std_msgs.msg import Bool
 
-# relative_path = "left_inter_completion_detector.py"
-# script_path = os.path.join(os.path.dirname(__file__), relative_path)
 
 
 
@@ -55,19 +50,15 @@ def normalise_angle(angle: float) -> float:
 class PointcloudLeftTurnDriver(Node):
     def __init__(self):
         super().__init__("pointcloud_left_turn_driver")
-
+        self.create_subscription(String, '/intersection', self.intersection_cb, 10)
+        self.should_drive = False
         self.create_subscription(PointCloud2, "/camera/points", self.pointcloud_cb, 10)
-        self.create_subscription(Odometry, "/odom", self.odom_cb, 50)
-        #self.create_subscription(Bool, '/shutdown_signal', self.shutdown_cb, 10)
+        self.create_subscription(Odometry, "/odom", self.odom_cb, 50)   
         self.cmd_vel_publisher = self.create_publisher(Twist, "cmd_vel", 10)
         if DEBUG:
             self.marker_publisher = self.create_publisher(Marker, "intersection_lane_marker", 10)
             self.filtered_white_points_publilsher = self.create_publisher(PointCloud2, "intersection_filtered_white", 10)
-            self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "intersection_llane_scan_2d_debug", 10)
-        self.get_logger().info(f"🚀 Launching completion detector")
-        self.child_process = subprocess.Popen(["ros2", "run", "bme_gazebo_sensors_py", "left_inter_completion_detector"],preexec_fn=os.setsid)
-        # Add shutdown hook
-        self.add_on_shutdown(self.shutdown_hook)
+            self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "intersection_llane_scan_2d_debug", 10)    
 
         
         #subprocess.Popen(["python3", script_path])
@@ -88,24 +79,20 @@ class PointcloudLeftTurnDriver(Node):
         if DEBUG:
             self.get_logger().info(f"⏩ Driving {INITIAL_INTERSECTION_FORWARD_MOVEMENT:g} m, then left-turn 90 °, then straight again.")
 
-    # def shutdown_cb(self, msg: Bool):
-    #     if msg.data:
-    #         self.get_logger().info("📩 Received shutdown signal. Exiting gracefully.")
-    #         rclpy.shutdown()
-
-    def shutdown_hook(self):
-        self.get_logger().info('Shutting down main node. Terminating child process...')
-        try:
-            # Send SIGINT to the whole process group
-            os.killpg(os.getpgid(self.child_process.pid), signal.SIGINT)
-        except Exception as e:
-            self.get_logger().error(f'Failed to terminate child process: {e}')
+    def intersection_cb(self, msg: String):
+        if msg.data.lower() == "left":
+            self.should_drive = True
+            self.get_logger().info("🛑 Received 'left' from /intersection. Activating left-turn behavior.")
+        else:
+            self.should_drive = False
+            self.get_logger().info(f"🛑 Received '{msg.data}' from /intersection. Ignoring.")
 
     def pointcloud_cb(self, msg: PointCloud2):
         # ----------------------------------------------------------------------
         # 1) Extracting required points from the pointcloud
         # ----------------------------------------------------------------------
-
+        if not self.should_drive:
+            return
         height = msg.height
         width = msg.width
         white_img = np.zeros((height, width, 3), dtype=np.uint8)
@@ -369,6 +356,8 @@ class PointcloudLeftTurnDriver(Node):
 
 
     def odom_cb(self, msg: Odometry):
+        if not self.should_drive:
+            return
         # ─────────────────────────────────────────────────────────────────────
         # 0.  Current pose & yaw  (make yaw available everywhere below)
         # ─────────────────────────────────────────────────────────────────────
@@ -430,6 +419,9 @@ class PointcloudLeftTurnDriver(Node):
 
 
     def publish_cmd(self):
+        if not self.should_drive:
+            self.cmd_vel_publisher.publish(Twist())  # Stop when not driving
+            return
         if self.to_publish_because_of_polar_scans:
             self.cmd_vel_publisher.publish(self.to_publish_because_of_polar_scans)
         else:
