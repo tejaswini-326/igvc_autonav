@@ -9,6 +9,7 @@ python3 -m venv ~/yolo_env
 1.5 -  install these pacakges: FIRST TIME ONLY
 
 pip install --upgrade pip
+
 pip install ultralytics opencv-python numpy
 
 
