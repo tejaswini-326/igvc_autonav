@@ -6,6 +6,12 @@ Running the object detection node on your pc:
 
 python3 -m venv ~/yolo_env
 
+1.5 -  install these pacakges: FIRST TIME ONLY
+
+pip install --upgrade pip
+pip install ultralytics opencv-python numpy
+
+
 2 - build your workspace, source it.
 
 <b>DO NOT BUILD IN VENV. IT WILL RUIN YOUR ROS INSTALLATION.</b>
