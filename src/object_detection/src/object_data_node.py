@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 '''Description: This node integrates the object detection model with ROS, publishing labels, object position, an annotated image with bounding boxes and the point cloud of the object'''
-#TO DO: transforming frame for each point mkaes it slow??
 
 import rclpy
 from rclpy.node import Node
@@ -14,9 +13,7 @@ import numpy as np
 import sensor_msgs_py.point_cloud2 as pc2
 from ultralytics import YOLO
 from cv_bridge import CvBridge
-from tf2_ros import Buffer, TransformListener
-import tf2_geometry_msgs.tf2_geometry_msgs  # NOTE: this is required
-from geometry_msgs.msg import Point, PointStamped
+
 
 class ObjectDataNode(Node): 
     def __init__(self):
@@ -32,13 +29,9 @@ class ObjectDataNode(Node):
         self.pc_pub = self.create_publisher(PointCloud2, 'object_pc', 10)
         self.annotated_img_pub = self.create_publisher(CompressedImage, '/detected_object_img', 10)
 
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
-        self.current_msg_stamp = self.get_clock().now().to_msg()
-
-        # Model & Utils
+        #model and utils
         self.bridge = CvBridge()
-        self.model = YOLO('/home/anoushka-kuriakos/Desktop/igvc-sim/best.pt')
+        self.model = YOLO('/home/tejaswini/Desktop/abhiyaan/best.pt') #add model path here
         self.model.eval()
         self.get_logger().info('YOLOv8 model loaded.')
 
@@ -62,9 +55,6 @@ class ObjectDataNode(Node):
         self.latest_pc = msg #load and store latest point cloud
 
     def image_callback(self, msg):
-
-        self.current_msg_stamp = msg.header.stamp
-
         if self.depth_img is None:
             self.get_logger().warn("No depth image received yet.")
             return
@@ -92,8 +82,8 @@ class ObjectDataNode(Node):
             text = f"{label} ({confidence:.2f})"
             cv2.putText(image, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-            points_3d = self.get_points_from_depth(xmin, ymin, xmax, ymax, self.current_msg_stamp)
-            self.get_logger().info(f"Detected '{label}' in bbox ({xmin},{ymin})→({xmax},{ymax}) with {len(points_3d)} points")
+            points_3d = self.get_points_from_depth(xmin, ymin, xmax, ymax)  #load pointcloud of object within bounding box
+            self.get_logger().info(f"Detected '{label}' in bbox ({xmin},{ymin})→({xmax},{ymax}) with {len(points_3d)} points") #log data
 
             if len(points_3d) > 0: 
                 all_points.extend(points_3d.tolist())  #all points stores combined pointcloud multiple objects
@@ -135,7 +125,9 @@ class ObjectDataNode(Node):
         cv2.imshow("YOLO 3D Detection", image)
         cv2.waitKey(1)
 
-    def get_points_from_depth(self, xmin, ymin, xmax, ymax, time):
+    #function to map points within bounding box to point cloud
+    def get_points_from_depth(self, xmin, ymin, xmax, ymax):
+        #extending bounding box margins to include more points in case bb is too small
         margin = 5
         xmin += margin
         xmax -= margin
@@ -149,9 +141,7 @@ class ObjectDataNode(Node):
         depth = self.depth_img
         height, width = depth.shape
 
-        vertical_threshold = 0.005  # meters; adjust as needed to ignore ground
-
-        for v in range(ymin, ymax):
+        for v in range(ymin, ymax): #iterate through each point, check validity of data
             if not (0 <= v < height):
                 continue
             for u in range(xmin, xmax):
@@ -160,35 +150,16 @@ class ObjectDataNode(Node):
                 z = depth[v, u]
                 if z == 0 or np.isnan(z):
                     continue
-
-                x = (u - self.cx) * z / self.fx
+                x = (u - self.cx) * z / self.fx  #map points from 2d to 3d using camera intrinsics
                 y = (v - self.cy) * z / self.fy
 
-                points_odom = self.transform_points([z,-x,-y], time, 'camera_link', 'base_link')
-                if points_odom is None or points_odom[2] < vertical_threshold:
-                    # Z = height
-                    continue
-
-                points.append([z, -x, -y])
+                dist = np.sqrt(x**2 + y**2 + z**2)
+                if dist <= 6.0:             #only publishing points within a radius to avoid nans
+                    points.append([z, -x, -y]) #tranformed to align depth img with camera 
 
         return np.array(points, dtype=np.float32)
 
-    def transform_points(self, point_cam, time, from_frame, to_frame):
-        
-        point_stamped = PointStamped()
-        point_stamped.header.stamp = time
-        point_stamped.header.frame_id = from_frame
-        point_stamped.point.x = point_cam[0]
-        point_stamped.point.y = point_cam[1]
-        point_stamped.point.z = point_cam[2]
-
-        try:
-            transformed = self.tf_buffer.transform(point_stamped, to_frame, timeout=rclpy.duration.Duration(seconds=0.5))
-            return np.array([transformed.point.x, transformed.point.y, transformed.point.z], dtype=np.float32)
-        except Exception as e:
-            self.get_logger().warn(f"TF transform failed: {e}")
-            return None
-
+#instantiation and spinning of the node
 def main(args=None):
     rclpy.init(args=args)
     node = ObjectDataNode()
