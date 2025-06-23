@@ -38,7 +38,8 @@ class ObjectDataNode(Node):
         #initialising variables
         self.depth_img = None
         self.latest_pc = None
-        self.fx = 102.7348185494929  #camera intrinsics from urdf
+        #camera intrinsics from urdf
+        self.fx = 102.7348185494929
         self.fy = 102.7348185494929
         self.cx = 160.0
         self.cy = 120.0
@@ -83,7 +84,6 @@ class ObjectDataNode(Node):
             cls_id = int(box.cls[0].item())
             label = self.model.names[cls_id]
             confidence = float(box.conf[0])
-
             #drawing the bounding box
             cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
             text = f"{label} ({confidence:.2f})"

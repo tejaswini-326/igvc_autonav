@@ -10,10 +10,15 @@ import sensor_msgs_py.point_cloud2 as pc2
 import numpy as np
 from math import radians
 import struct
-
+import subprocess 
+import os
 import cv2
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
+from std_msgs.msg import Bool
+
+relative_path = "left_inter_completion_detector.py"
+script_path = os.path.join(os.path.dirname(__file__), relative_path)
 
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -27,13 +32,13 @@ DEBUG = True
 MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60 
 
 # Movement Related
-LINEAR_SPEED                                    = 0.2                # m/s   (forward)
+LINEAR_SPEED                                    = 1                # m/s   (forward)
 CMD_VEL_PUBLISHING_TIME_INTERVAL                = 0.1                # Time interval between 2 publishers in seconds
 
 # Intersection Turning Related
 ANGLE_TOLERANCE                                 = radians(45)        # ± deg window around 90° – θ
-INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 1                  # metres
-LEFT_TURN_ANGULAR_SPEED                         = 0.25               # rad/s (+ve = CCW = left)
+INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 1.5                 # metres
+LEFT_TURN_ANGULAR_SPEED                         = 0.3          # rad/s (+ve = CCW = left)
 TURN_ANGLE                                      = radians(80.0)      # 90 was over-turning for me? I'm not sure why though
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -49,13 +54,14 @@ class PointcloudLeftTurnDriver(Node):
 
         self.create_subscription(PointCloud2, "/camera/points", self.pointcloud_cb, 10)
         self.create_subscription(Odometry, "/odom", self.odom_cb, 50)
-
+        self.create_subscription(Bool, '/shutdown_signal', self.shutdown_cb, 10)
         self.cmd_vel_publisher = self.create_publisher(Twist, "cmd_vel", 10)
         if DEBUG:
             self.marker_publisher = self.create_publisher(Marker, "intersection_lane_marker", 10)
             self.filtered_white_points_publilsher = self.create_publisher(PointCloud2, "intersection_filtered_white", 10)
             self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "intersection_llane_scan_2d_debug", 10)
-
+        self.get_logger().info(f"🚀 Launching completion detector")
+        subprocess.Popen(["python3", script_path])
         # Internal state
         self.prev_x = None
         self.prev_y = None
@@ -73,6 +79,10 @@ class PointcloudLeftTurnDriver(Node):
         if DEBUG:
             self.get_logger().info(f"⏩ Driving {INITIAL_INTERSECTION_FORWARD_MOVEMENT:g} m, then left-turn 90 °, then straight again.")
 
+    def shutdown_cb(self, msg: Bool):
+        if msg.data:
+            self.get_logger().info("📩 Received shutdown signal. Exiting gracefully.")
+            rclpy.shutdown()
 
     def pointcloud_cb(self, msg: PointCloud2):
         # ----------------------------------------------------------------------
