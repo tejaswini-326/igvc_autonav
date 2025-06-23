@@ -31,7 +31,6 @@ class WhitePointImageVisualizer(Node):
         self.last_cmd.angular.z = 0.0
         self.active=True
         self.stopped = False
-
         # Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
         self.which_lane = 'right'
     def intersection_cb(self, msg):
@@ -41,10 +40,6 @@ class WhitePointImageVisualizer(Node):
         else:
             self.active = False
             
-        self.stopped = False
-
-        # Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
-        self.which_lane = 'right'
 
     def publish(self, cmd, target=None):
         if self.stopped:
