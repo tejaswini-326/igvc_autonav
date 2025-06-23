@@ -6,7 +6,7 @@ Running the object detection node on your pc:
 
 python3 -m venv ~/yolo_env
 
-1.5 -  install these pacakges: FIRST TIME ONLY
+1.5 -  install these pacakges INSIDE THE VENV: FIRST TIME ONLY
 
 pip install --upgrade pip
 

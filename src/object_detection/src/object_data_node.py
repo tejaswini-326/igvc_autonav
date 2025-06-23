@@ -151,7 +151,7 @@ class ObjectDataNode(Node):
                 y = (v - self.cy) * z / self.fy
 
                 dist = np.sqrt(x**2 + y**2 + z**2)
-                if dist <= 6.0:             #only publishing points within a radius to avoid nans
+                if dist <= 5.0:             #only publishing points within a radius to avoid nans
                     points.append([z, -x, -y]) #tranformed to align depth img with camera 
 
         return np.array(points, dtype=np.float32)

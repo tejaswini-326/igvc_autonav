@@ -11,9 +11,8 @@ from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 from std_msgs.msg import String
+
 # x forward, y left, z upward
-
-
 
 class WhitePointImageVisualizer(Node):
     def __init__(self):
@@ -28,12 +27,13 @@ class WhitePointImageVisualizer(Node):
         self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
         self.create_subscription(String, '/intersection', self.intersection_cb, 10)
         self.last_cmd = Twist()
-        self.last_cmd.linear.x = 0.3
+        self.last_cmd.linear.x = 1.0
         self.last_cmd.angular.z = 0.0
-        self.active=False
+        self.active=True
+        self.stopped = False
 
         # Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
-        self.which_lane = 'left'
+        self.which_lane = 'right'
     def intersection_cb(self, msg):
         if msg.data.lower() == "None":
             self.active = True
@@ -41,10 +41,23 @@ class WhitePointImageVisualizer(Node):
         else:
             self.active = False
             
+        self.stopped = False
+
+        # Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
+        self.which_lane = 'right'
+
     def publish(self, cmd, target=None):
-        # if obstacle detected publish other command velocity other than current cmd_vel or else publish the cmd_vel below
-        self.cmd_pub.publish(cmd)
-        return
+        if self.stopped:
+            # Override any move command with a full stop
+            self.get_logger().warn("Robot is stopped — blocking velocity command.")
+            stop_cmd = Twist()
+            stop_cmd.linear.x = 0.0
+            stop_cmd.angular.z = 0.0
+            self.cmd_pub.publish(stop_cmd)
+        else:
+            self.cmd_pub.publish(cmd)
+
+        print('')
 
     def debug_time_yo_yo_yo(self, x, y, msg, img, centers):
         self.get_logger().info(f"DEBUG")
@@ -85,22 +98,82 @@ class WhitePointImageVisualizer(Node):
         angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
 
         # Move toward target
-        cmd.linear.x = 0.5  # Forward speed
+        cmd.linear.x = 5.0  # Forward speed
     
         # Small angle threshold to avoid jitter
         if abs(angle_to_target) > 0.05:
             cmd.angular.z = angle_to_target  # Steer towards target
             if abs(angle_to_target) > 0.4:
-                cmd.linear.x = 0.1
+                cmd.linear.x = 0.2
             self.get_logger().info(f"Turning: angle to target = {math.degrees(angle_to_target):.2f}°")
         else:
             cmd.angular.z = 0.0
             self.get_logger().info("Target straight ahead")
         return cmd
     
+    def detect_horizontal_lines_2d(self, msg):
+        
+        white_y_vals = []
+
+        for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
+            x, y, z, rgb = point
+            if rgb is None or math.isnan(x) or math.isnan(y) or math.isnan(z):
+                continue
+
+            try:
+                rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
+            except:
+                continue
+
+            r = (rgb_int >> 16) & 0xFF
+            g = (rgb_int >> 8) & 0xFF
+            b = rgb_int & 0xFF
+
+            white_threshold = 100  # Increased threshold
+            color_balance_threshold = 25  # Colors should be similar for true white
+            
+            # Check if pixel is white (high intensity + balanced RGB)
+            avg_color = (r + g + b) / 3
+            if (r > white_threshold and g > white_threshold and b > white_threshold and
+                abs(r - avg_color) < color_balance_threshold and 
+                abs(g - avg_color) < color_balance_threshold and 
+                abs(b - avg_color) < color_balance_threshold):
+
+                if 3.0 < x < 3.5 and -1.4 < z < -1.3:
+                    white_y_vals.append(y)
+
+        if len(white_y_vals) < 300:
+            return
+
+        # Create histogram over Y axis
+        hist, bin_edges = np.histogram(white_y_vals, bins=20, range=(-2.0, 2.0))
+
+        # Find contiguous bin groups with high density
+        dense_threshold = 5  # min points per bin
+        dense_bins = [bin_edges[i] for i in range(len(hist)) if hist[i] >= dense_threshold]
+
+        if len(dense_bins) < 2:
+            return
+
+        # Dense region span = difference between leftmost and rightmost high bins
+        y_dense_min = min(dense_bins)
+        y_dense_max = max(dense_bins)
+        dense_y_range = y_dense_max - y_dense_min
+
+        if dense_y_range > 0.7:
+            self.get_logger().warn(
+                f"STOP LINE DETECTED: dense y-range = {dense_y_range:.2f}m with {len(white_y_vals)} points"
+            )
+            self.stopped = True
+
     def pointcloud_callback(self, msg):
         if self.active is False:
             return
+        
+        self.detect_horizontal_lines_2d(msg)
+        # if self.stopped == True:
+        #     self.destroy_node()
+
         height = msg.height
         width = msg.width
 
@@ -138,33 +211,21 @@ class WhitePointImageVisualizer(Node):
                 abs(b - avg_color) < color_balance_threshold):
 
                 # Ground level filtering
-                if -1.5 < z < -0.5:  # Adjusted range
+                if -1.4 < z < -1.3 and 0.0 < x < 3.0:  # Adjusted range
                     white_img[row, col] = (255, 255, 255)
                     white_ground_points.append([x, y, z])  # Store x,y,z coordinates
             index += 1
 
-        self.get_logger().info(f"White ground points: {len(white_ground_points)}")
-
-        # Display only the white thresholded image
-        # cv2.imshow("White Lane Clusters", white_img)
-        # cv2.waitKey(1)
-
-        if len(white_ground_points) < 10:  # Increased minimum threshold
-            self.get_logger().warn("Not enough white points for clustering")
+        # Only do 3D clustering for lane following if we have enough points
+        if len(white_ground_points) < 10:
+            self.get_logger().warn("Not enough white points for lane detection")
+            self.publish(self.last_cmd)
             return
 
         points_np = np.array(white_ground_points)
         
         # Use only x,y coordinates for clustering (ignore z)
         points_xy = points_np[:, :2]  # Extract x,y coordinates
-        
-        # Debug: Print point distribution
-        x_coords = points_xy[:, 0]
-        y_coords = points_xy[:, 1]
-        z_coords = points_np[:, 2]
-        self.get_logger().info(f"X range: {x_coords.min():.2f} to {x_coords.max():.2f}")
-        self.get_logger().info(f"Y range: {y_coords.min():.2f} to {y_coords.max():.2f}")
-        self.get_logger().info(f"Z range: {z_coords.min():.2f} to {z_coords.max():.2f}")
 
         # Better clustering parameters
         eps = 0.75  # Reduced eps for tighter clusters
@@ -175,44 +236,23 @@ class WhitePointImageVisualizer(Node):
         
         # Count clusters and noise points
         unique_labels = set(labels)
-        n_clusters = len(unique_labels) - (1 if -1 in labels else 0)
-        n_noise = list(labels).count(-1)
-        
-        self.get_logger().info(f"Clusters found: {n_clusters}, Noise points: {n_noise}")
-        self.get_logger().info(f"Cluster labels: {unique_labels}")
 
-        # Process valid clusters
+        # Process lane clusters
         centers = []
-        cluster_info = []
-        
         for label in unique_labels:
-            if label == -1:  # Skip noise
+            if label == -1:
                 continue
-                
-            cluster_points = points_xy[labels == label]  # Use x,y coordinates
-            cluster_size = len(cluster_points)
-            
-            # Filter out very small clusters
-            if cluster_size < 10:
-                self.get_logger().info(f"Cluster {label} too small ({cluster_size} points), skipping")
-                continue
-                
-            center = np.mean(cluster_points, axis=0)
-            std_dev = np.std(cluster_points, axis=0)
-            
-            
-            centers.append((label, center))
-            cluster_info.append({
-                'label': label,
-                'center': center,
-                'size': cluster_size,
-                'std': std_dev
-            })
-            
-            self.get_logger().info(f"Valid cluster {label}: center=({center[0]:.2f}, {center[1]:.2f}), size={cluster_size}, std=({std_dev[0]:.2f}, {std_dev[1]:.2f})")
 
+            cluster_points = points_xy[labels == label]
+            cluster_size = len(cluster_points)
+            if cluster_size < 10:
+                continue
+
+            center = np.mean(cluster_points, axis=0)
+            centers.append((label, center))
+
+        # Lane following logic
         cmd = Twist()
-        # Lane detection logic (processing only, no visualization)
         if len(centers) == 2:
             centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
             self.get_logger().info(f"{centers}")
@@ -221,35 +261,36 @@ class WhitePointImageVisualizer(Node):
             right_lane = centers[0][1]  # rightmost cluster
             
             target = (left_lane + right_lane) / 2
-            self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
+            
             cmd = self.calculate_normal_velocity(target, msg, white_img, centers)
             
             self.publish(cmd, target)
             self.last_cmd = cmd
             self.last_cmd.linear.x = 0.0
+            return
 
-        elif len(centers) >= 3:
+        if len(centers) >= 3:
             centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
-            self.get_logger().info(f"{centers}")
 
             right_lane = centers[0][1]
             middle_lane = centers[1][1]
             left_lane = centers[2][1]
 
             target = ((middle_lane + right_lane) / 2) if self.which_lane == 'right' else ((middle_lane + left_lane) / 2)
-            self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
             cmd = self.calculate_normal_velocity(target, msg, white_img, centers)
 
             self.publish(cmd, target)
             self.last_cmd = cmd
             self.last_cmd.linear.x = 0.0
+            return
         
+
         elif len(centers) == 1:
-            """
-            In case only one cluster is detected, this code will fir a parabola to the points in that clsuter and follow the curve.
-            It does this by following the center of the cluster and estimating the slope of the curve at that point. If enough points are not detected, 
-            it will simply move forward without turning.
-            """
+            
+            # In case only one cluster is detected, this code will fir a parabola to the points in that clsuter and follow the curve.
+            # It does this by following the center of the cluster and estimating the slope of the curve at that point. If enough points are not detected, 
+            # it will simply move forward without turning.
+            
             self.get_logger().info("Only one lane cluster found")
             label, center = centers[0]
             cluster_points = points_xy[labels == label]
@@ -312,13 +353,13 @@ class WhitePointImageVisualizer(Node):
             # Visual debugging and publishing control
             self.debug_time_yo_yo_yo(center[0], center[1], msg, white_img, centers)
             self.publish(cmd)
-
+            self.last_cmd = cmd
+            self.last_cmd.linear.x = 0.0
 
         else:
             self.get_logger().warn("No valid clusters found for lane detection")
-
-        
-        
+            self.publish(self.last_cmd)
+            
 
 
 def main(args=None):

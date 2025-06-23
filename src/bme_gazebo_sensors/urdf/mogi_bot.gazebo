@@ -11,9 +11,9 @@
       <left_joint>left_wheel_joint</left_joint>
       <right_joint>right_wheel_joint</right_joint>
 
-      <!-- Wheel parameters -->
-      <wheel_separation>0.3</wheel_separation>        <!-- Adjust for your robot -->
-      <wheel_radius>0.1</wheel_radius>                <!-- Adjust for your robot -->
+        <!-- Wheel parameters -->
+        <wheel_separation>1.1</wheel_separation>        <!-- Adjust for your robot -->
+        <wheel_radius>0.1875</wheel_radius>                <!-- Adjust for your robot -->
 
       <!-- Control gains and limits (optional) -->
       <max_velocity>3.0</max_velocity>                <!-- Max linear velocity in m/s -->
