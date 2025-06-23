@@ -24,7 +24,9 @@ setup(
             'gps_waypoint_follower = bme_gazebo_sensors_py.gps_waypoint_follower:main',
             'chase_the_ball = bme_gazebo_sensors_py.chase_the_ball:main',
             'transformed_pointcloud = bme_gazebo_sensors_py.pointcloud_transform:main',
-            'intersection_handler = bme_gazebo_sensors_py.intersection_handler:main'
+            'intersection_handler = bme_gazebo_sensors_py.intersection_handler:main',
+            'move_forward = bme_gazebo_sensors_py.move_forward:main',
+            'left_inter_completion_detector = bme_gazebo_sensors_py.left_inter_completion_detector:main',
         ],
     },
 )

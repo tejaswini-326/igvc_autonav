@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2, PointField, Image
 from nav_msgs.msg import Odometry
+from bme_gazebo_sensors_py.left_inter_completion_detector import LeftIntersectionDetector
 from geometry_msgs.msg import Twist
 from tf_transformations import euler_from_quaternion
 import sensor_msgs_py.point_cloud2 as pc2
@@ -11,14 +12,16 @@ import numpy as np
 from math import radians
 import struct
 import subprocess 
-import os
+# import os
 import cv2
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
-from std_msgs.msg import Bool
+#from std_msgs.msg import Bool
 
-relative_path = "left_inter_completion_detector.py"
-script_path = os.path.join(os.path.dirname(__file__), relative_path)
+# relative_path = "left_inter_completion_detector.py"
+# script_path = os.path.join(os.path.dirname(__file__), relative_path)
+
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -54,14 +57,16 @@ class PointcloudLeftTurnDriver(Node):
 
         self.create_subscription(PointCloud2, "/camera/points", self.pointcloud_cb, 10)
         self.create_subscription(Odometry, "/odom", self.odom_cb, 50)
-        self.create_subscription(Bool, '/shutdown_signal', self.shutdown_cb, 10)
+        #self.create_subscription(Bool, '/shutdown_signal', self.shutdown_cb, 10)
         self.cmd_vel_publisher = self.create_publisher(Twist, "cmd_vel", 10)
         if DEBUG:
             self.marker_publisher = self.create_publisher(Marker, "intersection_lane_marker", 10)
             self.filtered_white_points_publilsher = self.create_publisher(PointCloud2, "intersection_filtered_white", 10)
             self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "intersection_llane_scan_2d_debug", 10)
         self.get_logger().info(f"🚀 Launching completion detector")
-        subprocess.Popen(["python3", script_path])
+        self.file_a_process = subprocess.Popen(["ros2", "run", "bme_gazebo_sensors_py", "left_inter_completion_detector"])
+
+        #subprocess.Popen(["python3", script_path])
         # Internal state
         self.prev_x = None
         self.prev_y = None
@@ -79,10 +84,10 @@ class PointcloudLeftTurnDriver(Node):
         if DEBUG:
             self.get_logger().info(f"⏩ Driving {INITIAL_INTERSECTION_FORWARD_MOVEMENT:g} m, then left-turn 90 °, then straight again.")
 
-    def shutdown_cb(self, msg: Bool):
-        if msg.data:
-            self.get_logger().info("📩 Received shutdown signal. Exiting gracefully.")
-            rclpy.shutdown()
+    # def shutdown_cb(self, msg: Bool):
+    #     if msg.data:
+    #         self.get_logger().info("📩 Received shutdown signal. Exiting gracefully.")
+    #         rclpy.shutdown()
 
     def pointcloud_cb(self, msg: PointCloud2):
         # ----------------------------------------------------------------------

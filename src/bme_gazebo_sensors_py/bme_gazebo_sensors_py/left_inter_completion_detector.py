@@ -8,7 +8,7 @@ from rclpy.node import Node
 import subprocess  # for launching external files
 from std_msgs.msg import Bool
 
-relative_path = "../../bme_gazebo_sensors/move_forward.py"
+relative_path = "move_forward.py"
 script_path = os.path.join(os.path.dirname(__file__), relative_path)
 
 class LeftIntersectionDetector(Node):
