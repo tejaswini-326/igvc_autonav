@@ -7,6 +7,7 @@ import os
 from rclpy.node import Node
 import subprocess  # for launching external files
 from std_msgs.msg import Bool
+import signal
 
 relative_path = "move_forward.py"
 script_path = os.path.join(os.path.dirname(__file__), relative_path)

@@ -12,8 +12,9 @@ import numpy as np
 from math import radians
 import struct
 import subprocess 
-# import os
+import os
 import cv2
+import signal
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 #from std_msgs.msg import Bool
@@ -35,19 +36,19 @@ DEBUG = True
 MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60 
 
 # Movement Related
-LINEAR_SPEED                                    = 1                # m/s   (forward)
+LINEAR_SPEED                                    = 1                  # m/s   (forward)
 CMD_VEL_PUBLISHING_TIME_INTERVAL                = 0.1                # Time interval between 2 publishers in seconds
 
 # Intersection Turning Related
-ANGLE_TOLERANCE                                 = radians(45)        # ± deg window around 90° – θ
+ANGLE_TOLERANCE                                 = radians(45)         # ± deg window around 90° – θ
 INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 1.5                 # metres
-LEFT_TURN_ANGULAR_SPEED                         = 0.3          # rad/s (+ve = CCW = left)
-TURN_ANGLE                                      = radians(80.0)      # 90 was over-turning for me? I'm not sure why though
+LEFT_TURN_ANGULAR_SPEED                         = 0.3                 #rad/s (+ve = CCW = left)
+TURN_ANGLE                                      = radians(80.0)       # 90 was over-turning for me? I'm not sure why though
 
 # ──────────────────────────────────────────────────────────────────────────────
 
 def normalise_angle(angle: float) -> float:
-    """Wrap `angle` to the interval [-π, π]."""
+    """Wrap `angle` to the interval [-π, π].""" 
     return (angle + pi) % (2 * pi) - pi
 
 
@@ -64,8 +65,11 @@ class PointcloudLeftTurnDriver(Node):
             self.filtered_white_points_publilsher = self.create_publisher(PointCloud2, "intersection_filtered_white", 10)
             self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "intersection_llane_scan_2d_debug", 10)
         self.get_logger().info(f"🚀 Launching completion detector")
-        self.file_a_process = subprocess.Popen(["ros2", "run", "bme_gazebo_sensors_py", "left_inter_completion_detector"])
+        self.child_process = subprocess.Popen(["ros2", "run", "bme_gazebo_sensors_py", "left_inter_completion_detector"],preexec_fn=os.setsid)
+        # Add shutdown hook
+        self.add_on_shutdown(self.shutdown_hook)
 
+        
         #subprocess.Popen(["python3", script_path])
         # Internal state
         self.prev_x = None
@@ -88,6 +92,14 @@ class PointcloudLeftTurnDriver(Node):
     #     if msg.data:
     #         self.get_logger().info("📩 Received shutdown signal. Exiting gracefully.")
     #         rclpy.shutdown()
+
+    def shutdown_hook(self):
+        self.get_logger().info('Shutting down main node. Terminating child process...')
+        try:
+            # Send SIGINT to the whole process group
+            os.killpg(os.getpgid(self.child_process.pid), signal.SIGINT)
+        except Exception as e:
+            self.get_logger().error(f'Failed to terminate child process: {e}')
 
     def pointcloud_cb(self, msg: PointCloud2):
         # ----------------------------------------------------------------------
