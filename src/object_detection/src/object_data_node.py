@@ -4,7 +4,7 @@
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image, PointCloud2, CameraInfo, CompressedImage
+from sensor_msgs.msg import Image, PointCloud2
 from std_msgs.msg import Header
 from geometry_msgs.msg import Point
 from object_detection.msg import ObjectData
@@ -27,7 +27,7 @@ class ObjectDataNode(Node):
         #publishers to output custom message, object point cloud and image with predictions
         self.object_pub = self.create_publisher(ObjectData, 'object_data', 10)
         self.pc_pub = self.create_publisher(PointCloud2, 'object_pc', 10)
-        self.annotated_img_pub = self.create_publisher(CompressedImage, '/detected_object_img', 10)
+        self.annotated_img_pub = self.create_publisher(Image, '/detected_object_img', 10) #changed to raw image for rviz
 
         #model and utils
         self.bridge = CvBridge()
@@ -37,13 +37,13 @@ class ObjectDataNode(Node):
 
         #initialising variables
         self.depth_img = None
-        self.latest_image = None
         self.latest_pc = None
         #camera intrinsics from urdf
         self.fx = 102.7348185494929
         self.fy = 102.7348185494929
         self.cx = 160.0
         self.cy = 120.0
+        self.frame_count = 0  #used to skip frames for speed
 
     def depth_callback(self, msg):
         try:
@@ -55,12 +55,16 @@ class ObjectDataNode(Node):
         self.latest_pc = msg #load and store latest point cloud
 
     def image_callback(self, msg):
-        if self.depth_img is None:
+        if self.depth_img is None: #check if depth image is available
             self.get_logger().warn("No depth image received yet.")
             return
 
+        self.frame_count += 1
+        if self.frame_count % 3 != 0:  #skip every 2 out of 3 frames for faster inference
+            return
+
         try:
-            image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8') #load nad store latest camera image
+            image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8') #load and store latest camera image
         except Exception as e:
             self.get_logger().error(f'Error decoding image: {e}')
             return
@@ -70,60 +74,53 @@ class ObjectDataNode(Node):
 
         if not detections or len(detections) == 0:
             return
+
+        stamp = self.get_clock().now().to_msg()
+        frame_id = self.latest_pc.header.frame_id if self.latest_pc else "camera_link"
         all_points = []
+
         for box in detections:
             xmin, ymin, xmax, ymax = map(int, box.xyxy[0].tolist()) #get label, bounding box coords, and confidence of prediction
             cls_id = int(box.cls[0].item())
             label = self.model.names[cls_id]
             confidence = float(box.conf[0])
-            
             #drawing the bounding box
             cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
             text = f"{label} ({confidence:.2f})"
             cv2.putText(image, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
             points_3d = self.get_points_from_depth(xmin, ymin, xmax, ymax)  #load pointcloud of object within bounding box
-            self.get_logger().info(f"Detected '{label}' in bbox ({xmin},{ymin})→({xmax},{ymax}) with {len(points_3d)} points") #log data
 
             if len(points_3d) > 0: 
                 all_points.extend(points_3d.tolist())  #all points stores combined pointcloud multiple objects
                 centroid = np.mean(points_3d, axis=0) #finding centroid of individual object
                 x, y, z = centroid
-                self.get_logger().info(f"{label}: Centroid X={x:.2f}, Y={y:.2f}, Z={z:.2f}")
+                self.get_logger().debug(f"{label}: Centroid X={x:.2f}, Y={y:.2f}, Z={z:.2f}") #log data
 
-                msg = ObjectData() #create custom message with label, obj position and corresponding point cloud
-                msg.label = label
-                msg.position = Point(x=float(x), y=float(y), z=float(z))
+                msg_out = ObjectData() #create custom message with label, obj position and corresponding point cloud
+                msg_out.label = label
+                msg_out.position = Point(x=float(x), y=float(y), z=float(z))
 
                 if self.latest_pc:
-                    header = Header()
-                    header.stamp = self.get_clock().now().to_msg()
-                    header.frame_id = self.latest_pc.header.frame_id
-                    msg.pointcloud = pc2.create_cloud_xyz32(header, points_3d.tolist())
-                    #self.pc_pub.publish(msg.pointcloud)
+                    header = Header(stamp=stamp, frame_id=frame_id)
+                    msg_out.pointcloud = pc2.create_cloud_xyz32(header, points_3d.tolist())
 
-                self.object_pub.publish(msg) #publish the message
+                self.object_pub.publish(msg_out) #publish the message
 
         #publish combined point cloud
         if all_points:
-            header = Header()
-            header.stamp = self.get_clock().now().to_msg()
-            header.frame_id = self.latest_pc.header.frame_id
+            header = Header(stamp=stamp, frame_id=frame_id)
             combined_pc = pc2.create_cloud_xyz32(header, all_points)
             self.pc_pub.publish(combined_pc)
 
-
-        #publish annotated image
-        annotated_msg = CompressedImage()
-        annotated_msg.header.stamp = self.get_clock().now().to_msg()
-        annotated_msg.header.frame_id = msg.header.frame_id if self.latest_pc else "camera_link"
-        annotated_msg.format = "jpeg"
-        annotated_msg.data = np.array(cv2.imencode('.jpg', image)[1]).tobytes()
-        self.annotated_img_pub.publish(annotated_msg)
-
-        #display annotated image for debug
-        cv2.imshow("YOLO 3D Detection", image)
-        cv2.waitKey(1)
+        #publish annotated image for rviz (raw format instead of compressed)
+        try:
+            img_msg = self.bridge.cv2_to_imgmsg(image, encoding="bgr8") #convert to ros image
+            img_msg.header.stamp = stamp
+            img_msg.header.frame_id = frame_id
+            self.annotated_img_pub.publish(img_msg)
+        except Exception as e:
+            self.get_logger().warn(f"Could not publish annotated image: {e}")
 
     #function to map points within bounding box to point cloud
     def get_points_from_depth(self, xmin, ymin, xmax, ymax):
@@ -166,7 +163,7 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
-    cv2.destroyAllWindows()
+    #no need to call destroyAllWindows since imshow is not used
 
 
 if __name__ == '__main__':
