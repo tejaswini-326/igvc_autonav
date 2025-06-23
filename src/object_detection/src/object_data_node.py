@@ -146,7 +146,10 @@ class ObjectDataNode(Node):
                     continue
                 x = (u - self.cx) * z / self.fx
                 y = (v - self.cy) * z / self.fy
-                points.append([z, -x, -y])
+
+                dist = np.sqrt(x**2 + y**2 + z**2)
+                if dist <= 6.0:  
+                    points.append([z, -x, -y])
 
         return np.array(points, dtype=np.float32)
 
