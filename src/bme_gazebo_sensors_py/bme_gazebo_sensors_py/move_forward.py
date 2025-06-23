@@ -8,6 +8,9 @@ import cv2
 from sklearn.cluster import DBSCAN
 import math
 from geometry_msgs.msg import Twist
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point
+
 # x forward, y left, z upward
 
 class WhitePointImageVisualizer(Node):
@@ -94,7 +97,7 @@ class WhitePointImageVisualizer(Node):
         return cmd
     
     def detect_horizontal_lines_2d(self, msg):
-        """Detect stop line by checking dense spread in Y across 2–3m ahead."""
+        
         white_y_vals = []
 
         for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
@@ -121,7 +124,7 @@ class WhitePointImageVisualizer(Node):
                 abs(g - avg_color) < color_balance_threshold and 
                 abs(b - avg_color) < color_balance_threshold):
 
-                if 3.0 < x < 3.5 and -1.5 < z < -0.5:
+                if 3.0 < x < 3.5 and -1.4 < z < -1.3:
                     white_y_vals.append(y)
 
         if len(white_y_vals) < 300:
@@ -148,9 +151,6 @@ class WhitePointImageVisualizer(Node):
             )
             self.stopped = True
 
-
-
-    
     def pointcloud_callback(self, msg):
         self.detect_horizontal_lines_2d(msg)
         # if self.stopped == True:
@@ -208,14 +208,6 @@ class WhitePointImageVisualizer(Node):
         
         # Use only x,y coordinates for clustering (ignore z)
         points_xy = points_np[:, :2]  # Extract x,y coordinates
-        
-        # Debug: Print point distribution
-        x_coords = points_xy[:, 0]
-        y_coords = points_xy[:, 1]
-        z_coords = points_np[:, 2]
-        # self.get_logger().info(f"X range: {x_coords.min():.2f} to {x_coords.max():.2f}")
-        # self.get_logger().info(f"Y range: {y_coords.min():.2f} to {y_coords.max():.2f}")
-        # self.get_logger().info(f"Z range: {z_coords.min():.2f} to {z_coords.max():.2f}")
 
         # Better clustering parameters
         eps = 0.75  # Reduced eps for tighter clusters
@@ -226,10 +218,6 @@ class WhitePointImageVisualizer(Node):
         
         # Count clusters and noise points
         unique_labels = set(labels)
-        n_clusters = len(unique_labels) - (1 if -1 in labels else 0)
-        n_noise = list(labels).count(-1)
-        
-        # self.get_logger().info(f"Clusters found: {n_clusters}, Noise points: {n_noise}")
 
         # Process lane clusters
         centers = []
@@ -255,7 +243,7 @@ class WhitePointImageVisualizer(Node):
             right_lane = centers[0][1]  # rightmost cluster
             
             target = (left_lane + right_lane) / 2
-            # self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
+            
             cmd = self.calculate_normal_velocity(target, msg, white_img, centers)
             
             self.publish(cmd, target)
@@ -265,14 +253,12 @@ class WhitePointImageVisualizer(Node):
 
         if len(centers) >= 3:
             centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
-            # self.get_logger().info(f"{centers}")
 
             right_lane = centers[0][1]
             middle_lane = centers[1][1]
             left_lane = centers[2][1]
 
             target = ((middle_lane + right_lane) / 2) if self.which_lane == 'right' else ((middle_lane + left_lane) / 2)
-            # self.get_logger().info(f"Target point: ({target[0]:.2f}, {target[1]:.2f})")
             cmd = self.calculate_normal_velocity(target, msg, white_img, centers)
 
             self.publish(cmd, target)
@@ -282,11 +268,11 @@ class WhitePointImageVisualizer(Node):
         
 
         elif len(centers) == 1:
-            """
-            In case only one cluster is detected, this code will fir a parabola to the points in that clsuter and follow the curve.
-            It does this by following the center of the cluster and estimating the slope of the curve at that point. If enough points are not detected, 
-            it will simply move forward without turning.
-            """
+            
+            # In case only one cluster is detected, this code will fir a parabola to the points in that clsuter and follow the curve.
+            # It does this by following the center of the cluster and estimating the slope of the curve at that point. If enough points are not detected, 
+            # it will simply move forward without turning.
+            
             self.get_logger().info("Only one lane cluster found")
             label, center = centers[0]
             cluster_points = points_xy[labels == label]
@@ -349,10 +335,13 @@ class WhitePointImageVisualizer(Node):
             # Visual debugging and publishing control
             self.debug_time_yo_yo_yo(center[0], center[1], msg, white_img, centers)
             self.publish(cmd)
-
+            self.last_cmd = cmd
+            self.last_cmd.linear.x = 0.0
 
         else:
             self.get_logger().warn("No valid clusters found for lane detection")
+            self.publish(self.last_cmd)
+            
 
 
 def main(args=None):
