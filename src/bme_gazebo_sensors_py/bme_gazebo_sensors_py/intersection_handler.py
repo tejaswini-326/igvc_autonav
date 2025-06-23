@@ -17,7 +17,7 @@ from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 from std_msgs.msg import Bool
 
-relative_path = "right_inter_completion_detector.py"
+relative_path = "left_inter_completion_detector.py"
 script_path = os.path.join(os.path.dirname(__file__), relative_path)
 
 # ──────────────────────────────────────────────────────────────────────────────

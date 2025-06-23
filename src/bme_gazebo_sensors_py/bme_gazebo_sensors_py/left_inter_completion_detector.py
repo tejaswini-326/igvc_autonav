@@ -11,9 +11,9 @@ from std_msgs.msg import Bool
 relative_path = "../../bme_gazebo_sensors/move_forward.py"
 script_path = os.path.join(os.path.dirname(__file__), relative_path)
 
-class RightIntersectionDetector(Node):
+class LeftIntersectionDetector(Node):
     def __init__(self):
-        super().__init__('RightIntersectionDetector')
+        super().__init__('LeftIntersectionDetector')
         self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
         self.shutdown_pub = self.create_publisher(Bool, '/shutdown_signal', 10)
         self.turning = False
@@ -60,7 +60,7 @@ class RightIntersectionDetector(Node):
             rclpy.shutdown()
 def main(args=None):
     rclpy.init(args=args)
-    node =RightIntersectionDetector()
+    node =LeftIntersectionDetector()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
