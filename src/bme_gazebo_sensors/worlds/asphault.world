@@ -42,7 +42,7 @@
           <geometry>
             <plane>
               <normal>0 0 1</normal>
-              <size>50 52</size>
+              <size>81.64 84.91</size>
             </plane>
           </geometry>
           <surface>
@@ -67,7 +67,7 @@
           <geometry>
             <plane>
               <normal>0 0 1</normal>
-              <size>50 52</size>
+              <size>81.64 84.91</size>
             </plane>
           </geometry>
           <material>

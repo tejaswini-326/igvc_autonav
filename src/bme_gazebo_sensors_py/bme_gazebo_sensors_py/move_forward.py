@@ -11,365 +11,372 @@ from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 from std_msgs.msg import String
+from nav_msgs.msg import Odometry
 
+BOT_SPEED=10.0
 # x forward, y left, z upward
 
-class WhitePointImageVisualizer(Node):
-    def __init__(self):
-        super().__init__('white_point_image_visualizer')
-        self.subscription = self.create_subscription(
-            PointCloud2,
-            '/camera/points',
-            self.pointcloud_callback,
-            10
-        )
-        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
-        self.create_subscription(String, '/intersection', self.intersection_cb, 10)
-        self.last_cmd = Twist()
-        self.last_cmd.linear.x = 5.0
-        self.last_cmd.angular.z = 0.0
-        self.active=True
-        self.stopped = False
-        # Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
-        self.which_lane = 'right'
-        
-        self.intersection_pub = self.create_publisher(String, '/intersection', 10)
-    def intersection_cb(self, msg):
-        if msg.data.lower() == "none":
-            self.active = True
-            self.get_logger().info("🟢 'None' received — move_forward activated.")
-        else:
-            self.active = False
-            
+class LaneFollowerNode(Node):
+	def __init__(self):
+		super().__init__('lane_follower_node')
+		self.subscription = self.create_subscription(
+			PointCloud2,
+			'/camera/points',
+			self.pointcloud_callback,
+			10
+		)
+		self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+		self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
+		self.create_subscription(String, '/intersection', self.intersection_cb, 10)
+		self.create_subscription(Odometry, "/odom", self.odom_cb, 50)  
+		self.last_cmd = Twist()
 
-    def publish(self, cmd, target=None):
-        if self.stopped:
-            # Override any move command with a full stop
-            self.get_logger().warn("Robot is stopped — blocking velocity command.")
-            stop_cmd = Twist()
-            stop_cmd.linear.x = 0.0
-            stop_cmd.angular.z = 0.0
-            self.cmd_pub.publish(stop_cmd)
-        else:
-            self.cmd_pub.publish(cmd)
+		self.last_cmd.linear.x = BOT_SPEED
 
-        print('')
+		self.last_cmd.angular.z = 0.0
+		self.active=True
+		self.stopping = False
+		# Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
+		self.which_lane = 'right'
+	def intersection_cb(self, msg):
+		if msg.data.lower() == "None":
+			self.active = True
+			self.get_logger().info("🟢 'None' received — move_forward activated.")
+		else:
+			self.active = False
+	
+	def odom_cb(self, msg: Odometry):
+		self.velocity_squared=(msg.twist.twist.linear.x)**2+(msg.twist.twist.linear.y)**2   
 
-    def debug_time_yo_yo_yo(self, x, y, msg, img, centers):
-        self.get_logger().info(f"DEBUG")
-        height = msg.height
-        width = msg.width
+	def publish(self, cmd, target=None):
+		if self.stopping:
+			# Override any move command with a full stop
+			self.get_logger().warn("Robot is stopped — blocking velocity command.")
+			stop_cmd = Twist()
+			stop_cmd.linear.x = 0.0
+			stop_cmd.angular.z = 0.0
+			self.cmd_pub.publish(stop_cmd)
+			if(self.velocity_squared==0):
+				msg = String()
+				msg.data = "left"  # or "none" or "done" — your choice
+				self.intersection_pub.publish(msg)
+				self.stopping=False
+		else:
+			self.cmd_pub.publish(cmd)
 
-        white_img = img
-        index = 0
-        for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
-            px, py, pz, rgb = point
-            if abs(px - x) < 0.02 and abs(py - y) < 0.02:
-                row = index // width
-                col = index % width
-                cv2.circle(white_img, (col, row), 5, (0, 0, 255), -1)
-            for label, center in centers:
-                cx = center[0]
-                cy = center[1]
-                if abs(px - cx) < 0.02 and abs(py - cy) < 0.02:
-                    row = index // width
-                    col = index % width
-                    cv2.circle(white_img, (col, row), 5, (255, 0, 0), -1)
-                    text = f"({cx:.2f}, {cy:.2f})"
-                    cv2.putText(
-                        white_img, text, (col + 10, row - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA
-                    )
-            index += 1
+		print('')
 
-        cv2.imshow("Target", white_img)
-        cv2.waitKey(1) 
-        return
-         
-    def calculate_normal_velocity(self, target, msg, white_img, centers):
-        cmd = Twist()
-        self.debug_time_yo_yo_yo(target[0], target[1], msg, white_img, centers)
+	def debug_time_yo_yo_yo(self, x, y, msg, img, centers):
+		self.get_logger().info(f"DEBUG")
+		height = msg.height
+		width = msg.width
 
-        # Compute direction to target
-        angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
+		white_img = img
+		index = 0
+		for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
+			px, py, pz, rgb = point
+			if abs(px - x) < 0.02 and abs(py - y) < 0.02:
+				row = index // width
+				col = index % width
+				cv2.circle(white_img, (col, row), 5, (0, 0, 255), -1)
+			for label, center in centers:
+				cx = center[0]
+				cy = center[1]
+				if abs(px - cx) < 0.02 and abs(py - cy) < 0.02:
+					row = index // width
+					col = index % width
+					cv2.circle(white_img, (col, row), 5, (255, 0, 0), -1)
+					text = f"({cx:.2f}, {cy:.2f})"
+					cv2.putText(
+						white_img, text, (col + 10, row - 10),
+						cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA
+					)
+			index += 1
 
-        # Move toward target
-        cmd.linear.x = 5.0  # Forward speed
-    
-        # Small angle threshold to avoid jitter
-        if abs(angle_to_target) > 0.05:
-            cmd.angular.z = angle_to_target  # Steer towards target
-            if abs(angle_to_target) > 0.4:
-                cmd.linear.x = 0.2
-            self.get_logger().info(f"Turning: angle to target = {math.degrees(angle_to_target):.2f}°")
-        else:
-            cmd.angular.z = 0.0
-            self.get_logger().info("Target straight ahead")
-        return cmd
-    
-    def detect_horizontal_lines_2d(self, msg):
-        
-        white_y_vals = []
+		cv2.imshow("Target", white_img)
+		cv2.waitKey(1) 
+		return
+		 
+	def calculate_normal_velocity(self, target, msg, white_img, centers):
+		cmd = Twist()
+		self.debug_time_yo_yo_yo(target[0], target[1], msg, white_img, centers)
 
-        for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
-            x, y, z, rgb = point
-            if rgb is None or math.isnan(x) or math.isnan(y) or math.isnan(z):
-                continue
+		# Compute direction to target
+		angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
 
-            try:
-                rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
-            except:
-                continue
+		# Move toward target
+		cmd.linear.x = BOT_SPEED  # Forward speed
+	
+		# Small angle threshold to avoid jitter
+		if abs(angle_to_target) > 0.05:
+			cmd.angular.z = angle_to_target  # Steer towards target
+			if abs(angle_to_target) > 0.4:
+				cmd.linear.x = 0.2
+			self.get_logger().info(f"Turning: angle to target = {math.degrees(angle_to_target):.2f}°")
+		else:
+			cmd.angular.z = 0.0
+			self.get_logger().info("Target straight ahead")
+		return cmd
+	
+	def detect_horizontal_lines_2d(self, msg):
+		
+		white_y_vals = []
 
-            r = (rgb_int >> 16) & 0xFF
-            g = (rgb_int >> 8) & 0xFF
-            b = rgb_int & 0xFF
+		for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
+			x, y, z, rgb = point
+			if rgb is None or math.isnan(x) or math.isnan(y) or math.isnan(z):
+				continue
 
-            white_threshold = 100  # Increased threshold
-            color_balance_threshold = 25  # Colors should be similar for true white
-            
-            # Check if pixel is white (high intensity + balanced RGB)
-            avg_color = (r + g + b) / 3
-            if (r > white_threshold and g > white_threshold and b > white_threshold and
-                abs(r - avg_color) < color_balance_threshold and 
-                abs(g - avg_color) < color_balance_threshold and 
-                abs(b - avg_color) < color_balance_threshold):
+			try:
+				rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
+			except:
+				continue
 
-                if 3.0 < x < 3.5 and -1.4 < z < -1.3:
-                    white_y_vals.append(y)
+			r = (rgb_int >> 16) & 0xFF
+			g = (rgb_int >> 8) & 0xFF
+			b = rgb_int & 0xFF
 
-        if len(white_y_vals) < 300:
-            return
+			white_threshold = 100  # Increased threshold
+			color_balance_threshold = 25  # Colors should be similar for true white
+			
+			# Check if pixel is white (high intensity + balanced RGB)
+			avg_color = (r + g + b) / 3
+			if (r > white_threshold and g > white_threshold and b > white_threshold and
+				abs(r - avg_color) < color_balance_threshold and 
+				abs(g - avg_color) < color_balance_threshold and 
+				abs(b - avg_color) < color_balance_threshold):
 
-        # Create histogram over Y axis
-        hist, bin_edges = np.histogram(white_y_vals, bins=20, range=(-2.0, 2.0))
+				if 3.0 < x < 3.5 and -1.4 < z < -1.3:
+					white_y_vals.append(y)
 
-        # Find contiguous bin groups with high density
-        dense_threshold = 5  # min points per bin
-        dense_bins = [bin_edges[i] for i in range(len(hist)) if hist[i] >= dense_threshold]
+		if len(white_y_vals) < 300:
+			return
 
-        if len(dense_bins) < 2:
-            return
+		# Create histogram over Y axis
+		hist, bin_edges = np.histogram(white_y_vals, bins=20, range=(-2.0, 2.0))
 
-        # Dense region span = difference between leftmost and rightmost high bins
-        y_dense_min = min(dense_bins)
-        y_dense_max = max(dense_bins)
-        dense_y_range = y_dense_max - y_dense_min
+		# Find contiguous bin groups with high density
+		dense_threshold = 5  # min points per bin
+		dense_bins = [bin_edges[i] for i in range(len(hist)) if hist[i] >= dense_threshold]
 
-        if dense_y_range > 0.7:
-            self.get_logger().warn(
-                f"STOP LINE DETECTED: dense y-range = {dense_y_range:.2f}m with {len(white_y_vals)} points"
-            )
-            self.stopped = True
-            msg = String()
-            msg.data = "left"  # or "none" or "done" — your choice
-            self.intersection_pub.publish(msg)
+		if len(dense_bins) < 2:
+			return
+
+		# Dense region span = difference between leftmost and rightmost high bins
+		y_dense_min = min(dense_bins)
+		y_dense_max = max(dense_bins)
+		dense_y_range = y_dense_max - y_dense_min
+
+		if dense_y_range > 0.7:
+			self.get_logger().warn(
+				f"STOP LINE DETECTED: dense y-range = {dense_y_range:.2f}m with {len(white_y_vals)} points"
+			)
+			self.stopped = True
 
 
-    def pointcloud_callback(self, msg):
-        if self.active is False:
-            return
-        
-        self.detect_horizontal_lines_2d(msg)
-        # if self.stopped == True:
-        #     self.destroy_node()
+	def pointcloud_callback(self, msg):
+		if self.active is False:
+			return
+		
+		self.detect_horizontal_lines_2d(msg)
+		# if self.stopped == True:
+		#     self.destroy_node()
 
-        height = msg.height
-        width = msg.width
+		height = msg.height
+		width = msg.width
 
-        white_img = np.zeros((height, width, 3), dtype=np.uint8)
-        white_ground_points = []
+		white_img = np.zeros((height, width, 3), dtype=np.uint8)
+		white_ground_points = []
 
-        index = 0
-        for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
-            x, y, z, rgb = point
-            row = index // width
-            col = index % width
+		index = 0
+		for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
+			x, y, z, rgb = point
+			row = index // width
+			col = index % width
 
-            # Skip invalid points
-            if rgb is None or math.isnan(x) or math.isnan(y) or math.isnan(z):
-                continue
+			# Skip invalid points
+			if rgb is None or math.isnan(x) or math.isnan(y) or math.isnan(z):
+				continue
 
-            try:
-                rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
-            except:
-                continue
+			try:
+				rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
+			except:
+				continue
 
-            r = (rgb_int >> 16) & 0xFF
-            g = (rgb_int >> 8) & 0xFF
-            b = rgb_int & 0xFF
+			r = (rgb_int >> 16) & 0xFF
+			g = (rgb_int >> 8) & 0xFF
+			b = rgb_int & 0xFF
 
-            # Improved white detection
-            white_threshold = 100  # Increased threshold
-            color_balance_threshold = 25  # Colors should be similar for true white
-            
-            # Check if pixel is white (high intensity + balanced RGB)
-            avg_color = (r + g + b) / 3
-            if (r > white_threshold and g > white_threshold and b > white_threshold and
-                abs(r - avg_color) < color_balance_threshold and 
-                abs(g - avg_color) < color_balance_threshold and 
-                abs(b - avg_color) < color_balance_threshold):
+			# Improved white detection
+			white_threshold = 100  # Increased threshold
+			color_balance_threshold = 25  # Colors should be similar for true white
+			
+			# Check if pixel is white (high intensity + balanced RGB)
+			avg_color = (r + g + b) / 3
+			if (r > white_threshold and g > white_threshold and b > white_threshold and
+				abs(r - avg_color) < color_balance_threshold and 
+				abs(g - avg_color) < color_balance_threshold and 
+				abs(b - avg_color) < color_balance_threshold):
 
-                # Ground level filtering
-                if -1.4 < z < -1.3 and 0.0 < x < 3.0:  # Adjusted range
-                    white_img[row, col] = (255, 255, 255)
-                    white_ground_points.append([x, y, z])  # Store x,y,z coordinates
-            index += 1
+				# Ground level filtering
+				if -1.4 < z < -1.3 and 0.0 < x < 3.0:  # Adjusted range
+					white_img[row, col] = (255, 255, 255)
+					white_ground_points.append([x, y, z])  # Store x,y,z coordinates
+			index += 1
 
-        # Only do 3D clustering for lane following if we have enough points
-        if len(white_ground_points) < 10:
-            self.get_logger().warn("Not enough white points for lane detection")
-            self.publish(self.last_cmd)
-            return
+		# Only do 3D clustering for lane following if we have enough points
+		if len(white_ground_points) < 10:
+			self.get_logger().warn("Not enough white points for lane detection")
+			self.publish(self.last_cmd)
+			return
 
-        points_np = np.array(white_ground_points)
-        
-        # Use only x,y coordinates for clustering (ignore z)
-        points_xy = points_np[:, :2]  # Extract x,y coordinates
+		points_np = np.array(white_ground_points)
+		
+		# Use only x,y coordinates for clustering (ignore z)
+		points_xy = points_np[:, :2]  # Extract x,y coordinates
 
-        # Better clustering parameters
-        eps = 0.75  # Reduced eps for tighter clusters
-        min_samples = 20  # Increased min_samples to reduce noise
-        
-        clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points_xy)
-        labels = clustering.labels_
-        
-        # Count clusters and noise points
-        unique_labels = set(labels)
+		# Better clustering parameters
+		eps = 0.75  # Reduced eps for tighter clusters
+		min_samples = 20  # Increased min_samples to reduce noise
+		
+		clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points_xy)
+		labels = clustering.labels_
+		
+		# Count clusters and noise points
+		unique_labels = set(labels)
 
-        # Process lane clusters
-        centers = []
-        for label in unique_labels:
-            if label == -1:
-                continue
+		# Process lane clusters
+		centers = []
+		for label in unique_labels:
+			if label == -1:
+				continue
 
-            cluster_points = points_xy[labels == label]
-            cluster_size = len(cluster_points)
-            if cluster_size < 10:
-                continue
+			cluster_points = points_xy[labels == label]
+			cluster_size = len(cluster_points)
+			if cluster_size < 10:
+				continue
 
-            center = np.mean(cluster_points, axis=0)
-            centers.append((label, center))
+			center = np.mean(cluster_points, axis=0)
+			centers.append((label, center))
 
-        # Lane following logic
-        cmd = Twist()
-        if len(centers) == 2:
-            centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
-            self.get_logger().info(f"{centers}")
+		# Lane following logic
+		cmd = Twist()
+		if len(centers) == 2:
+			centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
+			self.get_logger().info(f"{centers}")
 
-            left_lane = centers[1][1]   # leftmost cluster
-            right_lane = centers[0][1]  # rightmost cluster
-            
-            target = (left_lane + right_lane) / 2
-            
-            cmd = self.calculate_normal_velocity(target, msg, white_img, centers)
-            
-            self.publish(cmd, target)
-            self.last_cmd = cmd
-            self.last_cmd.linear.x = 0.0
-            return
+			left_lane = centers[1][1]   # leftmost cluster
+			right_lane = centers[0][1]  # rightmost cluster
+			
+			target = (left_lane + right_lane) / 2
+			
+			cmd = self.calculate_normal_velocity(target, msg, white_img, centers)
+			
+			self.publish(cmd, target)
+			self.last_cmd = cmd
+			self.last_cmd.linear.x = 0.0
+			return
 
-        if len(centers) >= 3:
-            centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
+		if len(centers) >= 3:
+			centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
 
-            right_lane = centers[0][1]
-            middle_lane = centers[1][1]
-            left_lane = centers[2][1]
+			right_lane = centers[0][1]
+			middle_lane = centers[1][1]
+			left_lane = centers[2][1]
 
-            target = ((middle_lane + right_lane) / 2) if self.which_lane == 'right' else ((middle_lane + left_lane) / 2)
-            cmd = self.calculate_normal_velocity(target, msg, white_img, centers)
+			target = ((middle_lane + right_lane) / 2) if self.which_lane == 'right' else ((middle_lane + left_lane) / 2)
+			cmd = self.calculate_normal_velocity(target, msg, white_img, centers)
 
-            self.publish(cmd, target)
-            self.last_cmd = cmd
-            self.last_cmd.linear.x = 0.0
-            return
-        
+			self.publish(cmd, target)
+			self.last_cmd = cmd
+			self.last_cmd.linear.x = 0.0
+			return
+		
 
-        elif len(centers) == 1:
-            
-            # In case only one cluster is detected, this code will fir a parabola to the points in that clsuter and follow the curve.
-            # It does this by following the center of the cluster and estimating the slope of the curve at that point. If enough points are not detected, 
-            # it will simply move forward without turning.
-            
-            self.get_logger().info("Only one lane cluster found")
-            label, center = centers[0]
-            cluster_points = points_xy[labels == label]
+		elif len(centers) == 1:
+			
+			# In case only one cluster is detected, this code will fir a parabola to the points in that clsuter and follow the curve.
+			# It does this by following the center of the cluster and estimating the slope of the curve at that point. If enough points are not detected, 
+			# it will simply move forward without turning.
+			
+			self.get_logger().info("Only one lane cluster found")
+			label, center = centers[0]
+			cluster_points = points_xy[labels == label]
 
-            if len(cluster_points) > 7:
-                x = cluster_points[:, 0]
-                y = cluster_points[:, 1]
+			if len(cluster_points) > 7:
+				x = cluster_points[:, 0]
+				y = cluster_points[:, 1]
 
-                # Fit parabola: y = ax^2 + bx + c
-                coeffs = np.polyfit(x, y, deg=2)
-                a, b, c = coeffs
+				# Fit parabola: y = ax^2 + bx + c
+				coeffs = np.polyfit(x, y, deg=2)
+				a, b, c = coeffs
 
-                # Estimate local slope at center of lane
-                x_center = np.mean(x)
-                slope = 2 * a * x_center + b
-                angle = math.atan(slope)
+				# Estimate local slope at center of lane
+				x_center = np.mean(x)
+				slope = 2 * a * x_center + b
+				angle = math.atan(slope)
 
-                # Control command
-                cmd.linear.x = 0.2
-                cmd.angular.z = angle
+				# Control command
+				cmd.linear.x = 0.2
+				cmd.angular.z = angle
 
-                self.get_logger().info(f"Curve-follow angle: {math.degrees(angle):.2f}°")
+				self.get_logger().info(f"Curve-follow angle: {math.degrees(angle):.2f}°")
 
-                # Visualization marker
-                marker = Marker()
-                marker.header.frame_id = msg.header.frame_id
-                marker.header.stamp = self.get_clock().now().to_msg()
-                marker.ns = "fitted_lane"
-                marker.id = 0
-                marker.type = Marker.LINE_STRIP
-                marker.action = Marker.ADD
-                marker.scale.x = 0.05  # line width
-                marker.color.r = 1.0
-                marker.color.g = 0.0
-                marker.color.b = 1.0
-                marker.color.a = 1.0
-                marker.lifetime.sec = 0
+				# Visualization marker
+				marker = Marker()
+				marker.header.frame_id = msg.header.frame_id
+				marker.header.stamp = self.get_clock().now().to_msg()
+				marker.ns = "fitted_lane"
+				marker.id = 0
+				marker.type = Marker.LINE_STRIP
+				marker.action = Marker.ADD
+				marker.scale.x = 0.05  # line width
+				marker.color.r = 1.0
+				marker.color.g = 0.0
+				marker.color.b = 1.0
+				marker.color.a = 1.0
+				marker.lifetime.sec = 0
 
-                # Plot fitted curve
-                x_vals = np.linspace(np.min(x), np.max(x), num=30)
-                for x_i in x_vals:
-                    y_i = a * x_i**2 + b * x_i + c
+				# Plot fitted curve
+				x_vals = np.linspace(np.min(x), np.max(x), num=30)
+				for x_i in x_vals:
+					y_i = a * x_i**2 + b * x_i + c
 
-                    # Safely determine z
-                    if cluster_points.shape[1] >= 3:
-                        z_i = np.mean(cluster_points[:, 2])
-                    else:
-                        z_i = 0.0  # Default height if Z not available
+					# Safely determine z
+					if cluster_points.shape[1] >= 3:
+						z_i = np.mean(cluster_points[:, 2])
+					else:
+						z_i = 0.0  # Default height if Z not available
 
-                    pt = Point(x=x_i, y=y_i, z=z_i)
-                    marker.points.append(pt)
+					pt = Point(x=x_i, y=y_i, z=z_i)
+					marker.points.append(pt)
 
-                self.marker_pub.publish(marker)
+				self.marker_pub.publish(marker)
 
-            else:
-                self.get_logger().warn("Not enough points to fit curve")
-                cmd.linear.x = 0.2
-                cmd.angular.z = 0.0
+			else:
+				self.get_logger().warn("Not enough points to fit curve")
+				cmd.linear.x = 0.2
+				cmd.angular.z = 0.0
 
-            # Visual debugging and publishing control
-            self.debug_time_yo_yo_yo(center[0], center[1], msg, white_img, centers)
-            self.publish(cmd)
-            self.last_cmd = cmd
-            self.last_cmd.linear.x = 0.0
+			# Visual debugging and publishing control
+			self.debug_time_yo_yo_yo(center[0], center[1], msg, white_img, centers)
+			self.publish(cmd)
+			self.last_cmd = cmd
+			self.last_cmd.linear.x = 0.0
 
-        else:
-            self.get_logger().warn("No valid clusters found for lane detection")
-            self.publish(self.last_cmd)
-            
+		else:
+			self.get_logger().warn("No valid clusters found for lane detection")
+			self.publish(self.last_cmd)
+			
 
 
 def main(args=None):
-    rclpy.init(args=args)
-    node = WhitePointImageVisualizer()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
-    cv2.destroyAllWindows()
+	rclpy.init(args=args)
+	node = LaneFollowerNode()
+	rclpy.spin(node)
+	node.destroy_node()
+	rclpy.shutdown()
+	cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    main()
+	main()

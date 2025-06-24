@@ -449,11 +449,7 @@ class PointcloudLeftTurnDriver(Node):
             cmd.angular.z = LEFT_TURN_ANGULAR_SPEED if self.turning else 0.0
             self.cmd_vel_publisher.publish(cmd)
 
-    # ───────────────────────────────────────────────────────────────────── #
-    # Graceful shutdown                                                    #
-    # ───────────────────────────────────────────────────────────────────── #
-    def stop(self):
-        self.cmd_vel_publisher.publish(Twist())  # send zero cmd
+    
 
 
 def main(args=None):
@@ -464,7 +460,7 @@ def main(args=None):
     except KeyboardInterrupt:
         node.get_logger().info("Shutting down…")
     finally:
-        node.stop()
+        
         node.destroy_node()
         rclpy.shutdown()
 
