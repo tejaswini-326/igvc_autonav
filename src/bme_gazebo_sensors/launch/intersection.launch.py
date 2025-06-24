@@ -120,7 +120,7 @@ def generate_launch_description():
     move_forward_node = Node(
         package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
         executable='move_forward',  # The name you specified in setup.py's entry_points
-        name='WhitePointImageVisualizer',
+        name='LaneFollowerNode',
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
