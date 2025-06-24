@@ -13,6 +13,7 @@ from geometry_msgs.msg import Point
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 
+BOT_SPEED=10.0
 # x forward, y left, z upward
 LINEAR_SPEED = 1.5
 REDUCED_LINEAR_SPEED = 0.5
