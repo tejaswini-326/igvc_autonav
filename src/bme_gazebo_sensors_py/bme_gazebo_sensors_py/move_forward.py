@@ -11,6 +11,7 @@ from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 from std_msgs.msg import String
+from nav_msgs.msg import Odometry
 
 # x forward, y left, z upward
 LINEAR_SPEED = 1.5
@@ -23,9 +24,9 @@ WHITE_THRESHOLD = 100
 COLOR_BALANCE_THRESHOLD = 25
 ANGLE_FACTOR = 1.2
 
-class WhitePointImageVisualizer(Node):
+class LaneFollowerNode(Node):
 	def __init__(self):
-		super().__init__('white_point_image_visualizer')
+		super().__init__('lane_follower_node')
 		self.subscription = self.create_subscription(
 			PointCloud2,
 			'/camera/points',
@@ -35,11 +36,13 @@ class WhitePointImageVisualizer(Node):
 		self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
 		self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
 		self.create_subscription(String, '/intersection', self.intersection_cb, 10)
+		self.create_subscription(Odometry, "/odom", self.odom_cb, 50) 
+		self.intersection_pub = self.create_publisher(String, '/intersection', 10)
 		self.last_cmd = Twist()
-		self.last_cmd.linear.x = 1.0
+		self.last_cmd.linear.x = LINEAR_SPEED
 		self.last_cmd.angular.z = 0.0
 		self.active=True
-		self.stopped = False
+		self.stopping = False
 		# Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
 		self.which_lane = 'right'
 	def intersection_cb(self, msg):
@@ -49,15 +52,22 @@ class WhitePointImageVisualizer(Node):
 		else:
 			self.active = False
 			
+	def odom_cb(self, msg: Odometry):
+		self.velocity_squared=(msg.twist.twist.linear.x)**2+(msg.twist.twist.linear.y)**2       
 
 	def publish(self, cmd, target=None):
-		if self.stopped:
+		if self.stopping:
 			# Override any move command with a full stop
 			self.get_logger().warn("Robot is stopped — blocking velocity command.")
 			stop_cmd = Twist()
 			stop_cmd.linear.x = 0.0
 			stop_cmd.angular.z = 0.0
 			self.cmd_pub.publish(stop_cmd)
+			if(self.velocity_squared==0):
+				msg = String()
+				msg.data = "left"  # or "none" or "done" — your choice
+				self.intersection_pub.publish(msg)
+				self.stopping=False
 		else:
 			self.cmd_pub.publish(cmd)
 
@@ -171,7 +181,7 @@ class WhitePointImageVisualizer(Node):
 			self.get_logger().warn(
 				f"STOP LINE DETECTED: dense y-range = {dense_y_range:.2f}m with {len(white_y_vals)} points"
 			)
-			self.stopped = True
+			self.stopping = True
 
 	def pointcloud_callback(self, msg):
 		if self.active is False:
@@ -371,7 +381,7 @@ class WhitePointImageVisualizer(Node):
 
 def main(args=None):
 	rclpy.init(args=args)
-	node = WhitePointImageVisualizer()
+	node = LaneFollowerNode()
 	rclpy.spin(node)
 	node.destroy_node()
 	rclpy.shutdown()
