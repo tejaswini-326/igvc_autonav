@@ -17,7 +17,7 @@ class LeftIntersectionDetector(Node):
         self.turning = False
         self.turn_start_position = None
         self.turn_start_yaw = None
-        self.target_displacement = 3.7 # the gazebo value is 3.7
+        self.target_displacement = 6 # the gazebo value is 6
         
         self.switched_to_b = False
 

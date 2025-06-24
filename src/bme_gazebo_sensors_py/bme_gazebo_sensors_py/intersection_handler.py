@@ -31,15 +31,14 @@ DEBUG = True
 MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60 
 
 # Movement Related
-LINEAR_SPEED                                    = 1                  # m/s   (forward)
+LINEAR_SPEED                                    = 1.0                # m/s   (forward)
 CMD_VEL_PUBLISHING_TIME_INTERVAL                = 0.1                # Time interval between 2 publishers in seconds
 
 # Intersection Turning Related
-ANGLE_TOLERANCE                                 = radians(45)         # ± deg window around 90° – θ
-INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 1.5                 # metres
-LEFT_TURN_ANGULAR_SPEED                         = 0.3                 #rad/s (+ve = CCW = left)
-TURN_ANGLE                                      = radians(80.0)       # 90 was over-turning for me? I'm not sure why though
-
+ANGLE_TOLERANCE                                 = radians(30)        # ± deg window around 90° – θ
+INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 3                 # metres
+LEFT_TURN_ANGULAR_SPEED                         = 0.1          # rad/s (+ve = CCW = left)
+TURN_ANGLE                                      = radians(90.0)      # 90 was over-turning for me? I'm not sure why though
 # ──────────────────────────────────────────────────────────────────────────────
 
 def normalise_angle(angle: float) -> float:
@@ -420,7 +419,6 @@ class PointcloudLeftTurnDriver(Node):
 
     def publish_cmd(self):
         if not self.should_drive:
-            self.cmd_vel_publisher.publish(Twist())  # Stop when not driving
             return
         if self.to_publish_because_of_polar_scans:
             self.cmd_vel_publisher.publish(self.to_publish_because_of_polar_scans)
