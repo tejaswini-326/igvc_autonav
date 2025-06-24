@@ -27,14 +27,16 @@ class WhitePointImageVisualizer(Node):
         self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
         self.create_subscription(String, '/intersection', self.intersection_cb, 10)
         self.last_cmd = Twist()
-        self.last_cmd.linear.x = 1.0
+        self.last_cmd.linear.x = 5.0
         self.last_cmd.angular.z = 0.0
         self.active=True
         self.stopped = False
         # Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
         self.which_lane = 'right'
+        
+        self.intersection_pub = self.create_publisher(String, '/intersection', 10)
     def intersection_cb(self, msg):
-        if msg.data.lower() == "None":
+        if msg.data.lower() == "none":
             self.active = True
             self.get_logger().info("🟢 'None' received — move_forward activated.")
         else:
@@ -160,6 +162,10 @@ class WhitePointImageVisualizer(Node):
                 f"STOP LINE DETECTED: dense y-range = {dense_y_range:.2f}m with {len(white_y_vals)} points"
             )
             self.stopped = True
+            msg = String()
+            msg.data = "left"  # or "none" or "done" — your choice
+            self.intersection_pub.publish(msg)
+
 
     def pointcloud_callback(self, msg):
         if self.active is False:

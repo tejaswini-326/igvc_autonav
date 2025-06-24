@@ -39,7 +39,6 @@ ANGLE_TOLERANCE                                 = radians(30)        # ± deg wi
 INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 3                 # metres
 LEFT_TURN_ANGULAR_SPEED                         = 0.1          # rad/s (+ve = CCW = left)
 TURN_ANGLE                                      = radians(90.0)      # 90 was over-turning for me? I'm not sure why though
-
 # ──────────────────────────────────────────────────────────────────────────────
 
 def normalise_angle(angle: float) -> float:
@@ -441,7 +440,6 @@ class PointcloudLeftTurnDriver(Node):
 
     def publish_cmd(self):
         if not self.should_drive:
-            self.cmd_vel_publisher.publish(Twist())  # Stop when not driving
             return
         if self.to_publish_because_of_polar_scans:
             self.cmd_vel_publisher.publish(self.to_publish_because_of_polar_scans)
