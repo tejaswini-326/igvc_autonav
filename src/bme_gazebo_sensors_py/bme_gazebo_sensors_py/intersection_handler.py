@@ -9,7 +9,7 @@ from geometry_msgs.msg import Twist
 from tf_transformations import euler_from_quaternion
 import sensor_msgs_py.point_cloud2 as pc2
 import numpy as np
-from math import radians
+from math import radians, degrees
 import struct
 from std_msgs.msg import String
 import cv2
@@ -31,14 +31,14 @@ DEBUG = True
 MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60 
 
 # Movement Related
-LINEAR_SPEED                                    = 1                  # m/s   (forward)
+LINEAR_SPEED                                    = 1.0                # m/s   (forward)
 CMD_VEL_PUBLISHING_TIME_INTERVAL                = 0.1                # Time interval between 2 publishers in seconds
 
 # Intersection Turning Related
-ANGLE_TOLERANCE                                 = radians(45)         # ± deg window around 90° – θ
-INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 1.5                 # metres
-LEFT_TURN_ANGULAR_SPEED                         = 0.3                 #rad/s (+ve = CCW = left)
-TURN_ANGLE                                      = radians(80.0)       # 90 was over-turning for me? I'm not sure why though
+ANGLE_TOLERANCE                                 = radians(30)        # ± deg window around 90° – θ
+INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 3                 # metres
+LEFT_TURN_ANGULAR_SPEED                         = 0.1          # rad/s (+ve = CCW = left)
+TURN_ANGLE                                      = radians(90.0)      # 90 was over-turning for me? I'm not sure why though
 
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -330,9 +330,25 @@ class PointcloudLeftTurnDriver(Node):
                 if dist_px < 0:          # skip invalid / out-of-band rays
                     continue
                 u, v = grid_uv(theta, dist_px)
-                colour = (128, 128, 255)                    # light red-blue
-                thickness = 1
-                cv2.line(viz, (CX, CY), (u, v), colour, thickness, cv2.LINE_AA)
+                                   # light red-blue
+                
+                
+
+            colour = (128, 128, 255)
+            thickness = 1
+            # March each ray
+            for k, (ux, uy) in enumerate(dirs):
+                for s in range(0, MAX_RANGE_PX + 1):
+                    u = int(CX + ux * s)
+                    v = int(CY - uy * s)                      # minus because image-y down
+                    cv2.line(viz, (CX, CY), (u, v), colour, thickness, cv2.LINE_AA)
+                    if not (0 <= u < GRID_SIZE and 0 <= v < GRID_SIZE):
+                        # ran off map ⇒ keep MAX_RANGE_PX, no hit
+                        break
+                    if binary[v, u]:                          # hit white stripe
+                        dists[k]   = s
+                        hit_mask[k] = True
+                        break
 
             # 2) draw the *best* ray nice and bold
             u_best, v_best = grid_uv(best_theta, best_dist_px)
@@ -341,6 +357,8 @@ class PointcloudLeftTurnDriver(Node):
                 (0, 255, 0),              # bright green
                 2, tipLength=0.08, line_type=cv2.LINE_AA
             )
+
+            viz = cv2.rotate(viz, cv2.ROTATE_90_COUNTERCLOCKWISE)
             
             # B. publish to a ROS image topic
             if not hasattr(self, "bridge"):
@@ -367,6 +385,9 @@ class PointcloudLeftTurnDriver(Node):
         _, _, yaw = euler_from_quaternion((q.x, q.y, q.z, q.w))   # <── moved here
         self.prev_yaw = yaw                                       # keep latest copy
 
+        if self.turn_start_yaw is not None:
+            print(yaw, self.turn_start_yaw, normalise_angle(yaw - self.turn_start_yaw))
+
         # -------------------------------------------------------------------
         # 1.  Straight-line distance check
         # -------------------------------------------------------------------
@@ -377,7 +398,7 @@ class PointcloudLeftTurnDriver(Node):
         if (not self.turning) and (not self.raw_turn_completed) \
                 and self.distance_travelled >= INITIAL_INTERSECTION_FORWARD_MOVEMENT:
             self.turning = True
-            self.turn_start_yaw = None
+            self.turn_start_yaw = yaw
             self.get_logger().info("🚦 Reached distance - starting intersection left turn…")
 
         # -------------------------------------------------------------------
@@ -397,7 +418,7 @@ class PointcloudLeftTurnDriver(Node):
         # -------------------------------------------------------------------
         # 3.  Snap to lane heading (best_theta)  — uses *yaw* defined above
         # -------------------------------------------------------------------
-        ALIGN_TOL     = np.deg2rad(2.0)
+        ALIGN_TOL     = np.deg2rad(3.0)
         KP_ALIGN      = 1.5
 
         if self.raw_turn_completed and (self.best_theta is not None):

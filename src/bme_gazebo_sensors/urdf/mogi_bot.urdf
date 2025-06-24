@@ -354,7 +354,16 @@
         <box size=".075 .25 .075" />
       </geometry>
     </visual>
+  </link>
 
+  <!-- STEP 9 - GPS -->
+  <joint name="navsat_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="base_link"/>
+    <child link="navsat_link" />
+  </joint>
+
+  <link name="navsat_link">
   </link>
 
 </robot>

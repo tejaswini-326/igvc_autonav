@@ -7,6 +7,9 @@ import rclpy
 from rclpy.node import Node
 
 
+TARGET_DISPLACEMENT = 6 # Gazebo value is 6
+
+
 class LeftIntersectionDetector(Node):
     def __init__(self):
         super().__init__('LeftIntersectionDetector')
@@ -17,7 +20,7 @@ class LeftIntersectionDetector(Node):
         self.turning = False
         self.turn_start_position = None
         self.turn_start_yaw = None
-        self.target_displacement = 3.7 # the gazebo value is 3.7
+        self.TARGET_DISPLACEMENT = TARGET_DISPLACEMENT
         
         self.switched_to_b = False
 
@@ -59,7 +62,7 @@ class LeftIntersectionDetector(Node):
 
         self.get_logger().info(f"📏 Rightward displacement: {rightward_disp:.2f} m")
 
-        if rightward_disp >= self.target_displacement:
+        if rightward_disp >= self.TARGET_DISPLACEMENT:
             self.get_logger().info("✅ Turn complete — launching file B")
             msg = String()
             msg.data = "None"  # or "none" or "done" — your choice
@@ -67,6 +70,7 @@ class LeftIntersectionDetector(Node):
             #you want to publish None to the topic /intersection
             self.switched_to_b = True
             self.active = False  # deactivate after completion
+            
 def main(args=None):
     rclpy.init(args=args)
     node = LeftIntersectionDetector()
@@ -75,7 +79,6 @@ def main(args=None):
     except KeyboardInterrupt:
         node.get_logger().info("🛑 KeyboardInterrupt — shutting down…")
     finally:
-        node.stop()
         node.destroy_node()
         rclpy.shutdown()
 
