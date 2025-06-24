@@ -13,6 +13,15 @@ from geometry_msgs.msg import Point
 from std_msgs.msg import String
 
 # x forward, y left, z upward
+LINEAR_SPEED = 1.5
+REDUCED_LINEAR_SPEED = 0.5
+THRESHOLD_ANGLE_TO_ROTATE = 0.2
+THRESHOLD_ANGLE_TO_REDUCE_LINEAR_SPEED = 0.4
+MIN_CLUSTERING_DISTANCE = 0.971
+MIN_CLUSTERING_POINTS = 20
+WHITE_THRESHOLD = 100
+COLOR_BALANCE_THRESHOLD = 25
+ANGLE_FACTOR = 1.2
 
 class WhitePointImageVisualizer(Node):
     def __init__(self):
@@ -70,7 +79,8 @@ class WhitePointImageVisualizer(Node):
             for label, center in centers:
                 cx = center[0]
                 cy = center[1]
-                if abs(px - cx) < 0.02 and abs(py - cy) < 0.02:
+                # self.get_logger().info(f"{cx}, {cy}")
+                if abs(px - cx) < 0.027 and abs(py - cy) < 0.027:
                     row = index // width
                     col = index % width
                     cv2.circle(white_img, (col, row), 5, (255, 0, 0), -1)
@@ -79,6 +89,7 @@ class WhitePointImageVisualizer(Node):
                         white_img, text, (col + 10, row - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA
                     )
+                    break
             index += 1
 
         cv2.imshow("Target", white_img)
@@ -93,14 +104,15 @@ class WhitePointImageVisualizer(Node):
         angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
 
         # Move toward target
-        cmd.linear.x = 5.0  # Forward speed
+        cmd.linear.x = LINEAR_SPEED  # Forward speed
     
         # Small angle threshold to avoid jitter
-        if abs(angle_to_target) > 0.05:
-            cmd.angular.z = angle_to_target  # Steer towards target
-            if abs(angle_to_target) > 0.4:
-                cmd.linear.x = 0.2
-            self.get_logger().info(f"Turning: angle to target = {math.degrees(angle_to_target):.2f}°")
+        if abs(angle_to_target) > THRESHOLD_ANGLE_TO_ROTATE:
+            cmd.angular.z = angle_to_target # Steer towards target
+            if abs(angle_to_target) > THRESHOLD_ANGLE_TO_REDUCE_LINEAR_SPEED:
+                cmd.linear.x = REDUCED_LINEAR_SPEED
+                cmd.angular.z = angle_to_target * ANGLE_FACTOR # Steer towards target
+            self.get_logger().info(f"Turning: angle to target = {angle_to_target:.2f}")
         else:
             cmd.angular.z = 0.0
             self.get_logger().info("Target straight ahead")
@@ -124,8 +136,8 @@ class WhitePointImageVisualizer(Node):
             g = (rgb_int >> 8) & 0xFF
             b = rgb_int & 0xFF
 
-            white_threshold = 100  # Increased threshold
-            color_balance_threshold = 25  # Colors should be similar for true white
+            white_threshold = WHITE_THRESHOLD  # Increased threshold
+            color_balance_threshold = COLOR_BALANCE_THRESHOLD  # Colors should be similar for true white
             
             # Check if pixel is white (high intensity + balanced RGB)
             avg_color = (r + g + b) / 3
@@ -195,8 +207,8 @@ class WhitePointImageVisualizer(Node):
             b = rgb_int & 0xFF
 
             # Improved white detection
-            white_threshold = 100  # Increased threshold
-            color_balance_threshold = 25  # Colors should be similar for true white
+            white_threshold = WHITE_THRESHOLD  # Increased threshold
+            color_balance_threshold = COLOR_BALANCE_THRESHOLD  # Colors should be similar for true white
             
             # Check if pixel is white (high intensity + balanced RGB)
             avg_color = (r + g + b) / 3
@@ -206,7 +218,7 @@ class WhitePointImageVisualizer(Node):
                 abs(b - avg_color) < color_balance_threshold):
 
                 # Ground level filtering
-                if -1.4 < z < -1.3 and 0.0 < x < 3.0:  # Adjusted range
+                if -1.4 < z < -1.3 and 0.0 < x < 5.0:  # Adjusted range
                     white_img[row, col] = (255, 255, 255)
                     white_ground_points.append([x, y, z])  # Store x,y,z coordinates
             index += 1
@@ -222,16 +234,16 @@ class WhitePointImageVisualizer(Node):
         # Use only x,y coordinates for clustering (ignore z)
         points_xy = points_np[:, :2]  # Extract x,y coordinates
 
-        # Better clustering parameters
-        eps = 0.75  # Reduced eps for tighter clusters
-        min_samples = 20  # Increased min_samples to reduce noise
-        
-        clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points_xy)
+        clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy)
         labels = clustering.labels_
         
         # Count clusters and noise points
         unique_labels = set(labels)
 
+        n_clusters = len(unique_labels) - (1 if -1 in labels else 0)
+        n_noise = list(labels).count(-1)
+        
+        self.get_logger().info(f"Clusters found: {n_clusters}, Noise points: {n_noise}")
         # Process lane clusters
         centers = []
         for label in unique_labels:
