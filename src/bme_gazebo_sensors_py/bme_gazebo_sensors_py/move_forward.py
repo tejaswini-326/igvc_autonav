@@ -28,7 +28,8 @@ class LaneFollowerNode(Node):
 		self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
 		self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
 		self.create_subscription(String, '/intersection', self.intersection_cb, 10)
-		self.create_subscription(Odometry, "/odom", self.odom_cb, 50)  
+		self.create_subscription(Odometry, "/odom", self.odom_cb, 50) 
+		self.intersection_pub = self.create_publisher(String, '/intersection', 10)
 		self.last_cmd = Twist()
 
 		self.last_cmd.linear.x = BOT_SPEED
