@@ -27,6 +27,7 @@ setup(
             'intersection_handler = bme_gazebo_sensors_py.intersection_handler:main',
             'move_forward = bme_gazebo_sensors_py.move_forward:main',
             'left_inter_completion_detector = bme_gazebo_sensors_py.left_inter_completion_detector:main',
+            'parking_pullin= bme_gazebo_sensors_py.parking_pullin:main',
         ],
     },
 )
