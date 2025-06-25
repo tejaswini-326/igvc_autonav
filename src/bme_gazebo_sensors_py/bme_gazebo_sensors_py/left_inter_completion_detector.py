@@ -1,29 +1,37 @@
 from geometry_msgs.msg import Pose, Twist
 from nav_msgs.msg import Odometry
+from std_msgs.msg import String
 from tf_transformations import euler_from_quaternion
 import math
 import rclpy
-import os
 from rclpy.node import Node
-import subprocess  # for launching external files
-from std_msgs.msg import Bool
 
-relative_path = "move_forward.py"
-script_path = os.path.join(os.path.dirname(__file__), relative_path)
 
 class LeftIntersectionDetector(Node):
     def __init__(self):
         super().__init__('LeftIntersectionDetector')
         self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
-        self.shutdown_pub = self.create_publisher(Bool, '/shutdown_signal', 10)
+        self.create_subscription(String, '/intersection', self.intersection_cb, 10)
+        self.intersection_pub = self.create_publisher(String, '/intersection', 10)
+        self.active = False
         self.turning = False
         self.turn_start_position = None
         self.turn_start_yaw = None
-        self.target_displacement = 3.7 # the gazebo value is 3.7
+        self.target_displacement = 6 # the gazebo value is 6
         
         self.switched_to_b = False
 
+    def intersection_cb(self, msg):
+        if msg.data.lower() == "left":
+            self.active = True
+            self.get_logger().info("🟢 'left' received — LeftIntersectionDetector activated.")
+        else:
+            self.active = False
+            self.get_logger().info(f"🔴 Received '{msg.data}' — ignoring in LeftIntersectionDetector.")
+
     def odom_cb(self, msg):
+        if not self.active or self.switched_to_b:
+            return
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
 
@@ -53,18 +61,19 @@ class LeftIntersectionDetector(Node):
 
         if rightward_disp >= self.target_displacement:
             self.get_logger().info("✅ Turn complete — launching file B")
-            subprocess.Popen(["python3",script_path])
-            self.shutdown_pub.publish(Bool(data=True))
+            msg = String()
+            msg.data = "None"  # or "none" or "done" — your choice
+            self.intersection_pub.publish(msg)
+            #you want to publish None to the topic /intersection
             self.switched_to_b = True
-            self.get_logger().info("🛑 Shutting down RightIntersectionDetector…")
-            rclpy.shutdown()
+            self.active = False  # deactivate after completion
 def main(args=None):
     rclpy.init(args=args)
-    node =LeftIntersectionDetector()
+    node = LeftIntersectionDetector()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Shutting down…")
+        node.get_logger().info("🛑 KeyboardInterrupt — shutting down…")
     finally:
         node.stop()
         node.destroy_node()

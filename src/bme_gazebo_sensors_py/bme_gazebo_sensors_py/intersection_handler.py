@@ -11,15 +11,11 @@ import sensor_msgs_py.point_cloud2 as pc2
 import numpy as np
 from math import radians
 import struct
-import subprocess 
-# import os
+from std_msgs.msg import String
 import cv2
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
-#from std_msgs.msg import Bool
 
-# relative_path = "left_inter_completion_detector.py"
-# script_path = os.path.join(os.path.dirname(__file__), relative_path)
 
 
 
@@ -35,37 +31,35 @@ DEBUG = True
 MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60 
 
 # Movement Related
-LINEAR_SPEED                                    = 1                # m/s   (forward)
+LINEAR_SPEED                                    = 1.0                # m/s   (forward)
 CMD_VEL_PUBLISHING_TIME_INTERVAL                = 0.1                # Time interval between 2 publishers in seconds
 
 # Intersection Turning Related
-ANGLE_TOLERANCE                                 = radians(45)        # ± deg window around 90° – θ
-INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 1.5                 # metres
-LEFT_TURN_ANGULAR_SPEED                         = 0.3          # rad/s (+ve = CCW = left)
-TURN_ANGLE                                      = radians(80.0)      # 90 was over-turning for me? I'm not sure why though
-
+ANGLE_TOLERANCE                                 = radians(30)        # ± deg window around 90° – θ
+INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 3                 # metres
+LEFT_TURN_ANGULAR_SPEED                         = 0.1          # rad/s (+ve = CCW = left)
+TURN_ANGLE                                      = radians(90.0)      # 90 was over-turning for me? I'm not sure why though
 # ──────────────────────────────────────────────────────────────────────────────
 
 def normalise_angle(angle: float) -> float:
-    """Wrap `angle` to the interval [-π, π]."""
+    """Wrap `angle` to the interval [-π, π].""" 
     return (angle + pi) % (2 * pi) - pi
 
 
 class PointcloudLeftTurnDriver(Node):
     def __init__(self):
         super().__init__("pointcloud_left_turn_driver")
-
+        self.create_subscription(String, '/intersection', self.intersection_cb, 10)
+        self.should_drive = False
         self.create_subscription(PointCloud2, "/camera/points", self.pointcloud_cb, 10)
-        self.create_subscription(Odometry, "/odom", self.odom_cb, 50)
-        #self.create_subscription(Bool, '/shutdown_signal', self.shutdown_cb, 10)
+        self.create_subscription(Odometry, "/odom", self.odom_cb, 50)   
         self.cmd_vel_publisher = self.create_publisher(Twist, "cmd_vel", 10)
         if DEBUG:
             self.marker_publisher = self.create_publisher(Marker, "intersection_lane_marker", 10)
             self.filtered_white_points_publilsher = self.create_publisher(PointCloud2, "intersection_filtered_white", 10)
-            self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "intersection_llane_scan_2d_debug", 10)
-        self.get_logger().info(f"🚀 Launching completion detector")
-        self.file_a_process = subprocess.Popen(["ros2", "run", "bme_gazebo_sensors_py", "left_inter_completion_detector"])
+            self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "intersection_llane_scan_2d_debug", 10)    
 
+        
         #subprocess.Popen(["python3", script_path])
         # Internal state
         self.prev_x = None
@@ -84,16 +78,20 @@ class PointcloudLeftTurnDriver(Node):
         if DEBUG:
             self.get_logger().info(f"⏩ Driving {INITIAL_INTERSECTION_FORWARD_MOVEMENT:g} m, then left-turn 90 °, then straight again.")
 
-    # def shutdown_cb(self, msg: Bool):
-    #     if msg.data:
-    #         self.get_logger().info("📩 Received shutdown signal. Exiting gracefully.")
-    #         rclpy.shutdown()
+    def intersection_cb(self, msg: String):
+        if msg.data.lower() == "left":
+            self.should_drive = True
+            self.get_logger().info("🛑 Received 'left' from /intersection. Activating left-turn behavior.")
+        else:
+            self.should_drive = False
+            self.get_logger().info(f"🛑 Received '{msg.data}' from /intersection. Ignoring.")
 
     def pointcloud_cb(self, msg: PointCloud2):
         # ----------------------------------------------------------------------
         # 1) Extracting required points from the pointcloud
         # ----------------------------------------------------------------------
-
+        if not self.should_drive:
+            return
         height = msg.height
         width = msg.width
         white_img = np.zeros((height, width, 3), dtype=np.uint8)
@@ -357,6 +355,8 @@ class PointcloudLeftTurnDriver(Node):
 
 
     def odom_cb(self, msg: Odometry):
+        if not self.should_drive:
+            return
         # ─────────────────────────────────────────────────────────────────────
         # 0.  Current pose & yaw  (make yaw available everywhere below)
         # ─────────────────────────────────────────────────────────────────────
@@ -418,6 +418,8 @@ class PointcloudLeftTurnDriver(Node):
 
 
     def publish_cmd(self):
+        if not self.should_drive:
+            return
         if self.to_publish_because_of_polar_scans:
             self.cmd_vel_publisher.publish(self.to_publish_because_of_polar_scans)
         else:
@@ -426,11 +428,7 @@ class PointcloudLeftTurnDriver(Node):
             cmd.angular.z = LEFT_TURN_ANGULAR_SPEED if self.turning else 0.0
             self.cmd_vel_publisher.publish(cmd)
 
-    # ───────────────────────────────────────────────────────────────────── #
-    # Graceful shutdown                                                    #
-    # ───────────────────────────────────────────────────────────────────── #
-    def stop(self):
-        self.cmd_vel_publisher.publish(Twist())  # send zero cmd
+    
 
 
 def main(args=None):
@@ -441,7 +439,7 @@ def main(args=None):
     except KeyboardInterrupt:
         node.get_logger().info("Shutting down…")
     finally:
-        node.stop()
+        
         node.destroy_node()
         rclpy.shutdown()
 

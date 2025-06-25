@@ -23,7 +23,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------------
     rviz_launch_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='false',
+        default_value='true',
         description='Whether to start RViz'
     )
     rviz_config_arg = DeclareLaunchArgument(
@@ -43,7 +43,7 @@ def generate_launch_description():
     )
     x_arg = DeclareLaunchArgument(
         'x',
-        default_value='-30.10',
+        default_value='-23',
         description='Initial X coordinate for robot spawn'
     )
     y_arg = DeclareLaunchArgument(
@@ -100,6 +100,32 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('rviz')),
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
+
+        
+    left_intersection_detector_node = Node(
+        package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
+        executable='left_inter_completion_detector',  # The name you specified in setup.py's entry_points
+        name='LeftIntersectionDetector',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+
+    intersection_handler_node = Node(
+        package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
+        executable='intersection_handler',  # The name you specified in setup.py's entry_points
+        name='PointcloudLeftTurnDriver',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+
+    move_forward_node = Node(
+        package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
+        executable='move_forward',  # The name you specified in setup.py's entry_points
+        name='LaneFollowerNode',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+
 
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
@@ -242,5 +268,8 @@ def generate_launch_description():
     ld.add_action(trajectory_odom_topic_node)
     ld.add_action(trajectory_node)
     ld.add_action(robot_state_publisher_node)
+    ld.add_action(left_intersection_detector_node)
+    ld.add_action(intersection_handler_node)
+    ld.add_action(move_forward_node)
 
     return ld
