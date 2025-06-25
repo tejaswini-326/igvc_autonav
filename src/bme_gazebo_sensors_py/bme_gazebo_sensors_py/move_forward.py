@@ -15,6 +15,7 @@ from nav_msgs.msg import Odometry
 
 from object_detection.msg import ObjectData
 from std_msgs.msg import String
+
 '''obj detection stuff'''
 from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
@@ -31,14 +32,16 @@ WHITE_THRESHOLD = 100
 COLOR_BALANCE_THRESHOLD = 25
 ANGLE_FACTOR = 1.1
 
-class TrackedObstacle:
+class TrackedObstacle:   #constructor to store object data
     def __init__(self, label, odom_position, lane, detection_time):
         self.label = label
-        self.odom_position = odom_position  # (x, y, z) in odom frame
-        self.lane = lane                    # 'left', 'right'
+        self.odom_position = odom_position 
+        self.lane = lane                   
         self.first_detected = detection_time
+        self.position_history = []
         self.last_updated = detection_time
         self.is_being_avoided = False
+        self.resume_timer_active = False 
     
     def update(self, update_time):
         self.last_updated = update_time
@@ -79,6 +82,8 @@ class LaneFollowerNode(Node):
 		self.stopping = False
 		# Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
 		self.which_lane = 'right'
+
+		
 
 		self.robot_x = 0.0  # initialize
 		self.avoid_obstacle = None
@@ -223,6 +228,27 @@ class LaneFollowerNode(Node):
 			self.stopping = True
 
 	def pointcloud_callback(self, msg):
+		if self.tracked_obstacles:
+            # Sort and trim obstacles
+			sorted_obstacles = sorted(self.tracked_obstacles, key=lambda obs: (obs.odom_position[0] -self.robot_x))
+			closest = sorted_obstacles[0]
+			self.get_logger().info(f"[Obstacle] Closest: x={closest.odom_position[0]:.2f}, label={closest.label}")
+
+            # Always keep latest version of closest obstacle
+			self.avoid_obstacle = closest
+
+			if not closest.is_being_avoided:
+				#find closest in tracked_obstacled and set being_avoided as True 
+				closest.is_being_avoided = True
+				if closest.label == 'stop':
+					self.get_logger().info("Closest obstacle is STOP → stopping")
+					self.handle_stop()
+				elif closest.label == 'mannequin':
+					self.get_logger().info("Closest obstacle is MANNEQUIN → handling")
+					self.handle_mannequin()
+				else:
+					self.get_logger().info("Entering avoid mode for barrel!")
+					self.handle_other_obstacle()
 		if self.active is False:
 			return
 		
@@ -421,6 +447,7 @@ class LaneFollowerNode(Node):
 		else:
 			self.get_logger().warn("No valid clusters found for lane detection")
 			self.publish(self.last_cmd)
+		
 			
 			
 	def classify_object_lane(self, odom_pos, current_time):
@@ -447,99 +474,144 @@ class LaneFollowerNode(Node):
 			self.get_logger().warn("Lane center data unavailable — skipping lane check for object")
 			return "right" #assuming obstacle is in right lane if it cant be detected
 
-	def object_callback(self, msg):
+	 def object_callback(self, msg):
+        '''takes in object data, tracks obstacles based on distance and time'''
+	        current_time = self.get_clock().now()
+	        obj_label = msg.label
+	        obj_pc = msg.pointcloud
+	        #filter object base, convert to odom
+	        obj_base_pos = self.filter_pc(obj_pc)
+	        if obj_base_pos is None:
+	            self.get_logger().warn(f"Couldn't compute base position for {obj_label}")
+	            return
+	        
+	        odom_pos = self.transform_to_odom(*obj_base_pos, current_time)
+	        if odom_pos is None:
+	            return 
+	
+	        POSITION_THRESHOLD = 0.5 
+	        existing_obstacle = None
+	
+	        for obs in self.tracked_obstacles:
+	            dist = math.sqrt(
+	                (obs.odom_position[0] - odom_pos[0])**2 +
+	                (obs.odom_position[1] - odom_pos[1])**2
+	            )
+	            self.get_logger().warn(f"Distance to {obs.label}: {dist:.2f}")
+	            if dist <= POSITION_THRESHOLD:
+	                existing_obstacle = obs
+	                break
+	
+	        if existing_obstacle:
+	            existing_obstacle.update(current_time)
+	            existing_obstacle.odom_position = odom_pos  # update position
+	
+	            # If mannequin, update its position history
+	            if existing_obstacle.label == "vest":
+	                existing_obstacle.position_history.append((current_time, odom_pos))
+	                if len(existing_obstacle.position_history) > 5:
+	                    existing_obstacle.position_history.pop(0)
+	
+	            self.get_logger().info(f"Updated obstacle: {existing_obstacle}")
+	
+	        else:
+	            # Log position key (rounded)
+	            position_key = tuple(round(c, 1) for c in odom_pos)
+	            self.get_logger().info(
+	                f"Ground position of {obj_label}: x={odom_pos[0]:.2f}, y={odom_pos[1]:.2f}, z={odom_pos[2]:.2f}"
+	            )
+	
+	            # Classify lane based on base odom position
+	            lane = self.classify_object_lane(odom_pos, current_time)
+	            self.get_logger().info(f"{obj_label} is in the {lane} lane based on dynamic lane detection")
+	
+	            # Track the new obstacle
+	            new_obs = TrackedObstacle(
+	                label=obj_label,
+	                odom_position=odom_pos,
+	                lane=lane,
+	                detection_time=current_time
+	            )
+	            if obj_label == "vest":
+	                new_obs.position_history = [(current_time, odom_pos)]
+	            self.tracked_obstacles.append(new_obs)
+	            self.get_logger().info(f"New obstacle: {new_obs}")
+	
+	        # Step 5: Clean up old or passed obstacles
+	        self.cleanup_obstacles(current_time)
 
-		''' Convert obstacle to odom frame, 
-			filters PC to find lowest Z and avgs it, 
-			find's obstacle's lane using vector math,
-			matches to existing obstacles within 50 cm radius and updates its time,
-			creates new entries for new obstacles,
-			removes obstacles unseen for >5 sec'''
-		current_time = self.get_clock().now()
-		obj_label = msg.label
-		obj_pc = msg.pointcloud
-
-    	# Step 1: Extract base position from point cloud
-		obj_base_pos = self.filter_pc(obj_pc)
-		if obj_base_pos is None:
-			self.get_logger().warn(f"Couldn't compute base position for {obj_label}")
+	def handle_mannequin(self):
+		mannequin = next((obs for obs in self.tracked_obstacles if obs.label == "vest"), None)
+		if not mannequin or not hasattr(mannequin, "position_history"):
 			return
-
-		# Step 2: Transform base position to odom frame
-		odom_pos = self.transform_to_odom(*obj_base_pos, current_time)
-		if odom_pos is None:
-			return  # Skip if transform failed
-
-    	# Step 3: Check if it's an existing obstacle (based on base position)
-		POSITION_THRESHOLD = 0.9  # 90 cm threshold
-		existing_obstacle = None
-
-		for obs in self.tracked_obstacles:
-			dist = math.sqrt(
-            	(obs.odom_position[0] - odom_pos[0])**2 +
-            	(obs.odom_position[1] - odom_pos[1])**2
-        	)
-			self.get_logger().warn(f"Dist bw obstacles to check if it is same: {dist}")
-        	# Check if same obstacle type and within threshold
-			if dist <= POSITION_THRESHOLD: #TO DO: and obj_label == msg.label {after proper training?}
-				existing_obstacle = obs
-				break
-			#TO-Do: if new obstacle's global posn is behind an existing one, dont add (mis-reading?)
-
-    	# Step 4: Update or create obstacle
-		if existing_obstacle:
-			existing_obstacle.update(current_time)
-			self.get_logger().info(f"Updated obstacle: {existing_obstacle}")
-        	# TO DO: Consider reclassifying lane if necessary
+		
+		if mannequin.is_being_avoided:
+			return  # Already handling this mannequin
+		
+		history = mannequin.position_history
+		if len(history) < 2:
+			return
+		
+		start_pos = np.array(history[0][1])
+		latest_pos = np.array(history[-1][1])
+		movement = np.linalg.norm(latest_pos[:2] - start_pos[:2])
+		
+		MOVEMENT_THRESHOLD = 0.5
+		
+		if movement < MOVEMENT_THRESHOLD:
+		# Static mannequin → change lanes
+			mannequin_lane = self.classify_lane(latest_pos, self.get_clock().now())
+			new_lane = "left" if mannequin_lane == "right" else "right"
+			self.which_lane = new_lane
+			mannequin.is_being_avoided = True
+			self.get_logger().info(f"Static mannequin in {mannequin_lane} lane → switching to {new_lane}")
 		else:
-        	# Log position key (rounded)
-			position_key = tuple(round(c, 1) for c in odom_pos)
-			self.get_logger().info(
-            	f"Ground position of {obj_label}: x={odom_pos[0]:.2f}, y={odom_pos[1]:.2f}, z={odom_pos[2]:.2f}"
-        	)
+		# Moving mannequin → stop temporarily
+			if not self.stopping:
+			    self.stopping = True
+			    mannequin.is_being_avoided = True
+			    self.get_logger().warn("Moving mannequin → stopping robot temporarily")
+			
+			    if not mannequin.resume_timer_active:
+				mannequin.resume_timer_active = True
+			
+				def check_and_resume():
+				    mannequin_still_there = any(
+					obs.label == "vest" and obs.is_being_avoided for obs in self.tracked_obstacles
+				    )
+				    if not mannequin_still_there:
+					self.stopping = False
+					self.get_logger().info("Mannequin disappeared → resuming motion")
+				    else:
+					self.get_logger().info("Mannequin still present → staying stopped")
+			
+				    mannequin.resume_timer_active = False
+				    mannequin.is_being_avoided = False  # Reset the flag
+			
+				self.create_timer(5.0, check_and_resume)	
 
-        	# Classify lane based on base odom position
-			lane = self.classify_object_lane(odom_pos, current_time)
-			self.get_logger().info(f"{obj_label} is in the {lane} lane based on dynamic lane detection")
 
-        	# Track the new obstacle
-			new_obs = TrackedObstacle(
-            	label=obj_label,
-            	odom_position=odom_pos,
-            	lane=lane,
-            	detection_time=current_time
-        	)
-			self.tracked_obstacles.append(new_obs)
-			self.get_logger().info(f"New obstacle: {new_obs}")
+	def handle_stop_sign(self):
+		stop_sign = next((obs for obs in self.tracked_obstacles if obs.label == "stop-sign"), None)
+		if not stop_sign:
+			return
+		
+		if stop_sign.is_being_avoided:
+			return  # Already stopped for this one
+		
+		if not self.stopping:
+			self.stopping = True
+			stop_sign.is_being_avoided = True
+			self.get_logger().info("Stop sign detected. Stopping robot for 3 seconds.")
+		
+			def resume():
+			    self.stopping = False
+			    stop_sign.is_being_avoided = False  # Reset after handling
+			    self.get_logger().info("Resuming movement after stop.")
+			
+			self.create_timer(3.0, resume)
 
-    	# Step 5: Clean up old or passed obstacles
-		self.cleanup_obstacles(current_time)
-
-		#check if tracked obstacles not empty, then find closest to bot, 
-		#trigger handle_mannequin, handle_stop, handle_other
-		#handle_other : changes self.which_lane if obstacle and bopt on same lane
-
-		if self.tracked_obstacles:
-            # Sort and trim obstacles
-			sorted_obstacles = sorted(self.tracked_obstacles, key=lambda obs: (obs.odom_position[0] -self.robot_x))
-			closest = sorted_obstacles[0]
-			self.get_logger().info(f"[Obstacle] Closest: x={closest.odom_position[0]:.2f}, label={closest.label}")
-
-            # Always keep latest version of closest obstacle
-			self.avoid_obstacle = closest
-
-			if not closest.is_being_avoided:
-				#find closest in tracked_obstacled and set being_avoided as True 
-				closest.is_being_avoided = True
-				if closest.label == 'stop':
-					self.get_logger().info("Closest obstacle is STOP → stopping")
-					self.handle_stop()
-				elif closest.label == 'mannequin':
-					self.get_logger().info("Closest obstacle is MANNEQUIN → handling")
-					self.handle_mannequin()
-				else:
-					self.get_logger().info("Entering avoid mode for barrel!")
-					self.handle_other_obstacle()
+		
 
 	def handle_other_obstacle(self):
 
@@ -648,11 +720,7 @@ class LaneFollowerNode(Node):
 		self.tracked_obstacles = active_obstacles
 		self.get_logger().info(f"Currently tracking {len(self.tracked_obstacles)} obstacles.")
 
-	def handle_stop(self):
-		return
-	
-	def handle_mannequin(self):
-		return
+
 
 def main(args=None):
 	rclpy.init(args=args)
