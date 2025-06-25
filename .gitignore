@@ -56,3 +56,5 @@ Makefile
 
 # Logs
 *.log
+
+src/bme_gazebo_sensors_py/bme_gazebo_sensors_py/__pycache__/

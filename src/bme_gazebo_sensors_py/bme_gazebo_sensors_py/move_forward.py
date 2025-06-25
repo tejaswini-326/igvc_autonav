@@ -10,7 +10,7 @@ import math
 from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
-from std_msgs.msg import String
+from std_msgs.msg import String, Int32, Float64MultiArray
 from nav_msgs.msg import Odometry
 
 # x forward, y left, z upward
@@ -27,24 +27,24 @@ ANGLE_FACTOR = 1.1
 class LaneFollowerNode(Node):
 	def __init__(self):
 		super().__init__('lane_follower_node')
-		self.subscription = self.create_subscription(
-			PointCloud2,
-			'/camera/points',
-			self.pointcloud_callback,
-			10
-		)
+		
 		self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
 		self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
+
+		self.create_subscription(PointCloud2, '/camera/points', self.pointcloud_callback, 10)
 		self.create_subscription(String, '/intersection', self.intersection_cb, 10)
 		self.create_subscription(Odometry, "/odom", self.odom_cb, 50) 
+		self.create_subscription(Float64MultiArray, '/igvc/next_waypoint', self.next_waypoint_cb, 10)
 		self.intersection_pub = self.create_publisher(String, '/intersection', 10)
 		self.last_cmd = Twist()
 		self.last_cmd.linear.x = LINEAR_SPEED
 		self.last_cmd.angular.z = 0.0
 		self.active=True
 		self.stopping = False
+		self.next_waypoint = None
 		# Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
 		self.which_lane = 'right'
+
 	def intersection_cb(self, msg):
 		if msg.data.lower() == "None":
 			self.active = True
@@ -376,6 +376,10 @@ class LaneFollowerNode(Node):
 		else:
 			self.get_logger().warn("No valid clusters found for lane detection")
 			self.publish(self.last_cmd)
+
+	def next_waypoint_cb(self, msg:Float64MultiArray):
+		distance, heading_error, idx = msg.data
+		self.next_waypoint = {'distance':distance, 'direction':heading_error, 'waypoint_idx':idx}
 			
 
 

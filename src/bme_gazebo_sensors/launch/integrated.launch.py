@@ -110,10 +110,10 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    intersection_handler_node = Node(
+    intersection_leftturn_node = Node(
         package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
-        executable='intersection_handler',  # The name you specified in setup.py's entry_points
-        name='PointcloudLeftTurnDriver',
+        executable='intersection_leftturn',  # The name you specified in setup.py's entry_points
+        name='IntersectionLeftTurnDriver',
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
@@ -269,7 +269,7 @@ def generate_launch_description():
     ld.add_action(trajectory_node)
     ld.add_action(robot_state_publisher_node)
     ld.add_action(left_intersection_detector_node)
-    ld.add_action(intersection_handler_node)
+    ld.add_action(intersection_leftturn_node)
     ld.add_action(move_forward_node)
 
     return ld
