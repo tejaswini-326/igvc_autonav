@@ -13,7 +13,6 @@ from geometry_msgs.msg import Point
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 
-BOT_SPEED=10.0
 # x forward, y left, z upward
 LINEAR_SPEED = 1.5
 REDUCED_LINEAR_SPEED = 0.5
@@ -23,7 +22,7 @@ MIN_CLUSTERING_DISTANCE = 0.971
 MIN_CLUSTERING_POINTS = 20
 WHITE_THRESHOLD = 100
 COLOR_BALANCE_THRESHOLD = 25
-ANGLE_FACTOR = 1.2
+ANGLE_FACTOR = 1.1
 
 class LaneFollowerNode(Node):
 	def __init__(self):
@@ -115,18 +114,18 @@ class LaneFollowerNode(Node):
 		angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
 
 		# Move toward target
-		cmd.linear.x = LINEAR_SPEED  # Forward speed
+		cmd.linear.x = LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR # Forward speed
+		cmd.angular.z = angle_to_target  # teer towards target
 	
 		# Small angle threshold to avoid jitter
-		if abs(angle_to_target) > THRESHOLD_ANGLE_TO_ROTATE:
-			cmd.angular.z = angle_to_target # Steer towards target
-			if abs(angle_to_target) > THRESHOLD_ANGLE_TO_REDUCE_LINEAR_SPEED:
-				cmd.linear.x = REDUCED_LINEAR_SPEED
-				cmd.angular.z = angle_to_target * ANGLE_FACTOR # Steer towards target
-			self.get_logger().info(f"Turning: angle to target = {angle_to_target:.2f}")
-		else:
-			cmd.angular.z = 0.0
-			self.get_logger().info("Target straight ahead")
+		# if abs(angle_to_target) > THRESHOLD_ANGLE_TO_ROTATE:
+		# 	if abs(angle_to_target) > THRESHOLD_ANGLE_TO_REDUCE_LINEAR_SPEED:
+		# 		cmd.linear.x = REDUCED_LINEAR_SPEED
+		# 		cmd.angular.z = angle_to_target * ANGLE_FACTOR # Steer towards target
+		# 	self.get_logger().info(f"Turning: angle to target = {angle_to_target:.2f}")
+		# else:
+		# 	cmd.angular.z = 0.0
+		# 	self.get_logger().info("Target straight ahead")
 		return cmd
 	
 	def detect_horizontal_lines_2d(self, msg):
