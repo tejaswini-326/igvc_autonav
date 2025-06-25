@@ -13,8 +13,16 @@ from geometry_msgs.msg import Point
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 
-BOT_SPEED=10.0
 # x forward, y left, z upward
+LINEAR_SPEED = 1.5
+REDUCED_LINEAR_SPEED = 0.5
+THRESHOLD_ANGLE_TO_ROTATE = 0.2
+THRESHOLD_ANGLE_TO_REDUCE_LINEAR_SPEED = 0.4
+MIN_CLUSTERING_DISTANCE = 0.971
+MIN_CLUSTERING_POINTS = 20
+WHITE_THRESHOLD = 100
+COLOR_BALANCE_THRESHOLD = 25
+ANGLE_FACTOR = 1.1
 
 class LaneFollowerNode(Node):
 	def __init__(self):
@@ -28,11 +36,10 @@ class LaneFollowerNode(Node):
 		self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
 		self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
 		self.create_subscription(String, '/intersection', self.intersection_cb, 10)
-		self.create_subscription(Odometry, "/odom", self.odom_cb, 50)  
+		self.create_subscription(Odometry, "/odom", self.odom_cb, 50) 
+		self.intersection_pub = self.create_publisher(String, '/intersection', 10)
 		self.last_cmd = Twist()
-
-		self.last_cmd.linear.x = BOT_SPEED
-
+		self.last_cmd.linear.x = LINEAR_SPEED
 		self.last_cmd.angular.z = 0.0
 		self.active=True
 		self.stopping = False
@@ -44,9 +51,9 @@ class LaneFollowerNode(Node):
 			self.get_logger().info("🟢 'None' received — move_forward activated.")
 		else:
 			self.active = False
-	
+			
 	def odom_cb(self, msg: Odometry):
-		self.velocity_squared=(msg.twist.twist.linear.x)**2+(msg.twist.twist.linear.y)**2   
+		self.velocity_squared=(msg.twist.twist.linear.x)**2+(msg.twist.twist.linear.y)**2       
 
 	def publish(self, cmd, target=None):
 		if self.stopping:
@@ -82,7 +89,8 @@ class LaneFollowerNode(Node):
 			for label, center in centers:
 				cx = center[0]
 				cy = center[1]
-				if abs(px - cx) < 0.02 and abs(py - cy) < 0.02:
+				# self.get_logger().info(f"{cx}, {cy}")
+				if abs(px - cx) < 0.027 and abs(py - cy) < 0.027:
 					row = index // width
 					col = index % width
 					cv2.circle(white_img, (col, row), 5, (255, 0, 0), -1)
@@ -91,6 +99,7 @@ class LaneFollowerNode(Node):
 						white_img, text, (col + 10, row - 10),
 						cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA
 					)
+					break
 			index += 1
 
 		cv2.imshow("Target", white_img)
@@ -105,17 +114,18 @@ class LaneFollowerNode(Node):
 		angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
 
 		# Move toward target
-		cmd.linear.x = BOT_SPEED  # Forward speed
+		cmd.linear.x = LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR # Forward speed
+		cmd.angular.z = angle_to_target  # teer towards target
 	
 		# Small angle threshold to avoid jitter
-		if abs(angle_to_target) > 0.05:
-			cmd.angular.z = angle_to_target  # Steer towards target
-			if abs(angle_to_target) > 0.4:
-				cmd.linear.x = 0.2
-			self.get_logger().info(f"Turning: angle to target = {math.degrees(angle_to_target):.2f}°")
-		else:
-			cmd.angular.z = 0.0
-			self.get_logger().info("Target straight ahead")
+		# if abs(angle_to_target) > THRESHOLD_ANGLE_TO_ROTATE:
+		# 	if abs(angle_to_target) > THRESHOLD_ANGLE_TO_REDUCE_LINEAR_SPEED:
+		# 		cmd.linear.x = REDUCED_LINEAR_SPEED
+		# 		cmd.angular.z = angle_to_target * ANGLE_FACTOR # Steer towards target
+		# 	self.get_logger().info(f"Turning: angle to target = {angle_to_target:.2f}")
+		# else:
+		# 	cmd.angular.z = 0.0
+		# 	self.get_logger().info("Target straight ahead")
 		return cmd
 	
 	def detect_horizontal_lines_2d(self, msg):
@@ -136,8 +146,8 @@ class LaneFollowerNode(Node):
 			g = (rgb_int >> 8) & 0xFF
 			b = rgb_int & 0xFF
 
-			white_threshold = 100  # Increased threshold
-			color_balance_threshold = 25  # Colors should be similar for true white
+			white_threshold = WHITE_THRESHOLD  # Increased threshold
+			color_balance_threshold = COLOR_BALANCE_THRESHOLD  # Colors should be similar for true white
 			
 			# Check if pixel is white (high intensity + balanced RGB)
 			avg_color = (r + g + b) / 3
@@ -171,8 +181,7 @@ class LaneFollowerNode(Node):
 			self.get_logger().warn(
 				f"STOP LINE DETECTED: dense y-range = {dense_y_range:.2f}m with {len(white_y_vals)} points"
 			)
-			self.stopped = True
-
+			self.stopping = True
 
 	def pointcloud_callback(self, msg):
 		if self.active is False:
@@ -208,8 +217,8 @@ class LaneFollowerNode(Node):
 			b = rgb_int & 0xFF
 
 			# Improved white detection
-			white_threshold = 100  # Increased threshold
-			color_balance_threshold = 25  # Colors should be similar for true white
+			white_threshold = WHITE_THRESHOLD  # Increased threshold
+			color_balance_threshold = COLOR_BALANCE_THRESHOLD  # Colors should be similar for true white
 			
 			# Check if pixel is white (high intensity + balanced RGB)
 			avg_color = (r + g + b) / 3
@@ -219,7 +228,7 @@ class LaneFollowerNode(Node):
 				abs(b - avg_color) < color_balance_threshold):
 
 				# Ground level filtering
-				if -1.4 < z < -1.3 and 0.0 < x < 3.0:  # Adjusted range
+				if -1.4 < z < -1.3 and 0.0 < x < 5.0:  # Adjusted range
 					white_img[row, col] = (255, 255, 255)
 					white_ground_points.append([x, y, z])  # Store x,y,z coordinates
 			index += 1
@@ -235,16 +244,16 @@ class LaneFollowerNode(Node):
 		# Use only x,y coordinates for clustering (ignore z)
 		points_xy = points_np[:, :2]  # Extract x,y coordinates
 
-		# Better clustering parameters
-		eps = 0.75  # Reduced eps for tighter clusters
-		min_samples = 20  # Increased min_samples to reduce noise
-		
-		clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points_xy)
+		clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy)
 		labels = clustering.labels_
 		
 		# Count clusters and noise points
 		unique_labels = set(labels)
 
+		n_clusters = len(unique_labels) - (1 if -1 in labels else 0)
+		n_noise = list(labels).count(-1)
+		
+		self.get_logger().info(f"Clusters found: {n_clusters}, Noise points: {n_noise}")
 		# Process lane clusters
 		centers = []
 		for label in unique_labels:
