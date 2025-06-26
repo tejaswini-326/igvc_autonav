@@ -683,7 +683,7 @@ class LaneFollowerNode(Node):
 			return None
 
 		z_min = np.min(points[:, 2])
-		mask = 0.005< p.abs(points[:, 2] - z_min) < z_eps
+		mask = np.abs(points[:, 2] - z_min) < z_eps
 		base_points = points[mask]
 
 		if base_points.shape[0] == 0:
