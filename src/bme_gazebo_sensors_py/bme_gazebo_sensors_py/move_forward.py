@@ -683,12 +683,12 @@ class LaneFollowerNode(Node):
 			return None
 
 		z_min = np.min(points[:, 2])
-		mask = np.abs(points[:, 2] - z_min) < z_eps
+		mask = 0.005< p.abs(points[:, 2] - z_min) < z_eps
 		base_points = points[mask]
 
 		if base_points.shape[0] == 0:
 			return None
-
+		
 		return np.mean(base_points, axis=0)
 
 	def cleanup_obstacles(self, current_time):
