@@ -11,9 +11,10 @@
       <left_joint>left_wheel_joint</left_joint>
       <right_joint>right_wheel_joint</right_joint>
 
-        <!-- Wheel parameters -->
-        <wheel_separation>1.1</wheel_separation>        <!-- Adjust for your robot -->
-        <wheel_radius>0.1875</wheel_radius>                <!-- Adjust for your robot -->
+
+      <!-- Wheel parameters -->
+      <wheel_separation>1.1</wheel_separation>        <!-- Adjust for your robot -->
+      <wheel_radius>0.1875</wheel_radius>                <!-- Adjust for your robot -->
 
       <!-- Control gains and limits (optional) -->
       <max_velocity>100.0</max_velocity>                <!-- Max linear velocity in m/s -->
@@ -42,6 +43,8 @@
       <ros><remapping> -->
       <joint_name>left_wheel_joint</joint_name>
       <joint_name>right_wheel_joint</joint_name>
+      <joint_name>front_castor</joint_name>
+      <joint_name>back_castor</joint_name>
     </plugin>
   </gazebo>
 
