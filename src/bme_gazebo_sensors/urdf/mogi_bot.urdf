@@ -12,7 +12,7 @@
   <link name="base_footprint" />
 
   <joint name="base_footprint_joint" type="fixed">
-    <origin xyz="0 0 0.235" rpy="0 0 0" />
+    <origin xyz="0 0 .375" rpy="0 0 0" />
     <parent link="base_footprint" />
     <child link="base_link" />
   </joint>
@@ -45,7 +45,7 @@
 
   <joint
     type="continuous" name="left_wheel_joint">
-    <origin xyz="0 .55 -.15" rpy="0 0 0" />
+    <origin xyz="0 .55 -0.1875" rpy="0 0 0" />
     <child link="wheel_left" />
     <parent link="base_link" />
     <axis xyz="0 1 0" />
@@ -81,7 +81,7 @@
 
   <joint
     type="continuous" name="right_wheel_joint">
-    <origin xyz="0 -.55 -.15" rpy="0 0 0" />
+    <origin xyz="0 -.55 -0.1875" rpy="0 0 0" />
     <child link="wheel_right" />
     <parent link="base_link" />
     <axis xyz="0 1 0" />
@@ -117,7 +117,7 @@
 
   <joint
     type="fixed" name="linkf">
-    <origin xyz=".65 0 -.19625" rpy="0 0 0" />
+    <origin xyz=".65 0 -.2" rpy="0 0 0" />
     <child link="f_link" />
     <parent link="base_link" />
   </joint>
@@ -136,14 +136,14 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 1.5707" />
       <geometry>
-        <cylinder radius=".02" length=".045" />
+        <cylinder radius=".02" length=".09" />
       </geometry>
     </collision>
 
     <visual name='flinkvisual'>
       <origin xyz="0 0 0" rpy="0 0 1.5707" />
       <geometry>
-        <cylinder radius=".02" length=".045" />
+        <cylinder radius=".02" length=".09" />
       </geometry>
     </visual>
 
@@ -151,7 +151,7 @@
 
   <joint
     type="continuous" name="front_castor">
-    <origin xyz=".65 0 -.2775" rpy="0 0 0" />
+    <origin xyz="0 0 -.0825" rpy="0 0 0" />
     <child link="castor_front" />
     <parent link="f_link" />
     <axis xyz="0 0 1" />
@@ -187,7 +187,7 @@
 
   <joint
     type="fixed" name="linkb">
-    <origin xyz="-.65 0 -.19625" rpy="0 0 0" />
+    <origin xyz="-.65 0 -.2" rpy="0 0 0" />
     <child link="b_link" />
     <parent link="base_link" />
   </joint>
@@ -206,14 +206,14 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 1.5707" />
       <geometry>
-        <cylinder radius=".02" length=".045" />
+        <cylinder radius=".02" length=".09" />
       </geometry>
     </collision>
 
     <visual name='blinkvisual'>
       <origin xyz="0 0 0" rpy="0 0 1.5707" />
       <geometry>
-        <cylinder radius=".02" length=".045" />
+        <cylinder radius=".02" length=".09" />
       </geometry>
     </visual>
 
@@ -221,7 +221,7 @@
 
   <joint
     type="continuous" name="back_castor">
-    <origin xyz="-.65 0 -.2775" rpy="0 0 0" />
+    <origin xyz="0 0 -.0825" rpy="0 0 0" />
     <child link="castor_back" />
     <parent link="b_link" />
     <axis xyz="0 0 1" />
