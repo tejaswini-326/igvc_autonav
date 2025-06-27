@@ -153,7 +153,7 @@
     type="continuous" name="front_castor">
     <origin xyz=".65 0 -.2775" rpy="0 0 0" />
     <child link="castor_front" />
-    <parent link="base_link" />
+    <parent link="f_link" />
     <axis xyz="0 0 1" />
     <limit effort="100" velocity="10" />
     <dynamics damping="1.0" friction="1.0" />
@@ -223,7 +223,7 @@
     type="continuous" name="back_castor">
     <origin xyz="-.65 0 -.2775" rpy="0 0 0" />
     <child link="castor_back" />
-    <parent link="base_link" />
+    <parent link="b_link" />
     <axis xyz="0 0 1" />
     <limit effort="100" velocity="10" />
     <dynamics damping="1.0" friction="1.0" />
@@ -255,14 +255,7 @@
     </visual>
   </link>
 
-  <joint
-    type="fixed" name="sensor_mount">
-    <origin xyz=".4 0 .6" rpy="0 0 0" />
-    <child link="stick" />
-    <parent link="base_link" />
-  </joint>
-
-  <link name="stick">
+  <!-- <link name="stick">
     <inertial>
       <mass value="1.0" />
       <origin xyz="0.0 0 0" rpy="0 0 0" />
@@ -286,7 +279,14 @@
         <box size=".0625 .0625 .9" />
       </geometry>
     </visual>
-  </link>
+  </link> -->
+  
+  <!-- <joint
+    type="fixed" name="sensor_mount">
+    <origin xyz=".4 0 .6" rpy="0 0 0" />
+    <child link="camera_link" />
+    <parent link="base_link" />
+  </joint> -->
 
   <joint
     type="fixed" name="lidar">
@@ -327,7 +327,7 @@
     type="fixed" name="camera">
     <origin xyz="0 0 .45" rpy="0 0 0" />
     <child link="camera_link" />
-    <parent link="stick" />
+    <parent link="base_link" />
   </joint>
 
   <link name="camera_link">

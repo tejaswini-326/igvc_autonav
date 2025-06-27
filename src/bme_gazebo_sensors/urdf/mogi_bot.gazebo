@@ -42,6 +42,8 @@
       <ros><remapping> -->
       <joint_name>left_wheel_joint</joint_name>
       <joint_name>right_wheel_joint</joint_name>
+      <joint_name>front_castor</joint_name>
+      <joint_name>back_castor</joint_name>
     </plugin>
   </gazebo>
 
