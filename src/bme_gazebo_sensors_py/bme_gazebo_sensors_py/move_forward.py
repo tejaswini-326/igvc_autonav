@@ -5,14 +5,16 @@ import sensor_msgs_py.point_cloud2 as pc2
 import struct
 import numpy as np
 import cv2
-from sklearn.cluster import DBSCAN
+from cuml.cluster import DBSCAN
+#from sklearn.cluster import DBSCAN
 import math
 from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
-
+from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import Header
 from object_detection.msg import ObjectData
 from std_msgs.msg import String
 
@@ -42,6 +44,7 @@ class TrackedObstacle:   #constructor to store object data
 		self.last_updated = detection_time
 		self.is_being_avoided = False
 		self.resume_timer_active = False 
+		
 	
 	def update(self, update_time):
 		self.last_updated = update_time
@@ -64,7 +67,7 @@ class LaneFollowerNode(Node):
 		self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
 		self.create_subscription(String, '/intersection', self.intersection_cb, 10)
 		self.create_subscription(Odometry, "/odom", self.odom_cb, 50) 
-
+		self.white_points_pub = self.create_publisher(PointCloud2, '/white_points', 10)
 		self.create_subscription(ObjectData, '/object_data', self.object_callback, 10)
 		#self.obj_pos_history = {}
 		#stuff for transform
@@ -116,6 +119,21 @@ class LaneFollowerNode(Node):
 			self.cmd_pub.publish(cmd)
 
 		print('')
+	def create_pointcloud2(self, points, frame_id="camera_link"):
+		header = Header()
+		header.stamp = self.get_clock().now().to_msg()
+		header.frame_id = frame_id
+
+		fields = [
+			PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+			PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+			PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+		]
+
+		cloud_data = [(p[0], p[1], p[2]) for p in points]
+		pc2_msg = pc2.create_cloud(header, fields, cloud_data)
+		return pc2_msg
+
 
 	def debug_time_yo_yo_yo(self, x, y, msg, img, centers):
 		self.get_logger().info(f"DEBUG")
@@ -297,7 +315,8 @@ class LaneFollowerNode(Node):
 					white_img[row, col] = (255, 255, 255)
 					white_ground_points.append([x, y, z])  # Store x,y,z coordinates
 			index += 1
-
+		pc2_msg = self.create_pointcloud2(white_ground_points, frame_id=msg.header.frame_id)
+		self.white_points_pub.publish(pc2_msg)
 		# Only do 3D clustering for lane following if we have enough points
 		if len(white_ground_points) < 10:
 			self.get_logger().warn("Not enough white points for lane detection")
@@ -309,8 +328,10 @@ class LaneFollowerNode(Node):
 		# Use only x,y coordinates for clustering (ignore z)
 		points_xy = points_np[:, :2]  # Extract x,y coordinates
 
-		clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy)
-		labels = clustering.labels_
+		# clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy)
+		# labels = clustering.labels_
+		clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS)
+		labels = clustering.fit_predict(points_xy)
 		
 		# Count clusters and noise points
 		unique_labels = set(labels)
@@ -428,7 +449,7 @@ class LaneFollowerNode(Node):
 					else:
 						z_i = 0.0  # Default height if Z not available
 
-					pt = Point(x=x_i, y=y_i, z=z_i)
+					pt = Point(x=float(x_i), y=float(y_i), z=float(z_i))
 					marker.points.append(pt)
 
 				self.marker_pub.publish(marker)
