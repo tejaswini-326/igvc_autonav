@@ -32,7 +32,7 @@ except Exception:
 	from sklearn.cluster import DBSCAN
 
 # x forward, y left, z upward
-LINEAR_SPEED = 1.5
+LINEAR_SPEED = 0
 REDUCED_LINEAR_SPEED = 0.5
 THRESHOLD_ANGLE_TO_ROTATE = 0.2
 THRESHOLD_ANGLE_TO_REDUCE_LINEAR_SPEED = 0.4
@@ -95,7 +95,8 @@ class LaneFollowerNode(Node):
 		self.stopping = False
 		# Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
 		self.which_lane = 'right'
-
+		#NEW LINE FIT SHIT
+		self.lane_cluster_pub = self.create_publisher(PointCloud2, "/lane_cluster", 10)
 		
 
 		self.robot_x = 0.0  # initialize
@@ -126,7 +127,10 @@ class LaneFollowerNode(Node):
 				self.intersection_pub.publish(msg)
 				self.stopping=False
 		else:
+			cmd.linear.x = 0.0
+			cmd.angular.z = 0.0
 			self.cmd_pub.publish(cmd)
+
 
 		print('')
 	def create_pointcloud2(self, points, frame_id="camera_link"):
@@ -229,7 +233,9 @@ class LaneFollowerNode(Node):
 				abs(g - avg_color) < color_balance_threshold and 
 				abs(b - avg_color) < color_balance_threshold):
 
-				if 3.0 < x < 6.5 and -2.0 < z < 0.0:
+
+				if 3.0 < x < 3.5 and -2.0 < z < 0.0:
+
 					white_y_vals.append(y)
 
 		if len(white_y_vals) < 300:
