@@ -20,9 +20,13 @@ from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
 from geometry_msgs.msg import PointStamped
+import struct
+from std_msgs.msg import Header
+from sensor_msgs.msg import PointField, PointCloud2
+import sensor_msgs_py.point_cloud2 as pc2
 
 # x forward, y left, z upward
-LINEAR_SPEED = 1.5
+LINEAR_SPEED = 0
 REDUCED_LINEAR_SPEED = 0.5
 THRESHOLD_ANGLE_TO_ROTATE = 0.2
 THRESHOLD_ANGLE_TO_REDUCE_LINEAR_SPEED = 0.4
@@ -82,7 +86,8 @@ class LaneFollowerNode(Node):
 		self.stopping = False
 		# Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
 		self.which_lane = 'right'
-
+		#NEW LINE FIT SHIT
+		self.lane_cluster_pub = self.create_publisher(PointCloud2, "/lane_cluster", 10)
 		
 
 		self.robot_x = 0.0  # initialize
@@ -113,7 +118,10 @@ class LaneFollowerNode(Node):
 				self.intersection_pub.publish(msg)
 				self.stopping=False
 		else:
+			cmd.linear.x = 0.0
+			cmd.angular.z = 0.0
 			self.cmd_pub.publish(cmd)
+
 
 		print('')
 
@@ -200,7 +208,7 @@ class LaneFollowerNode(Node):
 				abs(g - avg_color) < color_balance_threshold and 
 				abs(b - avg_color) < color_balance_threshold):
 
-				if 3.0 < x < 3.5 and -1.4 < z < -1.3:
+				if 3.0 < x < 3.5 and -2 < z < 0:
 					white_y_vals.append(y)
 
 		if len(white_y_vals) < 300:
@@ -293,7 +301,7 @@ class LaneFollowerNode(Node):
 				abs(b - avg_color) < color_balance_threshold):
 
 				# Ground level filtering
-				if -1.4 < z < -1.3 and 0.0 < x < 5.0:  # Adjusted range
+				if -2 < z < 0 and 0.0 < x < 5.0:  # Adjusted range
 					white_img[row, col] = (255, 255, 255)
 					white_ground_points.append([x, y, z])  # Store x,y,z coordinates
 			index += 1
@@ -314,6 +322,19 @@ class LaneFollowerNode(Node):
 		
 		# Count clusters and noise points
 		unique_labels = set(labels)
+		# Extract non-noise points (exclude label == -1)
+		cluster_points = points_np[labels != -1]
+
+		if len(cluster_points) > 0:
+			stamp = msg.header.stamp
+			frame_id = msg.header.frame_id
+			header = Header(stamp=stamp, frame_id=frame_id)
+
+			clustered_msg = pc2.create_cloud_xyz32(header, cluster_points.tolist())
+			self.lane_cluster_pub.publish(clustered_msg)
+
+
+
 
 		n_clusters = len(unique_labels) - (1 if -1 in labels else 0)
 		n_noise = list(labels).count(-1)
