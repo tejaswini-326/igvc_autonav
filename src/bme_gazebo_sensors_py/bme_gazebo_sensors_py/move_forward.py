@@ -209,11 +209,7 @@ class LaneFollowerNode(Node):
 				abs(g - avg_color) < color_balance_threshold and 
 				abs(b - avg_color) < color_balance_threshold):
 
-<<<<<<< HEAD
 				if 3.0 < x < 3.5 and -2 < z < 0:
-=======
-				if 3.0 < x < 6.5 and -1.4 < z < -1.3:
->>>>>>> 8163bdf4862ed1e67864b9f215d1ee9e2eccd2df
 					white_y_vals.append(y)
 
 		if len(white_y_vals) < 300:
@@ -309,11 +305,7 @@ class LaneFollowerNode(Node):
 				abs(b - avg_color) < color_balance_threshold):
 
 				# Ground level filtering
-<<<<<<< HEAD
 				if -2 < z < 0 and 0.0 < x < 5.0:  # Adjusted range
-=======
-				if -1.4 < z < -1.3 and 0.0 < x < 4.0:  # Adjusted range
->>>>>>> 8163bdf4862ed1e67864b9f215d1ee9e2eccd2df
 					white_img[row, col] = (255, 255, 255)
 					white_ground_points.append([x, y, z])  # Store x,y,z coordinates
 			index += 1
