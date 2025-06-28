@@ -5,8 +5,7 @@ import sensor_msgs_py.point_cloud2 as pc2
 import struct
 import numpy as np
 import cv2
-from cuml.cluster import DBSCAN
-#from sklearn.cluster import DBSCAN
+import time
 import math
 from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker
@@ -22,6 +21,15 @@ from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
 from geometry_msgs.msg import PointStamped
+import numpy as np
+use_gpu = False
+try:
+	import cupy as cp
+	from cuml.cluster import DBSCAN
+	_ = cp.cuda.Device(0)
+	use_gpu = True
+except Exception:
+	from sklearn.cluster import DBSCAN
 
 # x forward, y left, z upward
 LINEAR_SPEED = 1.5
@@ -69,6 +77,8 @@ class LaneFollowerNode(Node):
 		self.create_subscription(Odometry, "/odom", self.odom_cb, 50) 
 		self.white_points_pub = self.create_publisher(PointCloud2, '/white_points', 10)
 		self.create_subscription(ObjectData, '/object_data', self.object_callback, 10)
+		self.cluster_pub = self.create_publisher(PointCloud2, "cluster_points", 10)
+
 		#self.obj_pos_history = {}
 		#stuff for transform
 		self.tf_buffer = Buffer()
@@ -219,7 +229,7 @@ class LaneFollowerNode(Node):
 				abs(g - avg_color) < color_balance_threshold and 
 				abs(b - avg_color) < color_balance_threshold):
 
-				if 3.0 < x < 6.5 and -1.4 < z < -1.3:
+				if 3.0 < x < 6.5 and -2.0 < z < 0.0:
 					white_y_vals.append(y)
 
 		if len(white_y_vals) < 300:
@@ -275,52 +285,129 @@ class LaneFollowerNode(Node):
 			return
 		
 		self.detect_horizontal_lines_2d(msg)
-		# if self.stopped == True:
-		#     self.destroy_node()
-
+		
 		height = msg.height
 		width = msg.width
+		
+		# Convert point cloud to numpy arrays
+		points_list = list(pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False))
+		
+		if not points_list:
+			return
+		if use_gpu:
+			# Convert to structured numpy array
+			points_array = np.array(points_list, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('rgb', 'f4')])
+			float_array = np.stack([points_array['x'], points_array['y'], points_array['z'], points_array['rgb']], axis=-1)
 
-		white_img = np.zeros((height, width, 3), dtype=np.uint8)
-		white_ground_points = []
-
-		index = 0
-		for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
-			x, y, z, rgb = point
-			row = index // width
-			col = index % width
-
-			# Skip invalid points
-			if rgb is None or math.isnan(x) or math.isnan(y) or math.isnan(z):
-				continue
-
-			try:
-				rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
-			except:
-				continue
-
-			r = (rgb_int >> 16) & 0xFF
-			g = (rgb_int >> 8) & 0xFF
-			b = rgb_int & 0xFF
-
-			# Improved white detection
-			white_threshold = WHITE_THRESHOLD  # Increased threshold
-			color_balance_threshold = COLOR_BALANCE_THRESHOLD  # Colors should be similar for true white
 			
-			# Check if pixel is white (high intensity + balanced RGB)
-			avg_color = (r + g + b) / 3
-			if (r > white_threshold and g > white_threshold and b > white_threshold and
-				abs(r - avg_color) < color_balance_threshold and 
-				abs(g - avg_color) < color_balance_threshold and 
-				abs(b - avg_color) < color_balance_threshold):
+			# Transfer to GPU
+			gpu_points = cp.asarray(float_array)
+			
+			# Create masks for valid points on GPU
+			valid_mask = ~(cp.isnan(gpu_points[:, 0]) | cp.isnan(gpu_points[:, 1]) | 
+						cp.isnan(gpu_points[:, 2]) | cp.isnan(gpu_points[:, 3]))
+			
+			if not cp.any(valid_mask):
+				return
+			
+			# Filter valid points on GPU
+			valid_points = gpu_points[valid_mask]
+			
+			# GPU-accelerated RGB extraction
+			rgb_ints = valid_points[:, 3].view(cp.uint32)
+			r = (rgb_ints >> 16) & 0xFF
+			g = (rgb_ints >> 8) & 0xFF
+			b = rgb_ints & 0xFF
+			
+			# GPU-accelerated white detection
+			white_threshold = WHITE_THRESHOLD
+			color_balance_threshold = COLOR_BALANCE_THRESHOLD
+			
+			avg_colors = (r + g + b) / 3
+			
+			# Create boolean masks on GPU
+			high_intensity_mask = (r > white_threshold) & (g > white_threshold) & (b > white_threshold)
+			color_balance_mask = (cp.abs(r - avg_colors) < color_balance_threshold) & \
+								(cp.abs(g - avg_colors) < color_balance_threshold) & \
+								(cp.abs(b - avg_colors) < color_balance_threshold)
+			
+			# Ground level filtering on GPU
+			ground_mask = (valid_points[:, 2] > -2.0) & (valid_points[:, 2] < 0.0) & \
+				(valid_points[:, 0] > 0.0) & (valid_points[:, 0] < 4.0)
 
-				# Ground level filtering
-				if -1.4 < z < -1.3 and 0.0 < x < 4.0:  # Adjusted range
-					white_img[row, col] = (255, 255, 255)
-					white_ground_points.append([x, y, z])  # Store x,y,z coordinates
-			index += 1
-		pc2_msg = self.create_pointcloud2(white_ground_points, frame_id=msg.header.frame_id)
-		self.white_points_pub.publish(pc2_msg)
+			
+			# Combine all masks on GPU
+			white_ground_mask = high_intensity_mask & color_balance_mask & ground_mask
+			
+			# Extract white ground points on GPU
+			white_ground_points_gpu = valid_points[white_ground_mask]
+			
+			# Transfer back to CPU for publishing
+			white_ground_points_cpu = cp.asnumpy(white_ground_points_gpu)
+			
+			# Create white image on GPU
+			white_img_gpu = cp.zeros((height, width, 3), dtype=cp.uint8)
+			
+			if len(white_ground_points_gpu) > 0:
+				# Calculate indices for valid points on GPU
+				valid_indices = cp.where(valid_mask)[0]
+				white_indices = valid_indices[white_ground_mask]
+				
+				rows = white_indices // width
+				cols = white_indices % width
+				
+				# Set white pixels on GPU
+				white_img_gpu[rows, cols] = 255
+				
+				# Transfer white image back to CPU if needed
+				white_img = cp.asnumpy(white_img_gpu)
+				
+				# Convert to list format for point cloud creation
+				white_ground_points = white_ground_points_cpu[:, :3].astype(float).tolist()
+		else:
+			white_img = np.zeros((height, width, 3), dtype=np.uint8)
+			white_ground_points = []
+			index = 0
+			
+			for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
+				x, y, z, rgb = point
+				row = index // width
+				col = index % width
+				
+				# Skip invalid points
+				if rgb is None or math.isnan(x) or math.isnan(y) or math.isnan(z):
+					continue
+				
+				try:
+					rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
+				except:
+					continue
+				
+				r = (rgb_int >> 16) & 0xFF
+				g = (rgb_int >> 8) & 0xFF
+				b = rgb_int & 0xFF
+				
+				# Improved white detection
+				white_threshold = WHITE_THRESHOLD  # Increased threshold
+				color_balance_threshold = COLOR_BALANCE_THRESHOLD  # Colors should be similar for true white
+				
+				# Check if pixel is white (high intensity + balanced RGB)
+				avg_color = (r + g + b) / 3
+				if (r > white_threshold and g > white_threshold and b > white_threshold and
+					abs(r - avg_color) < color_balance_threshold and
+					abs(g - avg_color) < color_balance_threshold and
+					abs(b - avg_color) < color_balance_threshold):
+					
+					# Ground level filtering
+					if -2.0 < z < 0.0 and 0.0 < x < 4.0:  # Adjusted range
+						white_img[row, col] = (255, 255, 255)
+						white_ground_points.append([x, y, z])  # Store x,y,z coordinates
+				
+				index += 1
+
+			# Publish results
+			pc2_msg = self.create_pointcloud2(white_ground_points, frame_id=msg.header.frame_id)
+			self.white_points_pub.publish(pc2_msg)
 		# Only do 3D clustering for lane following if we have enough points
 		if len(white_ground_points) < 10:
 			self.get_logger().warn("Not enough white points for lane detection")
@@ -334,14 +421,40 @@ class LaneFollowerNode(Node):
 
 		# clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy)
 		# labels = clustering.labels_
-		clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS)
-		labels = clustering.fit_predict(points_xy)
+		start_time = time.time()
+		if use_gpu:
+			clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS)
+			labels = clustering.fit_predict(points_xy)
+		else:
+			clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy)
+			labels = clustering.labels_
+
+		end_time = time.time()
+		self.get_logger().info(f"DBSCAN clustering took {end_time - start_time} seconds")
 		
 		# Count clusters and noise points
 		unique_labels = set(labels)
+		for label in unique_labels:
+			if label == -1:  # Ignore noise
+				continue
 
-		n_clusters = len(unique_labels) - (1 if -1 in labels else 0)
-		n_noise = list(labels).count(-1)
+			cluster_points = points_np[labels == label]  # Get points for this cluster
+
+			# If your points_np is only x,y, you might want to add z=0 or get z from original
+			if cluster_points.shape[1] == 2:
+				# Add z=0 (or some appropriate z)
+				cluster_points_3d = np.hstack([cluster_points, np.zeros((cluster_points.shape[0], 1))])
+			else:
+				cluster_points_3d = cluster_points
+
+			# Create PointCloud2 message for cluster
+			cluster_pc2 = self.create_pointcloud2(cluster_points_3d, frame_id="camera_link")
+
+			# Publish the cluster point cloud — you need a publisher per cluster or combine all clusters in one
+			# Example: Publish all clusters separately
+			self.cluster_pub.publish(cluster_pc2)
+
+		
 		
 		# self.get_logger().info(f"Clusters found: {n_clusters}, Noise points: {n_noise}")
 		# Process lane clusters
