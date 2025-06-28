@@ -94,7 +94,7 @@ class LaneFollowerNode(Node):
 	def intersection_cb(self, msg):
 		if msg.data.lower() == "None":
 			self.active = True
-			self.get_logger().info("🟢 'None' received — move_forward activated.")
+			# self.get_logger().info("🟢 'None' received — move_forward activated.")
 		else:
 			self.active = False
 			
@@ -136,7 +136,7 @@ class LaneFollowerNode(Node):
 
 
 	def debug_time_yo_yo_yo(self, x, y, msg, img, centers):
-		self.get_logger().info(f"DEBUG")
+		# self.get_logger().info(f"DEBUG")
 		height = msg.height
 		width = msg.width
 
@@ -175,19 +175,20 @@ class LaneFollowerNode(Node):
 		# Compute direction to target
 		angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
 
+		# self.get_logger().info(f"{target[0]}")
+		# self.get_logger().info(f"{angle_to_target}")
+
 		# Move toward target
-		cmd.linear.x = LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR # Forward speed
-		cmd.angular.z = angle_to_target  # teer towards target
-	
-		# Small angle threshold to avoid jitter
-		# if abs(angle_to_target) > THRESHOLD_ANGLE_TO_ROTATE:
-		# 	if abs(angle_to_target) > THRESHOLD_ANGLE_TO_REDUCE_LINEAR_SPEED:
-		# 		cmd.linear.x = REDUCED_LINEAR_SPEED
-		# 		cmd.angular.z = angle_to_target * ANGLE_FACTOR # Steer towards target
-		# 	self.get_logger().info(f"Turning: angle to target = {angle_to_target:.2f}")
-		# else:
-		# 	cmd.angular.z = 0.0
-		# 	self.get_logger().info("Target straight ahead")
+		if(target[0] < 2.2 and target[0] > 1.8):
+			if (abs(angle_to_target) > 0.2 ):
+				cmd.linear.x = (LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR)/3 # Forward speed
+				cmd.angular.z = angle_to_target/2
+			else:
+				cmd.linear.x = LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR # Forward speed
+				cmd.angular.z = angle_to_target/5 # teer towards target
+		else:
+			cmd.linear.x = LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR # Forward speed
+			cmd.angular.z = angle_to_target  # teer towards target
 		return cmd
 	
 	def detect_horizontal_lines_2d(self, msg):
@@ -218,7 +219,7 @@ class LaneFollowerNode(Node):
 				abs(g - avg_color) < color_balance_threshold and 
 				abs(b - avg_color) < color_balance_threshold):
 
-				if 3.0 < x < 3.5 and -1.4 < z < -1.3:
+				if 3.0 < x < 6.5 and -1.4 < z < -1.3:
 					white_y_vals.append(y)
 
 		if len(white_y_vals) < 300:
@@ -231,6 +232,9 @@ class LaneFollowerNode(Node):
 		dense_threshold = 5  # min points per bin
 		dense_bins = [bin_edges[i] for i in range(len(hist)) if hist[i] >= dense_threshold]
 
+		# self.get_logger().warn(f"STOP LINE DETECTED: dense y-range = {dense_y_range:.2f}m with {len(white_y_vals)} points")
+		# self.get_logger(f"The number of dense bins : {len(dense_bins)}")
+
 		if len(dense_bins) < 2:
 			return
 
@@ -239,10 +243,10 @@ class LaneFollowerNode(Node):
 		y_dense_max = max(dense_bins)
 		dense_y_range = y_dense_max - y_dense_min
 
-		if dense_y_range > 0.7:
-			self.get_logger().warn(
-				f"STOP LINE DETECTED: dense y-range = {dense_y_range:.2f}m with {len(white_y_vals)} points"
-			)
+		self.get_logger().warn(f"dense y-range = {dense_y_range:.2f}m with {len(white_y_vals)} points")
+
+		if dense_y_range > 0.7 and len(white_y_vals) > 600:
+			self.get_logger().warn(f"STOP LINE DETECTED: dense y-range = {dense_y_range:.2f}m with {len(white_y_vals)} points")
 			self.stopping = True
 
 	def pointcloud_callback(self, msg):
@@ -311,7 +315,7 @@ class LaneFollowerNode(Node):
 				abs(b - avg_color) < color_balance_threshold):
 
 				# Ground level filtering
-				if -1.4 < z < -1.3 and 0.0 < x < 5.0:  # Adjusted range
+				if -1.4 < z < -1.3 and 0.0 < x < 4.0:  # Adjusted range
 					white_img[row, col] = (255, 255, 255)
 					white_ground_points.append([x, y, z])  # Store x,y,z coordinates
 			index += 1
@@ -339,7 +343,7 @@ class LaneFollowerNode(Node):
 		n_clusters = len(unique_labels) - (1 if -1 in labels else 0)
 		n_noise = list(labels).count(-1)
 		
-		self.get_logger().info(f"Clusters found: {n_clusters}, Noise points: {n_noise}")
+		# self.get_logger().info(f"Clusters found: {n_clusters}, Noise points: {n_noise}")
 		# Process lane clusters
 		centers = []
 		for label in unique_labels:
@@ -358,7 +362,7 @@ class LaneFollowerNode(Node):
 		cmd = Twist()
 		if len(centers) == 2:
 			centers.sort(key=lambda c: c[1][1])  # sort by y coordinate
-			self.get_logger().info(f"{centers}")
+			# self.get_logger().info(f"{centers}")
 
 			left_lane = centers[1][1]   # leftmost cluster
 			right_lane = centers[0][1]  # rightmost cluster
