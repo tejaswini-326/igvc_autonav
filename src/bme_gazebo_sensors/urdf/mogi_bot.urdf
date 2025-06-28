@@ -136,14 +136,14 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 1.5707" />
       <geometry>
-        <cylinder radius=".02" length=".09" />
+        <cylinder radius=".02" length=".15" />
       </geometry>
     </collision>
 
     <visual name='flinkvisual'>
       <origin xyz="0 0 0" rpy="0 0 1.5707" />
       <geometry>
-        <cylinder radius=".02" length=".09" />
+        <cylinder radius=".02" length=".15" />
       </geometry>
     </visual>
 
@@ -151,7 +151,7 @@
 
   <joint
     type="continuous" name="front_castor">
-    <origin xyz="0 0 -.0825" rpy="0 0 0" />
+    <origin xyz="0 0 -.115" rpy="0 0 0" />
     <child link="castor_front" />
     <parent link="f_link" />
     <axis xyz="0 0 1" />
@@ -206,14 +206,14 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 1.5707" />
       <geometry>
-        <cylinder radius=".02" length=".09" />
+        <cylinder radius=".02" length=".15" />
       </geometry>
     </collision>
 
     <visual name='blinkvisual'>
       <origin xyz="0 0 0" rpy="0 0 1.5707" />
       <geometry>
-        <cylinder radius=".02" length=".09" />
+        <cylinder radius=".02" length=".15" />
       </geometry>
     </visual>
 
@@ -221,7 +221,7 @@
 
   <joint
     type="continuous" name="back_castor">
-    <origin xyz="0 0 -.0825" rpy="0 0 0" />
+    <origin xyz="0 0 -.115" rpy="0 0 0" />
     <child link="castor_back" />
     <parent link="b_link" />
     <axis xyz="0 0 1" />
