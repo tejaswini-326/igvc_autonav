@@ -255,7 +255,14 @@
     </visual>
   </link>
 
-  <!-- <link name="stick">
+  <joint
+    type="fixed" name="sensor_mount">
+    <origin xyz=".4 0 .6" rpy="0 0 0" />
+    <child link="stick" />
+    <parent link="base_link" />
+  </joint>
+
+  <link name="stick">
     <inertial>
       <mass value="1.0" />
       <origin xyz="0.0 0 0" rpy="0 0 0" />
@@ -279,14 +286,7 @@
         <box size=".0625 .0625 .9" />
       </geometry>
     </visual>
-  </link> -->
-  
-  <!-- <joint
-    type="fixed" name="sensor_mount">
-    <origin xyz=".4 0 .6" rpy="0 0 0" />
-    <child link="camera_link" />
-    <parent link="base_link" />
-  </joint> -->
+  </link>
 
   <joint
     type="fixed" name="lidar">
@@ -327,7 +327,7 @@
     type="fixed" name="camera">
     <origin xyz="0 0 .45" rpy="0 0 0" />
     <child link="camera_link" />
-    <parent link="base_link" />
+    <parent link="stick" />
   </joint>
 
   <link name="camera_link">
