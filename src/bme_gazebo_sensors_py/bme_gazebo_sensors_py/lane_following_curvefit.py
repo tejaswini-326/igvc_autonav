@@ -50,6 +50,8 @@ class LaneFollowerNode(Node):
 		self.stopping = False
 		# Set the variable below to 'left' or 'right' depending on which lane you want the robot to follow
 		self.which_lane = 'right'
+		self.white_pub = self.create_publisher(PointCloud2, "/white_lane_points", 10)
+		self.yellow_pub = self.create_publisher(PointCloud2, "/yellow_lane_points", 10)
 	
 	def intersection_cb(self, msg):
 		if msg.data.lower() == "None":
@@ -270,7 +272,7 @@ class LaneFollowerNode(Node):
 				abs(g - avg_color) < color_balance_threshold and 
 				abs(b - avg_color) < color_balance_threshold):
 
-				if 3.0 < x < 6.5 and -2.0 < z < 0.0:
+				if 3.0 < x < 6.5 and -2.0 < z < -1.3:
 					white_y_vals.append(y)
 			
 			# Yellow detection
@@ -278,7 +280,7 @@ class LaneFollowerNode(Node):
 				abs(r - avg_color) < color_balance_threshold and 
 				abs(g - avg_color) < color_balance_threshold and 
 				abs(b - avg_color) < color_balance_threshold)):
-				if 3.0 < x < 6.5 and -2.0 < z < -0.0:
+				if 3.0 < x < 6.5 and -2.0 < z < -1.3:
 					yellow_y_vals.append(y)
 
 		total_line_points = len(white_y_vals) + len(yellow_y_vals)
@@ -352,7 +354,7 @@ class LaneFollowerNode(Node):
 				abs(b - avg_color) < color_balance_threshold):
 
 				# Ground level filtering
-				if -2.0 < z < -0.0 and 0.0 < x < 10.0:
+				if -2.0 < z < -1.3 and 0.0 < x < 10.0:
 					white_ground_points.append([x, y, z])
 			
 			# Yellow detection (high red and green, low blue)
@@ -361,7 +363,7 @@ class LaneFollowerNode(Node):
 				abs(g - avg_color) < color_balance_threshold and 
 				abs(b - avg_color) < color_balance_threshold)):
 				# Ground level filtering
-				if -2.0 < z < 0.0 and 0.0 < x < 10.0:
+				if -2.0 < z < -1.3 and 0.0 < x < 10.0:
 					yellow_ground_points.append([x, y, z])
 			
 			index += 1
@@ -378,9 +380,30 @@ class LaneFollowerNode(Node):
 			return
 
 		points_np = np.array(all_lane_points)
+		self.get_logger().warn(f"no of yellow ground points : {len(yellow_ground_points)}")
+		points_np_y = np.array(yellow_ground_points)
 		
+		self.get_logger().warn(f" shape : {points_np_y.shape}")
+
 		# Use only x,y coordinates for clustering (ignore z)
 		points_xy = points_np[:, :2]  # Extract x,y coordinates
+		clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy)
+		labels = clustering.labels_
+		# WHITE
+		clustered_white_points = points_np[labels != -1]
+		self.get_logger().warn(f" white points being published : {len(clustered_white_points)}")
+		if len(clustered_white_points) > 0:
+			white_msg = pc2.create_cloud_xyz32(msg.header, clustered_white_points.tolist())
+			self.white_pub.publish(white_msg)
+
+		points_xy_y = points_np_y[:, :2]
+		clustering_y = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy_y)
+		labels_y = clustering_y.labels_
+		clustered_yellow_points = points_np_y[labels_y != -1]
+		self.get_logger().warn(f"yellow points being published : {len(clustered_yellow_points)}")
+		if len(clustered_yellow_points) > 0:
+			yellow_msg = pc2.create_cloud_xyz32(msg.header, clustered_yellow_points.tolist())
+			self.yellow_pub.publish(yellow_msg)
 
 		clustering = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy)
 		labels = clustering.labels_
