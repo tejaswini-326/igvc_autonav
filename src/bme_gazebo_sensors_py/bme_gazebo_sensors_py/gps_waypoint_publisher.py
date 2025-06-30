@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import NavSatFix
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Int32, Float64MultiArray
+from tf_transformations import euler_from_quaternion
+import math
+from math import pi
+
+THRESHOLD_DISTANCE_FOR_DECLARING_THAT_WE_REACHED_A_WAYPOINT = 3
+
+def normalise_angle(angle: float) -> float:
+    """Wrap `angle` to the interval [-π, π]."""
+    return (angle + pi) % (2 * pi) - pi
+
+
+def calculate_distance_and_bearing(latitude, longitude, waypt_lat, waypt_lon):
+    lat0 = math.radians(latitude)
+    m_per_deg_lat = 111132.92
+    m_per_deg_lon = 111412.84 * math.cos(lat0) - 93.5 * math.cos(3 * lat0)
+
+    dlat = waypt_lat - latitude
+    dlon = waypt_lon - longitude
+    northing = dlat * m_per_deg_lat
+    easting = dlon * m_per_deg_lon
+
+    distance = math.hypot(easting, northing)
+    bearing = math.atan2(easting, northing)
+    return distance, bearing
+
+
+class GPSNextWaypointPublisherNode(Node):
+    def __init__(self):
+        super().__init__('gps_next_waypoint_publisher_node')
+
+        self.latitude = 0.0
+        self.longitude = 0.0
+        self.yaw = 0.0
+        self.waypoint_index = 0
+
+        self.create_subscription(NavSatFix, '/navsat', self.navsat_callback, 10)
+        self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
+        self.next_waypoint_publisher = self.create_publisher(Float64MultiArray, '/igvc/next_waypoint', 10) # msg.data = [distance, heading_error, waypoint_index]
+
+        # Static list of waypoints: [latitude, longitude]
+        self.waypoints = [
+            [47.47878384569001, 19.057413221283262], # Before first left turn
+            [47.47867547320186, 19.057500743159018], # Just before first intersection
+            [47.47868320154593, 19.057779520264365], # Straight ahead of first intersection
+            [47.47881633796393, 19.057923110187613], # To the left of second intersection
+            [47.47918321226283, 19.057765083543092]  # Just before third intersection
+        ]
+
+        self.create_timer(0.1, self.publish_next_waypoint)
+
+    def navsat_callback(self, msg: NavSatFix):
+        self.latitude = msg.latitude
+        self.longitude = msg.longitude
+
+    def odom_cb(self, msg: Odometry):
+        q = msg.pose.pose.orientation
+        _, _, yaw = euler_from_quaternion((q.x, q.y, q.z, q.w))
+        self.yaw = yaw
+
+
+    def publish_next_waypoint(self):
+        idx = self.waypoint_index
+
+        # If we have reached our last waypoint
+        if idx >= len(self.waypoints):
+            self.get_logger().info('No more waypoints. Stopping.')
+            msg = Float64MultiArray()
+            msg.data = [0, 0, idx]
+            self.next_waypoint_publisher.publish(msg)
+            return
+
+        distance, bearing = calculate_distance_and_bearing(self.latitude, self.longitude, self.waypoints[idx][0], self.waypoints[idx][1])
+
+        # This bearing re-adjustment converts the angle of the navsat systemt to our gazebo system
+        # Might need to be changed for the real bot
+        bearing = normalise_angle(-bearing + pi)
+        heading_error = normalise_angle(bearing - self.yaw)
+
+        msg = Float64MultiArray()
+        msg.data = [float(distance), float(heading_error), float(idx)]
+        self.next_waypoint_publisher.publish(msg)
+
+        if distance < THRESHOLD_DISTANCE_FOR_DECLARING_THAT_WE_REACHED_A_WAYPOINT:
+            self.get_logger().info(f'Reached Waypoint {idx}. Beginning to publish next waypoint.')
+            self.waypoint_index += 1
+
+
+
+
+def main(args=None):
+	rclpy.init(args=args)
+	node = GPSNextWaypointPublisherNode()
+	rclpy.spin(node)
+	node.destroy_node()
+	rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

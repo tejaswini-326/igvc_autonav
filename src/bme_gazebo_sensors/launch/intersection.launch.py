@@ -23,7 +23,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------------
     rviz_launch_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='true',
+        default_value='false',
         description='Whether to start RViz'
     )
     rviz_config_arg = DeclareLaunchArgument(
@@ -43,17 +43,17 @@ def generate_launch_description():
     )
     x_arg = DeclareLaunchArgument(
         'x',
-        default_value='-14.167149539174213',
+        default_value='-17.323',
         description='Initial X coordinate for robot spawn'
     )
     y_arg = DeclareLaunchArgument(
         'y',
-        default_value='-24.934024805390383',
+        default_value='-32.183',
         description='Initial Y coordinate for robot spawn'
     )
     yaw_arg = DeclareLaunchArgument(
         'yaw',
-        default_value='0',
+        default_value='-0.2',
         description='Initial yaw (rotation around Z) for robot spawn'
     )
     sim_time_arg = DeclareLaunchArgument(
@@ -100,32 +100,31 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('rviz')),
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
-    
-    left_intersection_detector_node = Node(
-        package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
-        executable='left_inter_completion_detector',  # The name you specified in setup.py's entry_points
-        name='LeftIntersectionDetector',
+
+    intersection_straight_node = Node(
+        package='bme_gazebo_sensors_py',
+        executable='intersection_straight',
+        name='IntersectionStraightDriver',
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    intersection_handler_node = Node(
-        package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
-        executable='intersection_handler',  # The name you specified in setup.py's entry_points
-        name='PointcloudLeftTurnDriver',
+    intersection_left_node = Node(
+        package='bme_gazebo_sensors_py',
+        executable='intersection_left',
+        name='IntersectionLeftTurnDriver',
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    move_forward_node = Node(
-        package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
-        executable='move_forward',  # The name you specified in setup.py's entry_points
-        name='LaneFollowerNode',
+    gps_waypoint_publisher_node = Node(
+        package='bme_gazebo_sensors_py',
+        executable='gps_waypoint_publisher',
+        name='GPSNextWaypointPublisherNode',
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
     # ------------------------------------------------------------------------
@@ -211,24 +210,6 @@ def generate_launch_description():
     )
 
     # ------------------------------------------------------------------------
-    # Trajectory server nodes (custom mogi_trajectory_server package)
-    # ------------------------------------------------------------------------
-    trajectory_odom_topic_node = Node(
-        package='mogi_trajectory_server',
-        executable='mogi_trajectory_server_topic_based',
-        name='mogi_trajectory_server_odom_topic',
-        parameters=[
-            {'trajectory_topic': 'trajectory_raw'},
-            {'odometry_topic': 'odom'}
-        ],
-    )
-    trajectory_node = Node(
-        package='mogi_trajectory_server',
-        executable='mogi_trajectory_server',
-        name='mogi_trajectory_server'
-    )
-
-    # ------------------------------------------------------------------------
     # Robot State Publisher (publishes TF from the robot_description)
     # ------------------------------------------------------------------------
     robot_state_publisher_node = Node(
@@ -267,12 +248,11 @@ def generate_launch_description():
     ld.add_action(gz_image_bridge_node)
     ld.add_action(relay_camera_info_node)
     ld.add_action(ekf_node)
-    ld.add_action(trajectory_odom_topic_node)
-    ld.add_action(trajectory_node)
     ld.add_action(robot_state_publisher_node)
-    ld.add_action(left_intersection_detector_node)
-    ld.add_action(intersection_handler_node)
-    ld.add_action(move_forward_node)
+    
+    ld.add_action(intersection_straight_node)
+    ld.add_action(intersection_left_node)
+    ld.add_action(gps_waypoint_publisher_node)
 
 
     return ld
