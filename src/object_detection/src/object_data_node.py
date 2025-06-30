@@ -32,7 +32,11 @@ class ObjectDataNode(Node):
 
         #model and utils
         self.bridge = CvBridge()
+<<<<<<< HEAD
+        self.model = YOLO('/home/tejaswini/Desktop/abhiyaan/best.pt') #add model path here
+=======
         self.model = YOLO('/home/sinan/best.pt') #add model path here
+>>>>>>> e519545d6c5b4d030f54421b73fd772f9fbbe0c9
         self.model.eval()
         self.get_logger().info('YOLOv8 model loaded.')
 
