@@ -185,8 +185,6 @@ def radial_scans(pts_xy, mode, yaw, turn_start_yaw, angle_tolerance, debug_stuff
 		best_dist_px = dists[best_idx]
 		return best_idx, best_dist_px
 
-	msg_header, marker_publisher, lane_scan_2d_debug_publisher, intersection_filtered_points_publisher, cv2_bridge, self = debug_stuff
-
 	if mode in ('left', 'straight'):
 		if never_hit.any():
 			best_idx, best_dist_px = pick_median_among_never_hit()
