@@ -137,6 +137,9 @@ def generate_launch_description():
             "/scan/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
             "/camera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image",
             "/camera/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
+            "/bcamera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo",
+            "/bcamera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image",
+            "/bcamera/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
         ],
         output="screen",
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
@@ -168,6 +171,26 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
+    gz_bimage_bridge_node = Node(
+        package="ros_gz_image",
+        executable="image_bridge",
+        arguments=["/bcamera/image"],
+        output="screen",
+        parameters=[{
+            'use_sim_time': LaunchConfiguration('use_sim_time'),
+            'camera.image.compressed.jpeg_quality': 75
+        }],
+    )   
+
+    relay_bcamera_info_node = Node(
+        package='topic_tools',
+        executable='relay',
+        name='relay_bcamera_info',
+        output='screen',
+        arguments=['bcamera/camera_info', 'bcamera/image/camera_info'],
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+
     # ------------------------------------------------------------------------
     # EKF node for sensor fusion (robot_localization)
     # ------------------------------------------------------------------------
@@ -185,20 +208,20 @@ def generate_launch_description():
     # ------------------------------------------------------------------------
     # Trajectory server nodes (custom mogi_trajectory_server package)
     # ------------------------------------------------------------------------
-    trajectory_odom_topic_node = Node(
-        package='mogi_trajectory_server',
-        executable='mogi_trajectory_server_topic_based',
-        name='mogi_trajectory_server_odom_topic',
-        parameters=[
-            {'trajectory_topic': 'trajectory_raw'},
-            {'odometry_topic': 'odom'}
-        ],
-    )
-    trajectory_node = Node(
-        package='mogi_trajectory_server',
-        executable='mogi_trajectory_server',
-        name='mogi_trajectory_server'
-    )
+    # trajectory_odom_topic_node = Node(
+    #     package='mogi_trajectory_server',
+    #     executable='mogi_trajectory_server_topic_based',
+    #     name='mogi_trajectory_server_odom_topic',
+    #     parameters=[
+    #         {'trajectory_topic': 'trajectory_raw'},
+    #         {'odometry_topic': 'odom'}
+    #     ],
+    # )
+    # trajectory_node = Node(
+    #     package='mogi_trajectory_server',
+    #     executable='mogi_trajectory_server',
+    #     name='mogi_trajectory_server'
+    # )
 
     # ------------------------------------------------------------------------
     # Robot State Publisher (publishes TF from the robot_description)
@@ -237,9 +260,10 @@ def generate_launch_description():
     ld.add_action(gz_bridge_node)
     ld.add_action(gz_image_bridge_node)
     ld.add_action(relay_camera_info_node)
+    ld.add_action(relay_bcamera_info_node)
     ld.add_action(ekf_node)
-    ld.add_action(trajectory_odom_topic_node)
-    ld.add_action(trajectory_node)
+    # ld.add_action(trajectory_odom_topic_node)
+    # ld.add_action(trajectory_node)
     ld.add_action(robot_state_publisher_node)
 
     return ld
