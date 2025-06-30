@@ -23,7 +23,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------------
     rviz_launch_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='true',
+        default_value='false',
         description='Whether to start RViz'
     )
     rviz_config_arg = DeclareLaunchArgument(
@@ -101,16 +101,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-        
-
-    move_forward_node = Node(
-        package='bme_gazebo_sensors_py',  # Replace with your actual package name if different
-        executable='move_forward',  # The name you specified in setup.py's entry_points
-        name='LaneFollowerNode',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
     intersection_straight_node = Node(
         package='bme_gazebo_sensors_py',
         executable='intersection_straight',
@@ -118,7 +108,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
-
+    
     intersection_left_node = Node(
         package='bme_gazebo_sensors_py',
         executable='intersection_left',
@@ -135,7 +125,22 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-
+    move_forward_node = Node(
+        package='bme_gazebo_sensors_py',
+        executable='move_forward',
+        name='LaneFollowerNode',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+    
+    m_horizontal_line_detect_node = Node(
+        package='bme_gazebo_sensors_py',
+        executable='m_horizontal_line_detect',
+        name='M_HorizontalLineDetect',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+    
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
     # ------------------------------------------------------------------------
@@ -153,6 +158,9 @@ def generate_launch_description():
         output="screen",
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
+    
+
+
 
     # ------------------------------------------------------------------------
     # Bridge common topics between ROS 2 and Gazebo
@@ -176,7 +184,7 @@ def generate_launch_description():
         output="screen",
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
-
+    
     # ------------------------------------------------------------------------
     # Image bridge for camera with compressed transport
     # ------------------------------------------------------------------------
@@ -218,24 +226,6 @@ def generate_launch_description():
     )
 
     # ------------------------------------------------------------------------
-    # Trajectory server nodes (custom mogi_trajectory_server package)
-    # ------------------------------------------------------------------------
-    # trajectory_odom_topic_node = Node(
-    #     package='mogi_trajectory_server',
-    #     executable='mogi_trajectory_server_topic_based',
-    #     name='mogi_trajectory_server_odom_topic',
-    #     parameters=[
-    #         {'trajectory_topic': 'trajectory_raw'},
-    #         {'odometry_topic': 'odom'}
-    #     ],
-    # )
-    # trajectory_node = Node(
-    #     package='mogi_trajectory_server',
-    #     executable='mogi_trajectory_server',
-    #     name='mogi_trajectory_server'
-    # )
-
-    # ------------------------------------------------------------------------
     # Robot State Publisher (publishes TF from the robot_description)
     # ------------------------------------------------------------------------
     robot_state_publisher_node = Node(
@@ -275,10 +265,14 @@ def generate_launch_description():
     ld.add_action(relay_camera_info_node)
     ld.add_action(ekf_node)
     ld.add_action(robot_state_publisher_node)
-
-    ld.add_action(move_forward_node)
+    
     ld.add_action(intersection_straight_node)
     ld.add_action(intersection_left_node)
     ld.add_action(gps_waypoint_publisher_node)
+
+    # ld.add_action(move_forward_node)
     
+    ld.add_action(m_horizontal_line_detect_node)
+    
+
     return ld
