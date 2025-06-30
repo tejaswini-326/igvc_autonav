@@ -143,20 +143,20 @@ def generate_launch_description():
         ]
     )
 
-    traj_server = Node(
-        package='mogi_trajectory_server', executable='mogi_trajectory_server',
-        name='mogi_trajectory_server'
-    )
+    # traj_server = Node(
+    #     package='mogi_trajectory_server', executable='mogi_trajectory_server',
+    #     name='mogi_trajectory_server'
+    # )
 
-    traj_odom = Node(
-        package='mogi_trajectory_server',
-        executable='mogi_trajectory_server_topic_based',
-        name='mogi_trajectory_server_odom_topic',
-        parameters=[
-            {'trajectory_topic': 'trajectory_raw'},
-            {'odometry_topic': 'odom'}
-        ]
-    )
+    # traj_odom = Node(
+    #     package='mogi_trajectory_server',
+    #     executable='mogi_trajectory_server_topic_based',
+    #     name='mogi_trajectory_server_odom_topic',
+    #     parameters=[
+    #         {'trajectory_topic': 'trajectory_raw'},
+    #         {'odometry_topic': 'odom'}
+    #     ]
+    # )
 
     rsp = Node(
         package='robot_state_publisher', executable='robot_state_publisher',

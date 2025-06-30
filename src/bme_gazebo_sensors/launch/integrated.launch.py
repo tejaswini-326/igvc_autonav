@@ -218,6 +218,24 @@ def generate_launch_description():
     )
 
     # ------------------------------------------------------------------------
+    # Trajectory server nodes (custom mogi_trajectory_server package)
+    # ------------------------------------------------------------------------
+    # trajectory_odom_topic_node = Node(
+    #     package='mogi_trajectory_server',
+    #     executable='mogi_trajectory_server_topic_based',
+    #     name='mogi_trajectory_server_odom_topic',
+    #     parameters=[
+    #         {'trajectory_topic': 'trajectory_raw'},
+    #         {'odometry_topic': 'odom'}
+    #     ],
+    # )
+    # trajectory_node = Node(
+    #     package='mogi_trajectory_server',
+    #     executable='mogi_trajectory_server',
+    #     name='mogi_trajectory_server'
+    # )
+
+    # ------------------------------------------------------------------------
     # Robot State Publisher (publishes TF from the robot_description)
     # ------------------------------------------------------------------------
     robot_state_publisher_node = Node(

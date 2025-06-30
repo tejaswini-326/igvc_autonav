@@ -226,6 +226,16 @@ class LaneFollowerNode(Node):
 			white_threshold = WHITE_THRESHOLD  # Increased threshold
 			color_balance_threshold = COLOR_BALANCE_THRESHOLD  # Colors should be similar for true white
 			
+			#             z_vals = [z for x, y, z in white_ground_points]
+
+			# if len(z_vals) > 10:
+			#     z_median = np.median(z_vals)
+			#     z_std = np.std(z_vals)
+			#     lower_z = z_median - 0.1 * z_std
+			#     upper_z = z_median + 0.1 * z_std
+			# else:
+			#     lower_z = -1.4  
+			#     upper_z = -1.3
 			# Check if pixel is white (high intensity + balanced RGB)
 			avg_color = (r + g + b) / 3
 			if (r > white_threshold and g > white_threshold and b > white_threshold and
@@ -599,45 +609,7 @@ class LaneFollowerNode(Node):
 			self.get_logger().warn("Lane center data unavailable — skipping lane check for object")
 			return "right"  # default fallback
 
-		# Transform lane centers to odom
-		left_raw = self.latest_lane_centers["left"]
-		right_raw = self.latest_lane_centers["right"]
-
-		left = self.transform_to_odom(*left_raw, current_time)
-		right = self.transform_to_odom(*right_raw, current_time)
-
-		if left is None or right is None:
-			self.get_logger().warn("TF failed — returning default lane")
-			return "right"
-
-		left = np.array(left[:2])
-		right = np.array(right[:2])
-		obj = np.array(odom_pos[:2])
-
-		# Compute center line and perpendicular vector
-		lane_vec = right - left
-		if np.linalg.norm(lane_vec) < 1e-3:
-			self.get_logger().warn("Lane vector too small — probably bad data")
-			return "right"
-
-		lane_unit = lane_vec / np.linalg.norm(lane_vec)
-		perp_unit = np.array([-lane_unit[1], lane_unit[0]])
-
-		center = (left + right) / 2.0
-		obj_vec = obj - center
-		lateral_offset = np.dot(obj_vec, perp_unit)
-
-		lane = "left" if lateral_offset > 0 else "right"
-
-		# Log visuals for debugging
-		self.get_logger().info(f"Classified {odom_pos} as {lane} lane | offset={lateral_offset:.2f}")
-		self.get_logger().info(f"Left: {left_raw} → {left}, Right: {right_raw} → {right}, Obj: {odom_pos}")
-
-		return lane
-
-
 	def object_callback(self, msg):
-		'''takes in object data, tracks obstacles based on distance and time'''
 		current_time = self.get_clock().now()
 		obj_label = msg.label
 		obj_pc = msg.pointcloud
@@ -768,7 +740,7 @@ class LaneFollowerNode(Node):
 		
 			def resume():
 				self.stopping = False
-				stop_sign.is_being_avoided = False  # Reset after handling
+				stop_sign.is_being_avoided = False  
 				self.get_logger().info("Resuming movement after stop.")
 			
 			self.create_timer(3.0, resume)
@@ -879,8 +851,6 @@ class LaneFollowerNode(Node):
 	
 		self.tracked_obstacles = active_obstacles
 		self.get_logger().info(f"Currently tracking {len(self.tracked_obstacles)} obstacles.")
-
-
 
 def main(args=None):
 	rclpy.init(args=args)
