@@ -8,7 +8,7 @@ from tf_transformations import euler_from_quaternion
 import math
 from math import pi
 
-THRESHOLD_DISTANCE_FOR_DECLARING_THAT_WE_REACHED_A_WAYPOINT = 1
+THRESHOLD_DISTANCE_FOR_DECLARING_THAT_WE_REACHED_A_WAYPOINT = 3
 
 def normalise_angle(angle: float) -> float:
     """Wrap `angle` to the interval [-π, π]."""
@@ -45,10 +45,11 @@ class GPSNextWaypointPublisherNode(Node):
 
         # Static list of waypoints: [latitude, longitude]
         self.waypoints = [
-            [47.47894028321059, 19.057691238180013],
-            [47.478878, 19.058149],
-            [47.479075, 19.058055],
-            [47.478950, 19.057785]
+            [47.47878384569001, 19.057413221283262], # Before first left turn
+            [47.47867547320186, 19.057500743159018], # Just before first intersection
+            [47.47868320154593, 19.057779520264365], # Straight ahead of first intersection
+            [47.47881633796393, 19.057923110187613], # To the left of second intersection
+            [47.47918321226283, 19.057765083543092]  # Just before third intersection
         ]
 
         self.create_timer(0.1, self.publish_next_waypoint)
@@ -87,21 +88,17 @@ class GPSNextWaypointPublisherNode(Node):
 
         if distance < THRESHOLD_DISTANCE_FOR_DECLARING_THAT_WE_REACHED_A_WAYPOINT:
             self.get_logger().info(f'Reached Waypoint {idx}. Beginning to publish next waypoint.')
-            idx += 1
+            self.waypoint_index += 1
 
 
 
 
 def main(args=None):
-    rclpy.init(args=args)
-    node = GPSNextWaypointPublisherNode()
-    try:
-        node.waypoint_follower()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+	rclpy.init(args=args)
+	node = GPSNextWaypointPublisherNode()
+	rclpy.spin(node)
+	node.destroy_node()
+	rclpy.shutdown()
 
 
 if __name__ == '__main__':

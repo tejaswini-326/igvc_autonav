@@ -4,7 +4,6 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2, PointField, Image
 from nav_msgs.msg import Odometry
-from bme_gazebo_sensors_py.left_inter_completion_detector import LeftIntersectionDetector
 from geometry_msgs.msg import Twist
 from tf_transformations import euler_from_quaternion
 import sensor_msgs_py.point_cloud2 as pc2
@@ -31,13 +30,13 @@ DEBUG = True
 MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60 
 
 # Movement Related
-LINEAR_SPEED                                    = 1.0                # m/s   (forward)
+LINEAR_SPEED                                    = 1.5                # m/s   (forward)
 CMD_VEL_PUBLISHING_TIME_INTERVAL                = 0.1                # Time interval between 2 publishers in seconds
 
 # Intersection Turning Related
 ANGLE_TOLERANCE                                 = radians(30)        # ± deg window around 90° – θ
 INITIAL_INTERSECTION_FORWARD_MOVEMENT           = 3                 # metres
-LEFT_TURN_ANGULAR_SPEED                         = 0.1          # rad/s (+ve = CCW = left)
+LEFT_TURN_ANGULAR_SPEED                         = 0.22          # rad/s (+ve = CCW = left)
 TURN_ANGLE                                      = radians(90.0)      # 90 was over-turning for me? I'm not sure why though
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -61,7 +60,7 @@ class IntersectionLeftTurnDriver(Node):
 		if DEBUG:
 			self.marker_publisher = self.create_publisher(Marker, "intersection_lane_marker", 10)
 			self.filtered_white_points_publilsher = self.create_publisher(PointCloud2, "intersection_filtered_white", 10)
-			self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "intersection_llane_scan_2d_debug", 10)    
+			self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "intersection_lane_scan_2d_debug", 10)    
 
 		
 		self.next_waypoint = None
@@ -80,8 +79,6 @@ class IntersectionLeftTurnDriver(Node):
 
 		self.timer = self.create_timer(CMD_VEL_PUBLISHING_TIME_INTERVAL, self.publish_cmd)
 
-		if DEBUG:
-			self.get_logger().info(f"⏩ Driving {INITIAL_INTERSECTION_FORWARD_MOVEMENT:g} m, then left-turn 90 °, then straight again.")
 
 	def intersection_cb(self, msg: String):
 		if msg.data.lower() == "left":
@@ -390,9 +387,6 @@ class IntersectionLeftTurnDriver(Node):
 		_, _, yaw = euler_from_quaternion((q.x, q.y, q.z, q.w))   # <── moved here
 		self.prev_yaw = yaw                                       # keep latest copy
 
-		if self.turn_start_yaw is not None:
-			print(yaw, self.turn_start_yaw, normalise_angle(yaw - self.turn_start_yaw))
-
 		# -------------------------------------------------------------------
 		# 1.  Straight-line distance check
 		# -------------------------------------------------------------------
@@ -404,7 +398,7 @@ class IntersectionLeftTurnDriver(Node):
 				and self.distance_travelled >= INITIAL_INTERSECTION_FORWARD_MOVEMENT:
 			self.turning = True
 			self.turn_start_yaw = yaw
-			self.get_logger().info("🚦 Reached distance - starting intersection left turn…")
+			self.get_logger().info("🚦 Reached distance - starting intersection raw left turn…")
 
 		# -------------------------------------------------------------------
 		# 2.  90 ° left-turn controller
@@ -447,6 +441,7 @@ class IntersectionLeftTurnDriver(Node):
 	def publish_cmd(self):
 		if not self.should_drive:
 			return
+		self.get_logger().info("IM PUBLISHING VELOCITY")
 		if self.to_publish_because_of_polar_scans:
 			self.cmd_vel_publisher.publish(self.to_publish_because_of_polar_scans)
 		else:

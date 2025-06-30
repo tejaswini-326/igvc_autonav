@@ -21,13 +21,17 @@ setup(
     entry_points={
         'console_scripts': [
             'image_republisher = bme_gazebo_sensors_py.image_republisher:main',
-            'gps_waypoint_publisher = bme_gazebo_sensors_py.gps_waypoint_publisher:main',
             'chase_the_ball = bme_gazebo_sensors_py.chase_the_ball:main',
             'transformed_pointcloud = bme_gazebo_sensors_py.pointcloud_transform:main',
-            'intersection_leftturn = bme_gazebo_sensors_py.intersection_leftturn:main',
-            'intersection_straight = bme_gazebo_sensors_py.intersection_straight:main',
+
             'move_forward = bme_gazebo_sensors_py.move_forward:main',
-            'left_inter_completion_detector = bme_gazebo_sensors_py.left_inter_completion_detector:main',
+
+            'intersection_left = bme_gazebo_sensors_py.intersection_left:main',
+            'intersection_straight = bme_gazebo_sensors_py.intersection_straight:main',
+
+            'm_horizontal_line_detect = bme_gazebo_sensors_py.m_horizontal_line_detect:main',
+
+            'gps_waypoint_publisher = bme_gazebo_sensors_py.gps_waypoint_publisher:main',            
         ],
     },
 )
