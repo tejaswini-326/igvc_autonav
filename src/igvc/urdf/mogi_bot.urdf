@@ -3,10 +3,10 @@
 <robot name="mogi_bot" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!-- STEP 5 - Gazebo plugin -->
-  <xacro:include filename="$(find bme_gazebo_sensors)/urdf/mogi_bot.gazebo" />
+  <xacro:include filename="$(find igvc)/urdf/mogi_bot.gazebo" />
 
   <!-- STEP 4 - RViz colors -->
-  <xacro:include filename="$(find bme_gazebo_sensors)/urdf/materials.xacro" />
+  <xacro:include filename="$(find igvc)/urdf/materials.xacro" />
 
   <!-- STEP 1 - Robot footprint -->
   <link name="base_footprint" />

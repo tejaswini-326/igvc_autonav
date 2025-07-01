@@ -1,4 +1,4 @@
-from math import radians
+from math import hypot, pi, radians
 import math
 import rclpy
 from rclpy.node import Node
@@ -7,12 +7,13 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
 from tf_transformations import euler_from_quaternion
 import numpy as np
-from math import radians
+from math import radians, degrees
 from std_msgs.msg import String, Float64MultiArray
+import cv2
 from cv_bridge import CvBridge
 from visualization_msgs.msg import Marker
 
-from bme_gazebo_sensors_py.intersection_funcs import get_xy_of_all_white_and_yellow_points_from_pointcloud_msg, radial_scans, normalise_angle
+from movement.intersection_funcs import get_xy_of_all_white_and_yellow_points_from_pointcloud_msg, radial_scans, normalise_angle
 
 
 
@@ -29,22 +30,23 @@ MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60
 
 # Movement Related
 LINEAR_SPEED                                    = 1.5                # m/s   (forward)
+LINEAR_SPEED_WHEN_RADIAL_SCAN_TURNING           = 0.5
 LEFT_TURN_ANGULAR_SPEED                         = 0.22               # rad/s (+ve = CCW = left)
 
 # Intersection Turning Related
-ANGLE_TOLERANCE                                 = radians(30)        # ± deg window around 90° – θ
-INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (3) ** 2           # metres
-TURN_ANGLE                                      = radians(85.0)      # 90 was over-turning for me? I'm not sure why though
+ANGLE_TOLERANCE                                 = radians(20)        # ± deg window around 90° – θ
+INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (3)**2             # metres 
 
 # Completion Threshold - After this distance this node will handover control to main lane follower
-TARGET_LEFT_DISPLACEMENT = 9
+TARGET_FORWARD_DISPLACEMENT = 15
 # ──────────────────────────────────────────────────────────────────────────────
 
 
 
-class IntersectionLeftTurnDriver(Node):
+class IntersectionStraightDriver(Node):
 	def __init__(self):
-		super().__init__("intersection_left_turn_driver")
+		super().__init__("intersection_straight_driver")
+
 		self.create_subscription(String, '/intersection', self.intersection_cb, 10) 
 		self.create_subscription(PointCloud2, "/camera/points", self.pointcloud_cb, 10)
 		self.create_subscription(Odometry, "/odom", self.odom_cb, 10)   
@@ -58,16 +60,17 @@ class IntersectionLeftTurnDriver(Node):
 			self.intersection_filtered_points_publisher = self.create_publisher(PointCloud2, "/debug/intersection/filtered_points", 10)
 			self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "/debug/intersection/lane_scan_2d_debug", 10)    
 
+		
+		self.next_waypoint = None
+
+		self.start_x_y = None
 
 		# This variable will always be one of these four:
 		# '0. waiting for /intersection'
 		# '1. straight'
-		# '2. raw turn'
 		# '3. radial scan'
 		self.stage = '0. waiting for /intersection'
 
-		self.next_waypoint = None
-		self.start_x_y = None
 		self.turn_start_yaw = None
 		self.best_theta = None
 		self.linx_angz_to_publish = None
@@ -77,9 +80,9 @@ class IntersectionLeftTurnDriver(Node):
 
 
 	def intersection_cb(self, msg: String):
-		if msg.data.lower() == "left":
+		if msg.data.lower() == "straight":
 			self.stage = '1. straight'
-			self.get_logger().info("🟢 Received 'left' from /intersection.")
+			self.get_logger().info("🟢 Received 'straight' from /intersection.")
 		else:
 			self.stage = '0. waiting for /intersection'
 			self.get_logger().info(f"🛑 Ignoring '{msg.data}' from /intersection.")
@@ -93,16 +96,11 @@ class IntersectionLeftTurnDriver(Node):
 		if len(pts_xy) < MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED:
 			return
 
-		if self.turn_start_yaw is None:
-			if DEBUG:
-				self.get_logger().info("Turn start yaw is None")
-			return
-		
 		if not DEBUG:
-			self.best_theta = radial_scans(pts_xy, 'left', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, None)
+			self.best_theta = radial_scans(pts_xy, 'straight', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, None)
 		else:
-			debug_stuff = (msg.header, self.marker_publisher, self.lane_scan_2d_debug_publisher, self.intersection_filtered_points_publisher, self.bridge)
-			self.best_theta = radial_scans(pts_xy, 'left', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, debug_stuff)
+			debug_stuff = msg.header, self.marker_publisher, self.lane_scan_2d_debug_publisher, self.intersection_filtered_points_publisher, self.bridge
+			self.best_theta = radial_scans(pts_xy, 'straight', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, debug_stuff)
 
 
 
@@ -124,34 +122,27 @@ class IntersectionLeftTurnDriver(Node):
 			if self.start_x_y is None:
 				self.start_x_y = (x, y)
 			if (x - self.start_x_y[0])**2 + (y - self.start_x_y[1])**2 >= INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED:
-				self.stage = '2. raw turn'
-				self.get_logger().info("✅ Stage 1. straight completed.") 
-
-		elif self.stage == '2. raw turn':
-			self.linx_angz_to_publish = (LINEAR_SPEED, LEFT_TURN_ANGULAR_SPEED)
-			delta = normalise_angle(yaw - self.turn_start_yaw)
-			if delta >= TURN_ANGLE:
 				self.stage = '3. radial scan'
-				self.get_logger().info("✅ Stage 2. raw turn completed.")
+				self.get_logger().info("✅ Stage 1. straight completed.") 
 
 		elif self.stage == '3. radial scan' and (self.best_theta is not None):
 			ang_z_required = max(-LEFT_TURN_ANGULAR_SPEED, min(LEFT_TURN_ANGULAR_SPEED, 1.5 * self.best_theta))
-			self.linx_angz_to_publish = (0, ang_z_required)
+			self.linx_angz_to_publish = (LINEAR_SPEED_WHEN_RADIAL_SCAN_TURNING, ang_z_required)
 			if abs(self.best_theta) < np.deg2rad(3.0):
 				self.best_theta = None
 				self.align_target_yaw = None
 				self.linx_angz_to_publish = (LINEAR_SPEED, 0)
 
-		# Compute rightward displacement
+		# Compute Straight Displacement
 		dx = x - self.start_x_y[0]
 		dy = y - self.start_x_y[1]
-		left_displacement = dx * np.sin(-self.turn_start_yaw) + dy * np.cos(-self.turn_start_yaw)
+		forward_disp = dx * np.cos(self.turn_start_yaw) + dy * np.sin(self.turn_start_yaw)
 
 		if DEBUG:
-			self.get_logger().info(f"📏 Leftward displacement: {left_displacement:.2f} m")
+			self.get_logger().info(f"📏 Forward displacement: {forward_disp:.2f} m")
 
-		if left_displacement >= TARGET_LEFT_DISPLACEMENT:
-			self.get_logger().info("✅ Intersection Left Turn Complete. Publishing 'none' into /intersection")
+		if forward_disp >= TARGET_FORWARD_DISPLACEMENT:
+			self.get_logger().info("✅ Intersection Straight Drive Complete. Publishing 'none' into /intersection")
 			msg = String()
 			msg.data = "none"
 			self.intersection_pub.publish(msg)
@@ -160,7 +151,6 @@ class IntersectionLeftTurnDriver(Node):
 			self.turn_start_yaw = None
 			self.best_theta = None
 			self.linx_angz_to_publish = None
-
 
 	def publish_cmd(self):
 		if self.stage == '0. waiting for /intersection':
@@ -181,7 +171,7 @@ class IntersectionLeftTurnDriver(Node):
 
 def main(args=None):
 	rclpy.init(args=args)
-	node = IntersectionLeftTurnDriver()
+	node = IntersectionStraightDriver()
 	try:
 		rclpy.spin(node)
 	except KeyboardInterrupt:

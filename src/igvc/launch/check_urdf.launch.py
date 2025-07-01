@@ -7,8 +7,8 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     
-    pkg_bme_gazebo_sensors = FindPackageShare('bme_gazebo_sensors')
-    default_rviz_config_path = PathJoinSubstitution([pkg_bme_gazebo_sensors, 'rviz', 'urdf.rviz'])
+    pkg_igvc = FindPackageShare('igvc')
+    default_rviz_config_path = PathJoinSubstitution([pkg_igvc, 'rviz', 'urdf.rviz'])
 
     # Show joint state publisher GUI for joints
     gui_arg = DeclareLaunchArgument(name='gui', default_value='true', choices=['true', 'false'],
@@ -19,7 +19,7 @@ def generate_launch_description():
                                     description='Absolute path to rviz config file')
     
 
-    # URDF model path within the bme_gazebo_sensors package
+    # URDF model path within the igvc package
     model_arg = DeclareLaunchArgument(
         'model', default_value='mogi_bot.urdf',
         description='Name of the URDF description to load'
@@ -29,7 +29,7 @@ def generate_launch_description():
     urdf = IncludeLaunchDescription(
         PathJoinSubstitution([FindPackageShare('urdf_launch'), 'launch', 'display.launch.py']),
         launch_arguments={
-            'urdf_package': 'bme_gazebo_sensors',
+            'urdf_package': 'igvc',
             'urdf_package_path': PathJoinSubstitution(['urdf', LaunchConfiguration('model')]),
             'rviz_config': LaunchConfiguration('rvizconfig'),
             'jsp_gui': LaunchConfiguration('gui')}.items()
