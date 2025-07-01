@@ -56,7 +56,6 @@ class LaneFollowerNode(Node):
 	def intersection_cb(self, msg):
 		if msg.data.lower() == "None":
 			self.active = True
-			# self.get_logger().info("🟢 'None' received — move_forward activated.")
 		else:
 			self.active = False
 			
@@ -76,11 +75,13 @@ class LaneFollowerNode(Node):
 				msg.data = "left"  # or "none" or "done" — your choice
 				self.intersection_pub.publish(msg)
 				self.stopping=False
-		else:
-			self.cmd_pub.publish(cmd)
+		
+		# NOT PUBLISHING ANY VELOCITY CUZ IT IS NOT THE FUNCTION OF THIS CODE
+		# else:
+		# 	self.cmd_pub.publish(cmd)
 
+	# FUNCTION TO PUBLISH STUFF FOR LANE VISUALISATION IN RVIZ
 	def publish_lane_visualization(self, msg, target_point, cluster_curves, white_ground_points, yellow_ground_points):
-		"""Publish visualization markers for RViz"""
 		marker_array = MarkerArray()
 		
 		# Clear previous markers
@@ -222,26 +223,24 @@ class LaneFollowerNode(Node):
 		# Publish marker array
 		self.markers_pub.publish(marker_array)
 
+	# FUNCTION TO CALCULATE VELOCITY
 	def calculate_normal_velocity(self, target, msg, white_ground_points, yellow_ground_points, cluster_curves):
 		cmd = Twist()
-		
-		# Publish visualization instead of OpenCV display
 		self.publish_lane_visualization(msg, target, cluster_curves, white_ground_points, yellow_ground_points)
 
 		# Compute direction to target
-		angle_to_target = math.atan2(target[1], target[0])  # direction from (0,0) to target in radians
+		angle_to_target = math.atan2(target[1], target[0])  
 
-		# Move toward target
 		if(target[0] < 2.2 and target[0] > 1.8):
 			if (abs(angle_to_target) > 0.2 ):
-				cmd.linear.x = (LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR)/3 # Forward speed
+				cmd.linear.x = (LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR)/3
 				cmd.angular.z = angle_to_target/2
 			else:
-				cmd.linear.x = LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR # Forward speed
-				cmd.angular.z = angle_to_target/5 # steer towards target
+				cmd.linear.x = LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR 
+				cmd.angular.z = angle_to_target/5 
 		else:
-			cmd.linear.x = LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR # Forward speed
-			cmd.angular.z = angle_to_target  # steer towards target
+			cmd.linear.x = LINEAR_SPEED - abs(angle_to_target) * ANGLE_FACTOR 
+			cmd.angular.z = angle_to_target  
 		return cmd
 	
 	def detect_horizontal_lines_2d(self, msg):
@@ -341,8 +340,6 @@ class LaneFollowerNode(Node):
 			r = (rgb_int >> 16) & 0xFF
 			g = (rgb_int >> 8) & 0xFF
 			b = rgb_int & 0xFF
-			# if(r!= 218 and g != 218 and b!=218):
-			# 	self.get_logger().info(f"r: {r}, g: {g}, b: {b}")
 
 			# White detection
 			white_threshold = WHITE_THRESHOLD
@@ -445,7 +442,6 @@ class LaneFollowerNode(Node):
 		cmd = Twist()
 
 		if num_lanes_detected == 2:
-			# Example: You can decide logic here, like take average of two curves
 			self.get_logger().info(f"Two lane curves detected (white: {len(white_ground_points)}, yellow: {len(yellow_ground_points)})")
 			# Calculate target point between both curves
 			cmd.linear.x = 0.2

@@ -222,22 +222,22 @@ class ParallelParkingDetector(Node):
             avg_color = (r + g + b) /3
 
             # After collecting white points (before applying z filter)
-            z_vals = [z for x, y, z in white_ground_points]
+            # z_vals = [z for x, y, z in white_ground_points]
 
-            if len(z_vals) > 10:
-                z_median = np.median(z_vals)
-                z_std = np.std(z_vals)
-                lower_z = z_median - 0.1 * z_std
-                upper_z = z_median + 0.1 * z_std
-            else:
-                lower_z = -1.4  
-                upper_z = -1.3
+            # if len(z_vals) > 10:
+            #     z_median = np.median(z_vals)
+            #     z_std = np.std(z_vals)
+            #     lower_z = z_median - 0.1 * z_std
+            #     upper_z = z_median + 0.1 * z_std
+            # else:
+            #     lower_z = -1.4  
+            #     upper_z = -1.3
 
             if (r > WHITE_THRESHOLD and g > WHITE_THRESHOLD and b > WHITE_THRESHOLD and
                 abs(r - avg_color) < COLOR_BALANCE_THRESHOLD and
                 abs(g - avg_color) < COLOR_BALANCE_THRESHOLD and
                 abs(b - avg_color) < COLOR_BALANCE_THRESHOLD):
-                if lower_z < z < upper_z and 0.0 < x < 5.0:
+                if 0.0 < x < 5.0:
                     white_img[row, col] = (255, 255, 255)
                     white_ground_points.append([x, y, z])
             index += 1
