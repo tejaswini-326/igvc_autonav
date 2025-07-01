@@ -13,9 +13,9 @@ def generate_launch_description():
     # ------------------------------------------------------------------------
     # Locate your package and set up Gazebo resource paths
     # ------------------------------------------------------------------------
-    pkg_bme_gazebo_sensors = get_package_share_directory('bme_gazebo_sensors')
+    pkg_igvc = get_package_share_directory('igvc')
     # We want Gazebo to find both the worlds/ and models/ directories
-    gazebo_models_path, _ = os.path.split(pkg_bme_gazebo_sensors)
+    gazebo_models_path, _ = os.path.split(pkg_igvc)
     os.environ["GZ_SIM_RESOURCE_PATH"] += os.pathsep + gazebo_models_path
 
     # ------------------------------------------------------------------------
@@ -43,17 +43,17 @@ def generate_launch_description():
     )
     x_arg = DeclareLaunchArgument(
         'x',
-        default_value='-17.323',
+        default_value='-30.10',
         description='Initial X coordinate for robot spawn'
     )
     y_arg = DeclareLaunchArgument(
         'y',
-        default_value='-32.183',
+        default_value='-2.0',
         description='Initial Y coordinate for robot spawn'
     )
     yaw_arg = DeclareLaunchArgument(
         'yaw',
-        default_value='-0.2',
+        default_value='-1.5707',
         description='Initial yaw (rotation around Z) for robot spawn'
     )
     sim_time_arg = DeclareLaunchArgument(
@@ -66,7 +66,7 @@ def generate_launch_description():
     # Compose the path to the URDF (or xacro) file
     # ------------------------------------------------------------------------
     urdf_file_path = PathJoinSubstitution([
-        pkg_bme_gazebo_sensors,
+        pkg_igvc,
         "urdf",
         LaunchConfiguration('model')
     ])
@@ -76,7 +76,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------------
     world_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_bme_gazebo_sensors, 'launch', 'igvc_world.launch.py'),
+            os.path.join(pkg_igvc, 'launch', 'igvc_world.launch.py'),
         ),
         launch_arguments={
             'world': LaunchConfiguration('world'),
@@ -92,7 +92,7 @@ def generate_launch_description():
         arguments=[
             '-d',
             PathJoinSubstitution([
-                pkg_bme_gazebo_sensors,
+                pkg_igvc,
                 'rviz',
                 LaunchConfiguration('rviz_config')
             ])
@@ -102,15 +102,15 @@ def generate_launch_description():
     )
 
     intersection_straight_node = Node(
-        package='bme_gazebo_sensors_py',
+        package='movement',
         executable='intersection_straight',
         name='IntersectionStraightDriver',
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
-
+    
     intersection_left_node = Node(
-        package='bme_gazebo_sensors_py',
+        package='movement',
         executable='intersection_left',
         name='IntersectionLeftTurnDriver',
         output='screen',
@@ -118,13 +118,29 @@ def generate_launch_description():
     )
 
     gps_waypoint_publisher_node = Node(
-        package='bme_gazebo_sensors_py',
+        package='movement',
         executable='gps_waypoint_publisher',
         name='GPSNextWaypointPublisherNode',
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
+    move_forward_node = Node(
+        package='movement',
+        executable='move_forward',
+        name='LaneFollowerNode',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+    
+    m_horizontal_line_detect_node = Node(
+        package='movement',
+        executable='m_horizontal_line_detect',
+        name='M_HorizontalLineDetect',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+    
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
     # ------------------------------------------------------------------------
@@ -204,28 +220,10 @@ def generate_launch_description():
         name='ekf_filter_node',
         output='screen',
         parameters=[
-            os.path.join(pkg_bme_gazebo_sensors, 'config', 'ekf.yaml'),
+            os.path.join(pkg_igvc, 'config', 'ekf.yaml'),
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ],
     )
-
-    # ------------------------------------------------------------------------
-    # Trajectory server nodes (custom mogi_trajectory_server package)
-    # ------------------------------------------------------------------------
-    # trajectory_odom_topic_node = Node(
-    #     package='mogi_trajectory_server',
-    #     executable='mogi_trajectory_server_topic_based',
-    #     name='mogi_trajectory_server_odom_topic',
-    #     parameters=[
-    #         {'trajectory_topic': 'trajectory_raw'},
-    #         {'odometry_topic': 'odom'}
-    #     ],
-    # )
-    # trajectory_node = Node(
-    #     package='mogi_trajectory_server',
-    #     executable='mogi_trajectory_server',
-    #     name='mogi_trajectory_server'
-    # )
 
     # ------------------------------------------------------------------------
     # Robot State Publisher (publishes TF from the robot_description)
@@ -272,5 +270,9 @@ def generate_launch_description():
     ld.add_action(intersection_left_node)
     ld.add_action(gps_waypoint_publisher_node)
 
+    # ld.add_action(move_forward_node)
+    
+    ld.add_action(m_horizontal_line_detect_node)
+    
 
     return ld

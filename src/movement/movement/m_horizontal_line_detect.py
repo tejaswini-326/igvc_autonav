@@ -16,7 +16,7 @@ from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 from collections import deque
 
-from bme_gazebo_sensors_py.intersection_funcs import get_xy_of_all_white_and_yellow_points_from_pointcloud_msg, radial_scans, GRID_RES, normalise_angle
+from movement.intersection_funcs import get_xy_of_all_white_and_yellow_points_from_pointcloud_msg, radial_scans, GRID_RES, normalise_angle
 
 import matplotlib
 matplotlib.use("Agg")                     # headless rendering in ROS 2 nodes

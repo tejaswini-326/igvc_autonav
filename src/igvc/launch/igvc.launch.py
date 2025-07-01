@@ -19,7 +19,7 @@ def generate_launch_description():
     # ---------------------------------------------------------------------
     # Locate packages and set resource paths
     # ---------------------------------------------------------------------
-    pkg_bme = get_package_share_directory('bme_gazebo_sensors')
+    pkg_bme = get_package_share_directory('igvc')
     pkg_ros_gz = get_package_share_directory('ros_gz_sim')
 
     # Prepend models & worlds so Gazebo finds them

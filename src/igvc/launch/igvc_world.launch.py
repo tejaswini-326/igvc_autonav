@@ -13,8 +13,8 @@ def generate_launch_description():
         description='Name of the Gazebo world file to load'
     )
 
-    pkg_bme_gazebo_sensors = get_package_share_directory('bme_gazebo_sensors')
-    media_root = pkg_bme_gazebo_sensors
+    pkg_igvc = get_package_share_directory('igvc')
+    media_root = pkg_igvc
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
 
     # Add your own gazebo library path here
@@ -27,7 +27,7 @@ def generate_launch_description():
             os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py'),
         ),
         launch_arguments={'gz_args': [PathJoinSubstitution([
-            pkg_bme_gazebo_sensors,
+            pkg_igvc,
             'worlds',
             LaunchConfiguration('world')
         ]),

@@ -59,4 +59,4 @@ Makefile
 yolovenv/
 *.pt
 
-src/bme_gazebo_sensors_py/bme_gazebo_sensors_py/__pycache__/
+src/movement/movement/__pycache__/
