@@ -19,14 +19,13 @@ from bme_gazebo_sensors_py.intersection_funcs import get_xy_of_all_white_and_yel
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-
 # Setting this to true will generate 3 new topics:
 # intersection_lane_marker - Marker object showing direction chosen
 # intersection_filtered_white - Pointcloud showing filtered white points in blue colour
 # intersection_llane_scan_2d_debug - An image showing all polar scans and detected distances
 DEBUG = True
 
-# Lane Detection Related
+# In the future add some other fallback for not enough points being detected
 MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60 
 
 # Movement Related
@@ -36,8 +35,9 @@ LEFT_TURN_ANGULAR_SPEED                         = 0.22               # rad/s (+v
 
 # Intersection Turning Related
 ANGLE_TOLERANCE                                 = radians(20)        # ± deg window around 90° – θ
-INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (3)**2                 # metres 
+INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (3)**2             # metres 
 
+# Completion Threshold - After this distance this node will handover control to main lane follower
 TARGET_FORWARD_DISPLACEMENT = 15
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ class IntersectionStraightDriver(Node):
 		if not DEBUG:
 			self.best_theta = radial_scans(pts_xy, 'straight', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, None)
 		else:
-			debug_stuff = msg.header, self.marker_publisher, self.lane_scan_2d_debug_publisher, self.intersection_filtered_points_publisher, self.bridge, self
+			debug_stuff = msg.header, self.marker_publisher, self.lane_scan_2d_debug_publisher, self.intersection_filtered_points_publisher, self.bridge
 			self.best_theta = radial_scans(pts_xy, 'straight', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, debug_stuff)
 
 

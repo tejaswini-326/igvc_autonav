@@ -18,25 +18,25 @@ from bme_gazebo_sensors_py.intersection_funcs import get_xy_of_all_white_and_yel
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-
 # Setting this to true will generate 3 new topics:
 # intersection_lane_marker - Marker object showing direction chosen
 # intersection_filtered_white - Pointcloud showing filtered white points in blue colour
 # intersection_llane_scan_2d_debug - An image showing all polar scans and detected distances
 DEBUG = True
 
-# Lane Detection Related
+# In the future add some other fallback for not enough points being detected
 MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60 
 
 # Movement Related
 LINEAR_SPEED                                    = 1.5                # m/s   (forward)
-LEFT_TURN_ANGULAR_SPEED                         = 0.22          # rad/s (+ve = CCW = left)
+LEFT_TURN_ANGULAR_SPEED                         = 0.22               # rad/s (+ve = CCW = left)
 
 # Intersection Turning Related
 ANGLE_TOLERANCE                                 = radians(30)        # ± deg window around 90° – θ
-INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (3) ** 2                 # metres
+INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (3) ** 2           # metres
 TURN_ANGLE                                      = radians(85.0)      # 90 was over-turning for me? I'm not sure why though
 
+# Completion Threshold - After this distance this node will handover control to main lane follower
 TARGET_LEFT_DISPLACEMENT = 9
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -58,12 +58,6 @@ class IntersectionLeftTurnDriver(Node):
 			self.intersection_filtered_points_publisher = self.create_publisher(PointCloud2, "/debug/intersection/filtered_points", 10)
 			self.lane_scan_2d_debug_publisher = self.create_publisher(Image, "/debug/intersection/lane_scan_2d_debug", 10)    
 
-		
-		self.next_waypoint = None
-		#subprocess.Popen(["python3", script_path])
-		# Internal state
-
-		self.start_x_y = None
 
 		# This variable will always be one of these four:
 		# '0. waiting for /intersection'
@@ -72,6 +66,8 @@ class IntersectionLeftTurnDriver(Node):
 		# '3. radial scan'
 		self.stage = '0. waiting for /intersection'
 
+		self.next_waypoint = None
+		self.start_x_y = None
 		self.turn_start_yaw = None
 		self.best_theta = None
 		self.linx_angz_to_publish = None
@@ -96,8 +92,6 @@ class IntersectionLeftTurnDriver(Node):
 
 		if len(pts_xy) < MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED:
 			return
-
-
 
 		if self.turn_start_yaw is None:
 			if DEBUG:

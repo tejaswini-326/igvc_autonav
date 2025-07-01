@@ -204,7 +204,7 @@ def radial_scans(pts_xy, mode, yaw, turn_start_yaw, angle_tolerance, debug_stuff
 	if debug_stuff is None:
 		return best_theta
 	else:
-		msg_header, marker_publisher, lane_scan_2d_debug_publisher, intersection_filtered_points_publisher, cv2_bridge, self = debug_stuff
+		msg_header, marker_publisher, lane_scan_2d_debug_publisher, intersection_filtered_points_publisher, cv2_bridge = debug_stuff
 
 
 	# Publish the white/yellow points as a blue point cloud
