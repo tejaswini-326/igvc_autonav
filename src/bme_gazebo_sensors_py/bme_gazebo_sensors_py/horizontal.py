@@ -7,6 +7,9 @@ from cv_bridge import CvBridge
 import cv2
 import numpy as np
 from std_msgs.msg import Int32MultiArray
+from sensor_msgs.msg import PointCloud2, PointField
+import sensor_msgs_py.point_cloud2 as pc2
+import std_msgs.msg
 
 
 MAX_STOP_LINE_LENGTH = 100 
@@ -22,8 +25,8 @@ class LaneDetectorNode(Node):
 		
 		self.bridge = CvBridge()
 		self.get_logger().info("LaneDetectorNode initialized.")
-		self.stop_line_pub = self.create_publisher(Int32MultiArray, '/horizontal_line', 10)
 		self.depth_sub = self.create_subscription(Image, '/camera/depth_image', self.depth_callback, 10)
+		self.pointcloud_pub = self.create_publisher(PointCloud2, '/horizontal_line', 10)
 		self.fx = 102.7348185494929
 		self.fy = 102.7348185494929
 		self.cx = 160.0
@@ -107,20 +110,29 @@ class LaneDetectorNode(Node):
 							if np.isfinite(z) and z > 0.1:  # Ignore NaNs or very low values
 								x = (u - self.cx) * z / self.fx
 								y = (v - self.cy) * z / self.fy
-								dist = np.sqrt(x**2 + y**2 + z**2)
-								if dist <= 5.0 and -y > -1.3:
-									stop_points_3d.append([z, -x, -y])  # Your preferred coordinate frame
+								stop_points_3d.append([z, -x, -y])  # Your preferred coordinate frame
 
 			if stop_points_3d:
 				stop_points_3d = np.array(stop_points_3d)
+				header = std_msgs.msg.Header()
+				header.stamp = self.get_clock().now().to_msg()
+				header.frame_id = "camera_link"  # Set this to your TF frame
+
+				fields = [
+					PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+					PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+					PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1)
+				]
+
+				pointcloud_msg = pc2.create_cloud(header, fields, stop_points_3d)
+				self.pointcloud_pub.publish(pointcloud_msg)
 
 				# Find xmin, xmax
 				xmin = np.min(stop_points_3d[:, 1])  # x is second in [z, -x, -y]
 				xmax = np.max(stop_points_3d[:, 1])
 				self.get_logger().info(f"Stop line X range: xmin={xmin:.2f}, xmax={xmax:.2f}, Total points: {len(stop_points_3d)}")
 
-				# (Optional) Publish 3D points or save for next step
-
+    
 				
 
 		# Show the final result (for debugging only)

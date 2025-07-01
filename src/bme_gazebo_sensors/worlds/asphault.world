@@ -86,7 +86,7 @@
             <specular>1.0 1.0 1.0</specular>
             <pbr>
               <metal>
-                <albedo_map>file://media/materials/textures/asphault.png</albedo_map>
+                <albedo_map>file://media/materials/textures/asphault_v_with_pothole.png</albedo_map>
               </metal>
             </pbr>
           </material>
@@ -101,9 +101,9 @@
     <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
     <atmosphere type='adiabatic'/>
     <physics type='ode'>
-      <max_step_size>0.001</max_step_size>
+      <max_step_size>0.005</max_step_size>
       <real_time_factor>1</real_time_factor>
-      <real_time_update_rate>1000</real_time_update_rate>
+      <real_time_update_rate>200</real_time_update_rate>
     </physics>
     <scene>
       <ambient>0.1 0.1 0.1 1</ambient>         <!-- Low ambient light -->

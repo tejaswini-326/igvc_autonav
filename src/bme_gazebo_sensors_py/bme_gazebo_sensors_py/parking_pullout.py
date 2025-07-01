@@ -23,8 +23,8 @@ class YellowParkingDetector(Node):
         self.state = "IN_PARKING_SLOT"
         
     def detect_yellow_color(self, r, g, b):
-        pale_threshold = 80
-        color_balance_threshold = 30
+        pale_threshold = 60
+        color_balance_threshold = 50
 
         avg_color = (r + g + b) / 3
 
@@ -90,7 +90,7 @@ class YellowParkingDetector(Node):
             b = rgb_int & 0xFF
 
             if self.detect_yellow_color(r, g, b):
-                if -1.4 < z < -1.3 and 1.0 < x < 3.0:
+                if -2.0 < z < -1.3 and 1.0 < x < 3.0:
                     if 0 <= row < height and 0 <= col < width:
                         yellow_img[row, col] = (0,255,255)
                     yellow_ground_points.append([x,y,z])
@@ -105,7 +105,7 @@ class YellowParkingDetector(Node):
             pass
 
         if len(yellow_ground_points) < 20:
-            return None, yellow_img
+            return None, yellow_img, []
         
         points_np = np.array(yellow_ground_points)
         points_xy = points_np[:, :2]
@@ -155,7 +155,7 @@ class YellowParkingDetector(Node):
             b = rgb_int & 0xFF
 
             if self.detect_yellow_color(r, g, b):
-                if (3.0 < x < 4.0 and -1.4 < z < -1.2):
+                if (3.0 < x < 4.0 and -2.0 < z < -1.3):
                     yellow_y_vals.append(y)
         
         if len(yellow_y_vals) < 100:
