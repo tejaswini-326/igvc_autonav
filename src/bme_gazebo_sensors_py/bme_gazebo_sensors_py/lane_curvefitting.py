@@ -241,10 +241,10 @@ class LaneFollowerNode(Node):
 			return
 
 		points_np = np.array(all_lane_points)
-		self.get_logger().warn(f"no of yellow ground points : {len(yellow_ground_points)}")
+		# self.get_logger().warn(f"no of yellow ground points : {len(yellow_ground_points)}")
 		points_np_y = np.array(yellow_ground_points)
 		
-		self.get_logger().warn(f" shape : {points_np_y.shape}")
+		# self.get_logger().warn(f" shape : {points_np_y.shape}")
 
 		# Use only x,y coordinates for clustering (ignore z)
 		points_xy = points_np[:, :2]  # Extract x,y coordinates
@@ -252,7 +252,7 @@ class LaneFollowerNode(Node):
 		labels = clustering.labels_
 		# WHITE
 		clustered_white_points = points_np[labels != -1]
-		self.get_logger().warn(f" white points being published : {len(clustered_white_points)}")
+		# self.get_logger().warn(f" white points being published : {len(clustered_white_points)}")
 		if len(clustered_white_points) > 0:
 			white_msg = pc2.create_cloud_xyz32(msg.header, clustered_white_points.tolist())
 			self.white_pub.publish(white_msg)
@@ -260,8 +260,13 @@ class LaneFollowerNode(Node):
 		points_xy_y = points_np_y[:, :2]
 		clustering_y = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy_y)
 		labels_y = clustering_y.labels_
+		unique_labels_y = set(labels_y)
+		n_clusters_y = len(unique_labels_y) - (1 if -1 in labels else 0)
+
+		self.get_logger().info(f"The number of yellow clusters : {n_clusters_y} ")
+
 		clustered_yellow_points = points_np_y[labels_y != -1]
-		self.get_logger().warn(f"yellow points being published : {len(clustered_yellow_points)}")
+		# self.get_logger().warn(f"yellow points being published : {len(clustered_yellow_points)}")
 		if len(clustered_yellow_points) > 0:
 			yellow_msg = pc2.create_cloud_xyz32(msg.header, clustered_yellow_points.tolist())
 			self.yellow_pub.publish(yellow_msg)
@@ -275,6 +280,8 @@ class LaneFollowerNode(Node):
 		n_clusters = len(unique_labels) - (1 if -1 in labels else 0)
 		n_noise = list(labels).count(-1)
 		
+		self.get_logger().info(f"The number of white clusters : {n_clusters} ")
+
 		# Process lane clusters
 		cluster_curves = []
 
