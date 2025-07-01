@@ -1,4 +1,4 @@
-material AsphaultPlane/Image
+material AsphaltPlane/Image
 {
     technique
     {
@@ -6,7 +6,7 @@ material AsphaultPlane/Image
         {
             texture_unit
             {
-                texture asphault.png
+                texture asphalt.png
             }
         }
     }

@@ -41,46 +41,23 @@
     </spherical_coordinates>
     <gui fullscreen='false'>
       <camera name='user_camera'>
-        <pose>5.5319000000000003 -9.7176899999999993 6.8489500000000003 2.9459705656237252e-17 0.34179700000000024 0.53604000000000018</pose>
+        <pose>5.5319000000000003 -9.7176899999999993 6.8489500000000003 1.4729852828118626e-17 0.34179700000000013 0.53604000000000007</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
     </gui>
+    
     <include>
-      <uri>model://asphault_ground_plane</uri>
+      <uri>model://asphalt_ground_plane</uri>
       <name>ground_plane</name>
       <pose>0 0 0 0 0 0</pose>
     </include>
-    <include>
-      <uri>model://construction_barrel</uri>
-      <name>barrel_0</name>
-      <pose>-5.7300000000000004 -14.029999999999999 -1.8856596816982373e-11 1.0471999161670388e-11 -1.2150535035744508e-11 4.9498205335107352e-19</pose>
-    </include>
-    <include>
-      <uri>model://construction_barrel</uri>
-      <name>barrel_1</name>
-      <pose>-5.7300000000000004 -16.029999999999998 -1.8856596820451821e-11 1.0471999164756963e-11 -1.2150535036207485e-11 4.9452255730010597e-19</pose>
-    </include>
-    <include>
-      <uri>model://construction_cone</uri>
-      <name>cone_0</name>
-      <pose>-5.7300000000000004 -18.029999999999998 -1.3379350698519699e-11 9.2157184661267884e-22 -2.4394548880923853e-22 -1.1240664729738127e-43</pose>
-    </include>
-    <include>
-      <uri>model://construction_cone</uri>
-      <name>cone_1</name>
-      <pose>-5.7300000000000004 -20.029999999999998 -1.3379350696784975e-11 2.0599841277224584e-21 -1.8973538018496329e-21 -1.954259358242053e-42</pose>
-    </include>
-    <include>
-      <uri>model://construction_barrel</uri>
-      <name>barrel_0_1</name>
-      <pose>-5.7623201613346104 -11.978818089477544 -3.7185658746663463e-11 1.6138710734766828e-11 -2.4366339675231339e-11 8.4312385713728737e-19</pose>
-    </include>
-    <include>
-      <uri>model://stop_sign</uri>
-      <name>stop_sign_1</name>
-      <pose>-5.7623201613346104 -22.978818089477544 -3.7185658746663463e-11 1.6138710734766828e-11 -2.4366339675231339e-11 8.4312385713728737e-19</pose>
-    </include>
+
+    <include> <uri>model://construction_barrel</uri> <name>barrel_0</name> <pose>-5.7300000000000004 -14.029999999999999 0 0 0 0</pose> </include>
+    <include> <uri>model://construction_barrel</uri> <name>barrel_1</name> <pose>-5.7300000000000004 -16.029999999999999 0 0 0 0</pose> </include>
+    <include> <uri>model://construction_cone</uri> <name>cone_0</name> <pose>-5.7300000000000004 -18.029999999999999 0 0 0 0</pose> </include>
+    <include> <uri>model://construction_cone</uri> <name>cone_1</name> <pose>-5.7300000000000004 -20.029999999999999 0 0 0 0</pose> </include>
+
     <light name='sun' type='directional'>
       <pose>0 0 10 0 0 0</pose>
       <cast_shadows>true</cast_shadows>

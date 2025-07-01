@@ -33,7 +33,7 @@ def generate_launch_description():
     )
     world_arg = DeclareLaunchArgument(
         'world',
-        default_value='asphault.world',
+        default_value='asphalt.world',
         description='Name of the Ignition world file to load'
     )
     model_arg = DeclareLaunchArgument(
