@@ -23,7 +23,7 @@ def generate_launch_description():
     pkg_ros_gz = get_package_share_directory('ros_gz_sim')
 
     # Prepend models & worlds so Gazebo finds them
-    default_world = os.path.join(pkg_bme, 'worlds', 'asphault.world')
+    default_world = os.path.join(pkg_bme, 'worlds', 'asphalt.world')
     os.environ['GZ_SIM_RESOURCE_PATH'] = (
         pkg_bme + os.pathsep +
         os.path.join(pkg_bme, 'models') + os.pathsep +

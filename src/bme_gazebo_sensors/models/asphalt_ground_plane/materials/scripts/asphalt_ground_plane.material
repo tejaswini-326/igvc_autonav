@@ -1,0 +1,14 @@
+material AsphaltPlane/Image
+{
+    technique
+    {
+        pass
+        {
+            texture_unit
+            {
+                texture asphalt.png
+            }
+        }
+    }
+}
+

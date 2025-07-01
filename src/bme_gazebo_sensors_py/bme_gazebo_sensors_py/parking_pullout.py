@@ -23,8 +23,8 @@ class YellowParkingDetector(Node):
         self.state = "IN_PARKING_SLOT"
         
     def detect_yellow_color(self, r, g, b):
-        pale_threshold = 80
-        color_balance_threshold = 30
+        pale_threshold = 60
+        color_balance_threshold = 50
 
         avg_color = (r + g + b) / 3
 

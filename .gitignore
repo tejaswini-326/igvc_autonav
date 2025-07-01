@@ -31,7 +31,6 @@ Makefile
 *.suo
 *.ncb
 *.opensdf
-*.sdf
 *.VC.db
 *.VC.VC.opendb
 
