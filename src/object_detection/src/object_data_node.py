@@ -167,23 +167,28 @@ class ObjectDataNode(Node):
             self.get_logger().error(f'Error decoding image: {e}')
             return
 
-        # Detect potholes (white circles)
-        potholes = self.detect_potholes(image)
-        pothole_points_3d = self.process_potholes(potholes, image)
-
-        results = self.model(image)[0] #get labels and bounding boxes using model
-        detections = results.boxes #get bounding boxes
-
-        if not detections or len(detections) == 0:
-            return
 
         stamp = self.get_clock().now().to_msg()
         frame_id = self.latest_pc.header.frame_id if self.latest_pc else "camera_link"
         all_points = []
 
+        # Detect potholes (white circles)
+        potholes = self.detect_potholes(image)
+        pothole_points_3d = self.process_potholes(potholes, image)
+
         # Add pothole points to all_points
         if len(pothole_points_3d) > 0:
             all_points.extend(np.asarray(pothole_points_3d).tolist())
+
+        results = self.model(image)[0] #get labels and bounding boxes using model
+        detections = results.boxes #get bounding boxes
+
+        if not detections or len(detections) == 0:
+            if all_points:
+                header = Header(stamp=stamp, frame_id=frame_id)
+                combined_pc = pc2.create_cloud_xyz32(header, all_points)
+                self.pc_pub.publish(combined_pc)
+            return
 
         for box in detections:
             xmin, ymin, xmax, ymax = map(int, box.xyxy[0].tolist()) #get label, bounding box coords, and confidence of prediction
