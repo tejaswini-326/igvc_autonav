@@ -21,7 +21,7 @@
     <magnetic_field>6.0000000000000002e-06 2.3e-05 -4.1999999999999998e-05</magnetic_field>
     <atmosphere type='adiabatic'/>
     <physics type='ode'>
-      <max_step_size>0.005</max_step_size>
+      <max_step_size>0.0050000000000000001</max_step_size>
       <real_time_factor>1</real_time_factor>
       <real_time_update_rate>200</real_time_update_rate>
     </physics>
@@ -33,85 +33,95 @@
     <wind/>
     <gui fullscreen='false'>
       <camera name='user_camera'>
-        <pose>5.5319000000000003 -9.7176899999999993 6.8489500000000003 2.9459705656237252e-17 0.34179700000000046 0.53604000000000041</pose>
+        <pose>5.5319000000000003 -9.7176899999999993 6.8489500000000003 1.4729852828118629e-17 0.34179700000000046 0.53604000000000041</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
     </gui>
     <include>
-      <uri>model://asphalt_ground_plane</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/asphalt_ground_plane</uri>
       <name>ground_plane</name>
       <pose>0 0 0 0 0 0</pose>
     </include>
     <include>
-      <uri>model://construction_barrel</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/construction_barrel</uri>
       <name>barrel_0</name>
-      <pose>7.6111879348754901 11.308199882507324 -6.0310415722261004e-07 9.3324495495336428e-09 -9.3301155620040925e-09 -1.195058517266514e-16</pose>
+      <pose>7.6111898422241273 15.794006347656255 -5.4365658012932988e-07 1.397936697662821e-08 -1.3977085523063133e-08 -1.7356988110317363e-16</pose>
     </include>
     <include>
-      <uri>model://construction_barrel</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/construction_barrel</uri>
       <name>barrel_1</name>
-      <pose>-29.858600616455078 -13.509450912475586 -9.3525809015393429e-10 6.0119759013437088e-11 -1.0078667981336476e-10 8.6029400186830756e-19</pose>
+      <pose>-29.858600616455078 -13.509450912475586 -1.3877223786901149e-09 2.2540152528898148e-10 -3.8709547518644697e-10 7.9930867025665131e-19</pose>
     </include>
     <include>
-      <uri>model://construction_cone</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/construction_cone</uri>
       <name>cone_0</name>
-      <pose>-26.917400360107422 -20.469928741455078 -6.557114563300562e-11 9.5626662316207804e-20 6.0715293192024956e-20 4.043536260560398e-30</pose>
+      <pose>-26.917400360107422 -20.469928741455078 -3.994000777694097e-10 3.1680390550325065e-19 -2.1684046296426412e-19 1.6635411983580304e-29</pose>
     </include>
     <include>
-      <uri>model://construction_cone</uri>
-      <name>cone_1</name>
-      <pose>10.811373710632324 3.9650099277496338 -9.0892785492568963e-11 1.9477724839730191e-19 -4.9005926958125505e-20 4.7887814632113925e-29</pose>
-    </include>
-    <include>
-      <uri>model://construction_barrel</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/construction_barrel</uri>
       <name>barrel_0_1</name>
-      <pose>-7.5870299339294434 -17.802133560180664 -4.3057521890467466e-10 6.0119251891928533e-11 -1.0078465364415388e-10 8.4758303327272985e-19</pose>
+      <pose>-7.5870299339294434 -17.802133560180664 -8.8808638844424525e-10 2.2540105140335378e-10 -3.8709329665886264e-10 7.1124451584032077e-19</pose>
     </include>
     <include>
-      <uri>model://stop_sign</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/stop_sign</uri>
       <name>stop_sign_1_1</name>
-      <pose>2.7205390034803298 -34.496704753379028 -8.2051861835659601e-07 -2.649593009234628e-10 -5.0064999506681029e-08 -1.6301700740115752</pose>
+      <pose>2.7205390034803534 -34.496704753379028 -8.1277456663758101e-07 -1.4085754406561497e-08 -4.9563826473523e-08 -1.6301700740115819</pose>
     </include>
     <include>
-      <uri>model://stop_sign</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/stop_sign</uri>
       <name>stop_sign_1_1_1_2</name>
-      <pose>-15.402521144945494 -34.116809629301102 -8.0422741320602942e-07 -1.3609481009718892e-09 -4.9069476016793209e-08 -1.6301700740115745</pose>
+      <pose>-15.402521144945471 -34.116809629301102 -7.9664627367346378e-07 -1.5170814330440954e-08 -4.8578268251443179e-08 -1.6301700740115805</pose>
     </include>
     <include>
-      <uri>model://stop_sign</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/stop_sign</uri>
       <name>stop_sign_1_2</name>
-      <pose>-12.896847874937761 -22.405149997907429 -1.0640402942617598e-07 -3.5167463939081095e-08 -1.2433618153823765e-08 -3.1217099991917827</pose>
+      <pose>-12.896847874937761 -22.405149997907451 -1.0580111518694847e-07 -4.8640197001557638e-08 -1.2308415681291944e-08 -3.121709999191784</pose>
     </include>
     <include>
-      <uri>model://stop_sign</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/stop_sign</uri>
       <name>stop_sign_1_3</name>
-      <pose>-2.2660982137622083 -25.391612032307442 -1.0228367839150077e-07 9.057452764696044e-09 -3.4021318925718926e-08 1.6538399873777154</pose>
+      <pose>-2.2660982137622323 -25.391612032307442 -1.0172196124398246e-07 -4.8557422802954034e-09 -3.3680434066274505e-08 1.6538399873777123</pose>
     </include>
     <include>
-      <uri>model://stop_sign</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/stop_sign</uri>
       <name>stop_sign_1_4</name>
-      <pose>17.815939568411135 -24.998566859988209 -1.0228367839150425e-07 9.05745276463564e-09 -3.4021318925698558e-08 1.6538399873777154</pose>
+      <pose>17.81593956841111 -24.998566859988209 -1.0172196124398594e-07 -4.8557422827709763e-09 -3.3680434066890967e-08 1.6538399873777123</pose>
     </include>
     <include>
-      <uri>model://stop_sign</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/stop_sign</uri>
       <name>stop_sign_1_5</name>
-      <pose>-4.0292250331973323 29.246181524389144 -1.0228367839150077e-07 9.0574527646959894e-09 -3.4021318925732187e-08 1.6538399873777154</pose>
+      <pose>-4.0292250331973563 29.246181524389144 -1.0172196124398246e-07 -4.8557422793445113e-09 -3.3680434066225364e-08 1.6538399873777123</pose>
     </include>
     <include>
-      <uri>model://stop_sign</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/stop_sign</uri>
       <name>stop_sign_1_1_1_2_1</name>
-      <pose>-16.680713271719164 21.607640661489739 -7.9620334740577819e-07 -1.900858484824958e-09 -4.8579250222004862e-08 -1.6301700740115734</pose>
+      <pose>-16.680713271719139 21.607640661489736 -7.8870244851408044e-07 -1.5705324547135153e-08 -4.8092903299515619e-08 -1.6301700740115799</pose>
     </include>
     <include>
-      <uri>model://stop_sign</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/stop_sign</uri>
       <name>stop_sign_1_6</name>
-      <pose>-6.1296715409465232 18.596165898117547 -1.002842719256598e-07 3.038642239284684e-08 1.2180107401502316e-08 0.0097550994369975542</pose>
+      <pose>-6.1296715409465241 18.596165898117572 -9.9742546171161168e-08 1.6260742649255214e-08 1.2059412190702288e-08 0.0097550994369989125</pose>
     </include>
     <include>
-      <uri>model://stop_sign</uri>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/stop_sign</uri>
       <name>stop_sign_1_2_1</name>
-      <pose>6.4191485066659109 -20.571136488851913 -1.0535826229231273e-07 -3.5370229684731318e-08 -1.2309357767866478e-08 -3.1217099991917827</pose>
+      <pose>6.4191485066659109 -20.571136488851934 -1.0476580582238854e-07 -4.8840932269142203e-08 -1.2185393460528901e-08 -3.121709999191784</pose>
+    </include>
+    <include>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/tire</uri>
+      <name>tire</name>
+      <pose>10.748766899108887 2.0664100646972656 -6.7873946818508557e-07 9.3324503680491944e-09 -9.3301197878759012e-09 -1.1950599778277841e-16</pose>
+    </include>
+    <include>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/rescue_randy</uri>
+      <name>rescue_randy</name>
+      <pose>14.093606948852528 -4.4037799835214662 -0.00043560964141935442 0.0028951182156272026 -2.6727607160496746e-09 -1.2299203024109508e-05</pose>
+    </include>
+    <include>
+      <uri>file:///home/madhav/igvc-sim/src/igvc/models/person_standing</uri>
+      <name>person_standing</name>
+      <pose>14.104956627273364 -6.2199607035764704 0.003351077623267416 -0.10012893837575992 0.0045530308820791081 -5.8533053995577551e-05</pose>
     </include>
     <light name='sun' type='directional'>
       <pose>0 0 10 0 0 0</pose>
