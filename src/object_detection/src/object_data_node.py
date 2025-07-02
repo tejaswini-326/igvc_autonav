@@ -2,6 +2,7 @@
 
 '''Description: This node integrates the object detection model with ROS, publishing labels, object position, an annotated image with bounding boxes and the point cloud of the object'''
 
+#importing libraries
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image, PointCloud2, PointField
@@ -14,9 +15,10 @@ import math
 import sensor_msgs_py.point_cloud2 as pc2
 from ultralytics import YOLO
 from cv_bridge import CvBridge
+from sklearn.cluster import DBSCAN
 
 
-class ObjectDataNode(Node): 
+class ObjectDataNode(Node): #node constructor
     def __init__(self):
         super().__init__('object_data_node')
 
@@ -204,19 +206,37 @@ class ObjectDataNode(Node):
 
             if len(points_3d) > 0: 
                 all_points.extend(points_3d.tolist())  #all points stores combined pointcloud multiple objects
-                centroid = np.mean(points_3d, axis=0) #finding centroid of individual object
-                x, y, z = centroid
-                #self.get_logger().debug(f"{label}: Centroid X={x:.2f}, Y={y:.2f}, Z={z:.2f}") #log data
+                if len(points_3d) > 0:
+                # Run DBSCAN clustering on the 3D points
+                    clustering = DBSCAN(eps=0.15, min_samples=10).fit(points_3d)
+                    labels_db = clustering.labels_
 
-                msg_out = ObjectData() #create custom message with label, obj position and corresponding point cloud
-                msg_out.label = label
-                msg_out.position = Point(x=float(x), y=float(y), z=float(z))
+                    unique_labels = set(labels_db)
+                    for cluster_label in unique_labels:
+                        if cluster_label == -1:
+                            continue  # Skip noise
 
-                if self.latest_pc:
-                    header = Header(stamp=stamp, frame_id=frame_id)
-                    msg_out.pointcloud = pc2.create_cloud_xyz32(header, points_3d.tolist())
+                        # Extract points in this cluster
+                        cluster_points = points_3d[labels_db == cluster_label]
+                        if len(cluster_points) == 0:
+                            continue
 
-                self.object_pub.publish(msg_out) #publish the message
+                        # Compute centroid
+                        centroid = np.mean(cluster_points, axis=0)
+                        x, y, z = centroid
+                        self.get_logger().debug(f"{label} Cluster {cluster_label}: X={x:.2f}, Y={y:.2f}, Z={z:.2f}")
+
+                        # Fill and publish custom message
+                        msg_out = ObjectData()
+                        msg_out.label = label  # Optional: add cluster index or size if needed
+                        msg_out.position = Point(x=float(x), y=float(y), z=float(z))
+
+                        if self.latest_pc: #stores latest pc
+                            header = Header(stamp=stamp, frame_id=frame_id)
+                            msg_out.pointcloud = pc2.create_cloud_xyz32(header, cluster_points.tolist())
+
+                        self.object_pub.publish(msg_out) #publishing the pc of a particular object
+                        all_points.extend(cluster_points.tolist())#adding the object pc to a combined pc
 
         #publish combined point cloud
         if all_points:
@@ -256,13 +276,13 @@ class ObjectDataNode(Node):
                 if not (0 <= u < width):
                     continue
                 z = depth[v, u]
-                if z == 0 or np.isnan(z):
+                if not np.isfinite(z) or z <= 0.0:
                     continue
                 x = (u - self.cx) * z / self.fx  #map points from 2d to 3d using camera intrinsics
                 y = (v - self.cy) * z / self.fy
 
                 dist = np.sqrt(x**2 + y**2 + z**2)
-                if dist <= 5.0 and -y > -1.3:             #only publishing points within a radius to avoid nans
+                if dist <= 5.0 and -y > -1.3: #only publishing points within a radius to avoid nans
                     points.append([z, -x, -y]) #tranformed to align depth img with camera 
 
         return np.array(points, dtype=np.float32)
