@@ -26,37 +26,18 @@ class PathPlanner(Node):
             self.g = float('inf')  # Cost from start to this cell
             self.h = 0  # Heuristic cost from this cell to destination
 
-<<<<<<< HEAD
-		self.costmap = None
-		self.robot_pose = None
-		self.goal_point = None
-		self.costmap_grid = None
-		
-	def costmap_cb(self, msg):
-		self.get_logger().info("received costmap")
-		self.costmap = msg
-		self.origin_x = msg.info.origin.position.x
-		self.origin_y = msg.info.origin.position.y
-		self.resolution = msg.info.resolution
-		self.width = msg.info.width
-		self.height = msg.info.height 
-		data = np.array(msg.data, dtype=np.int8).reshape((self.height, self.width))
-		self.costmap_grid = (data.astype(np.float32) / 100.0 * 255).astype(np.uint8)
-	
-=======
     def __init__(self):
         super().__init__("path_planner_node")
         self.costmap_sub = self.create_subscription(OccupancyGrid, '/costmap', self.costmap_cb, 10)
         self.line_marker_sub = self.create_subscription(MarkerArray, '/lane_visualization', self.marker_cb, 10)
         self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
+        self.goal_sub = self.create_subscription(Point, '/goal_point', self.goal_cb, 10)
         # self.path_pub = self.create_publisher(Path, '/planned_path', 10)
         self.sm_path_pub = self.create_publisher(Path, '/sm_planned_path', 10)
-        self.goal_pub = self.create_publisher(PoseStamped, '/goal_point', 10)
         self.lane = 'right'
 
         self.param_file_path = os.path.expanduser('~/.config/config_igvc_ui/config.yaml')
 
->>>>>>> da0a8b8d9dff33ad4eb8f1a1ea9aed7af13c431a
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -79,7 +60,7 @@ class PathPlanner(Node):
         if(self.goal_y != -1 and self.goal_y != -1):
             # Convert flat costmap to 2D list
             self.grid_2d = np.array(self.costmap.data,dtype = np.int8).reshape((self.height,self.width)).tolist()
-            self.robot_pose.x, self.robot_pose.y = self.world_to_map(self.robot_pose.x, self.robot_pose.y)
+            self.robot_pose.x, self.robot_pose.y = self.base_link_to_costmap(self.robot_pose.x, self.robot_pose.y)
             self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [self.goal_x, self.goal_y])
 
 
@@ -91,6 +72,18 @@ class PathPlanner(Node):
             self.get_logger().warn("Costmap not received yet. Skipping marker callback.")
             return
         self.estimate_goal_from_markers(msg)
+
+    def goal_cb(self, goal):
+        if self.costmap is None:
+            self.get_logger().warn("Costmap not received yet. Ignoring goal.")
+            return
+
+        result = self.base_link_to_costmap(goal.x, goal.y)
+        if result is not None:
+            self.goal_x, self.goal_y = result
+            self.get_logger().info(f"Goal received and converted to grid: ({self.goal_x}, {self.goal_y})")
+        else:
+            self.get_logger().warn("Goal is outside map bounds")
 
 
     def estimate_goal_from_markers(self, marker_array):
@@ -184,7 +177,7 @@ class PathPlanner(Node):
 
 
         self.get_logger().info(f"Goal (odom): ({x_odom:.2f}, {y_odom:.2f})")
-        map_coords = self.world_to_map(x_odom, y_odom)
+        map_coords = self.base_link_to_costmap(x_odom, y_odom)
 
         if map_coords is not None:
             self.goal_x, self.goal_y = map_coords
@@ -219,16 +212,16 @@ class PathPlanner(Node):
             self.get_logger().warn(f"Transform failed: {e}")
             return None
         
-    def world_to_map(self, x, y):
-        mx = int((x - self.origin_x) / self.resolution)
-        my = int((y - self.origin_y) / self.resolution)
+    def base_link_to_costmap(self, x, y):
+        mx = int(x / self.resolution)
+        my = int(y / self.resolution)
         if 0 <= mx < self.width and 0 <= my < self.height:
             return (mx, my)
         return None
 
-    def map_to_world(self, mx, my):
-        x = mx * self.resolution + self.origin_x + self.resolution / 2
-        y = my * self.resolution + self.origin_y + self.resolution / 2
+    def costmap_to_base_link(self, mx, my):
+        x = mx * self.resolution + self.resolution / 2
+        y = my * self.resolution + self.resolution / 2
         return (x, y)
     
     def is_valid(self, row, col):
@@ -408,7 +401,7 @@ class PathPlanner(Node):
     #     path_msg.header.frame_id = 'odom'  # Target frame
 
     #     for (mx, my) in path_cells:
-    #         wx, wy = self.map_to_world(mx, my)
+    #         wx, wy = self.costmap_to_base_link(mx, my)
 
     #         # Convert world (map) point to odom frame
     #         world_pt = PointStamped()
@@ -445,10 +438,10 @@ class PathPlanner(Node):
     def publish_sm_path(self, path_cells):
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = 'odom'  # Target frame
+        path_msg.header.frame_id = 'base_link'  # Target frame
 
         for (mx, my) in path_cells:
-            wx, wy = self.map_to_world(mx, my)
+            wx, wy = self.costmap_to_base_link(mx, my)
 
             # Convert world (map) point to odom frame
             world_pt = PointStamped()
@@ -460,11 +453,11 @@ class PathPlanner(Node):
 
             try:
                 # wait for transform to be available
-                if not self.tf_buffer.can_transform('odom', world_pt.header.frame_id, rclpy.time.Time()):
+                if not self.tf_buffer.can_transform('base_link', world_pt.header.frame_id, rclpy.time.Time()):
                     continue
 
                 odom_pt = tf2_geometry_msgs.do_transform_point(world_pt,
-                    self.tf_buffer.lookup_transform('odom', world_pt.header.frame_id, rclpy.time.Time()))
+                    self.tf_buffer.lookup_transform('base_link', world_pt.header.frame_id, rclpy.time.Time()))
 
                 pose = PoseStamped()
                 pose.header = path_msg.header

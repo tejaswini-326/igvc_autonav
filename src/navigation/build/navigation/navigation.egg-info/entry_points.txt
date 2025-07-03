@@ -1,0 +1,5 @@
+[console_scripts]
+costmap = navigation.costmap:main
+curve_fit = navigation.lane_curvefitting:main
+goal_pub = navigation.goal_publisher:main
+path_planner = navigation.path_planning:main
