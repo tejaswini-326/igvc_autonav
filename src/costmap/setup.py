@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-        'costmap_node= costmap.costmap:main' 
+        'costmap_node= costmap.costmap:main',
+        'controller_node=costmap.controller:main' 
         ],
     },
 )

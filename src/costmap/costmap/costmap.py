@@ -1,4 +1,4 @@
-'''Description: Node that creates and publishes a costmap od bot's surroundings'''
+'''Description: Node that creates and publishes a costmap of bot's surroundings'''
 
 #importing libraries
 import rclpy
@@ -19,7 +19,7 @@ class CostmapNode(Node): #constructor for costmap node
 		super().__init__('costmap_node')
 
 		#constmap parameters
-		self.resolution = 0.05  #meters per cell
+		self.resolution = 0.01  #meters per cell
 		self.width = 500
 		self.height = 500
 		self.origin_x = 0

@@ -192,6 +192,21 @@
     <parent link="base_link" />
   </joint>
 
+  <link name="imu_link">
+    <inertial>
+      <mass value="0.001" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="1e-6" iyy="1e-6" izz="1e-6" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+
+  <joint name="camera_to_imu" type="fixed">
+    <parent link="camera_link" /> <!-- or base_link, depending on your setup -->
+    <child link="imu_link" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+
+
   <link name="b_link">
     <inertial>
       <mass value=".1" />
@@ -358,14 +373,14 @@
   <!-- STEP 9 - GPS -->
   <joint name="navsat_joint" type="fixed">
     <origin xyz="0 0 0" rpy="0 0 0" />
-    <parent link="base_link"/>
+    <parent link="base_link" />
     <child link="navsat_link" />
   </joint>
 
   <link name="navsat_link">
   </link>
 
-    <joint
+  <joint
     type="fixed" name="bcamera">
     <origin xyz="-0.75 0 0.45" rpy="0 0 3.1416" />
     <child link="bcamera_link" />

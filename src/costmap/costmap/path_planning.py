@@ -24,6 +24,7 @@ class PathPlanner(Node):
 		self.costmap = None
 		self.robot_pose = None
 		self.goal_point = None
+		self.costmap_grid = None
 		
 	def costmap_cb(self, msg):
 		self.get_logger().info("received costmap")
@@ -32,8 +33,10 @@ class PathPlanner(Node):
 		self.origin_y = msg.info.origin.position.y
 		self.resolution = msg.info.resolution
 		self.width = msg.info.width
-		self.height = msg.info.height
-
+		self.height = msg.info.height 
+		data = np.array(msg.data, dtype=np.int8).reshape((self.height, self.width))
+		self.costmap_grid = (data.astype(np.float32) / 100.0 * 255).astype(np.uint8)
+	
 
 	def odom_cb(self, msg):
 		self.robot_pose = msg.pose.pose
