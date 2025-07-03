@@ -11,7 +11,7 @@ from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 import numpy as np
 
-
+# You might want to change the z thresholds later to be exact
 
 GRID_RES   = 0.1             # 0.1 metres per pixel
 GRID_SIZE  = 200             # Number of pixels

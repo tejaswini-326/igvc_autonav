@@ -265,5 +265,6 @@ def generate_launch_description():
     # ld.add_action(trajectory_odom_topic_node)
     # ld.add_action(trajectory_node)
     ld.add_action(robot_state_publisher_node)
-
+    ld.add_action(gz_bimage_bridge_node) 
+    
     return ld
