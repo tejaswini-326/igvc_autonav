@@ -43,7 +43,7 @@ def generate_launch_description():
     )
     x_arg = DeclareLaunchArgument(
         'x',
-        default_value='-30.10',
+        default_value='-25.10',
         description='Initial X coordinate for robot spawn'
     )
     y_arg = DeclareLaunchArgument(
@@ -265,5 +265,6 @@ def generate_launch_description():
     # ld.add_action(trajectory_odom_topic_node)
     # ld.add_action(trajectory_node)
     ld.add_action(robot_state_publisher_node)
-
+    ld.add_action(gz_bimage_bridge_node) 
+    
     return ld

@@ -23,14 +23,14 @@ class ObjectDataNode(Node): #node constructor
         super().__init__('object_data_node')
 
         #subscribers to camera image, depth image and point cloud
-        self.image_sub = self.create_subscription(Image, '/camera/image', self.image_callback, 10)
-        self.depth_sub = self.create_subscription(Image, '/camera/depth_image', self.depth_callback, 10)
-        self.pc_sub = self.create_subscription(PointCloud2, '/camera/points', self.pc_callback, 10)
+        self.image_sub = self.create_subscription(Image, '/bcamera/image', self.image_callback, 10)
+        self.depth_sub = self.create_subscription(Image, '/bcamera/depth_image', self.depth_callback, 10)
+        self.pc_sub = self.create_subscription(PointCloud2, '/bcamera/points', self.pc_callback, 10)
 
         #publishers to output custom message, object point cloud and image with predictions
-        self.object_pub = self.create_publisher(ObjectData, 'object_data', 10)
-        self.pc_pub = self.create_publisher(PointCloud2, 'object_pc', 10)
-        self.annotated_img_pub = self.create_publisher(Image, '/detected_object_img', 10) #changed to raw image for rviz
+        self.object_pub = self.create_publisher(ObjectData, 'bobject_data', 10)
+        self.pc_pub = self.create_publisher(PointCloud2, 'bobject_pc', 10)
+        self.annotated_img_pub = self.create_publisher(Image, '/bdetected_object_img', 10) #changed to raw image for rviz
 
         #model and utils
         self.bridge = CvBridge()
