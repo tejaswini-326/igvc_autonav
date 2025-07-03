@@ -6,6 +6,7 @@ import struct
 import numpy as np
 from sklearn.cluster import DBSCAN
 import math
+from sklearn.decomposition import PCA
 from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
@@ -14,7 +15,7 @@ from nav_msgs.msg import Odometry
 import cv2
 
 
-MIN_CLUSTERING_DISTANCE = 0.971
+MIN_CLUSTERING_DISTANCE = 0.3
 MIN_CLUSTERING_POINTS = 20
 
 class LaneFollowerNode(Node):
@@ -276,15 +277,64 @@ class LaneFollowerNode(Node):
         # === WHITE DBSCAN and clustering ===
         points_np_white = np.array(white_ground_points)
         clustered_white_points = []
+        cluster_curves = []
+
         if len(points_np_white) >= MIN_CLUSTERING_POINTS:
             points_xy_white = points_np_white[:, :2]
             clustering_white = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy_white)
             labels_white = clustering_white.labels_
-            clustered_white_points = points_np_white[labels_white != -1]
+            unique_labels_white = set(labels_white)
 
-            if len(clustered_white_points) > 0:
-                white_msg = pc2.create_cloud_xyz32(msg.header, clustered_white_points.tolist())
-                self.white_pub.publish(white_msg)
+            # Compute yellow stats (used for proximity filtering)
+            yellow_y_mean = None
+            yellow_point_count = 0
+            if len(final_yellow_points) >= 10:
+                y_vals_yellow = np.array(final_yellow_points)[:, 1]
+                yellow_y_mean = np.mean(y_vals_yellow)
+                yellow_point_count = len(final_yellow_points)
+
+            for label in unique_labels_white:
+                if label == -1:
+                    continue
+
+                cluster_indices = np.where(labels_white == label)[0]
+                cluster_points = points_np_white[cluster_indices]
+                points_xy_cluster = cluster_points[:, :2]
+                num_white_pts = len(points_xy_cluster)
+
+                if num_white_pts < 100:
+                    continue
+
+                # PCA for elongation
+                pca = PCA(n_components=2)
+                pca.fit(points_xy_cluster)
+                eigenvalues = pca.explained_variance_ratio_
+                elongation_ratio = eigenvalues[0] / eigenvalues[1] if eigenvalues[1] != 0 else float('inf')
+
+                if elongation_ratio < 2.0:
+                    self.get_logger().info(f"Skipping white cluster {label} (pothole-like): elongation_ratio = {elongation_ratio:.2f}")
+                    continue
+
+                center_y_white = np.mean(points_xy_cluster[:, 1])
+                if yellow_y_mean is not None:
+                    if abs(center_y_white - yellow_y_mean) < 0.5 and num_white_pts < yellow_point_count and num_white_pts < 180:
+                        self.get_logger().info(f"Skipping white cluster {label} near yellow (y={yellow_y_mean:.2f}) with only {num_white_pts} pts")
+                        continue
+
+                # Passed all checks: add points to publish
+                clustered_white_points.extend(cluster_points.tolist())
+
+                # Curve fit
+                coeffs = np.polyfit(points_xy_cluster[:, 0], points_xy_cluster[:, 1], deg=2)
+                cluster_curves.append((label, coeffs, 'white'))
+
+                center_x = np.mean(points_xy_cluster[:, 0])
+                self.get_logger().info(f"White cluster {label}: center = ({center_x:.2f}, {center_y_white:.2f}), points = {num_white_pts}")
+
+            # === Publish filtered white points only ===
+        if len(clustered_white_points) > 0:
+            white_msg = pc2.create_cloud_xyz32(msg.header, clustered_white_points)
+            self.white_pub.publish(white_msg)
 
         # === YELLOW DBSCAN and clustering ===
         points_np_yellow = np.array(final_yellow_points)
@@ -303,28 +353,7 @@ class LaneFollowerNode(Node):
 
             unique_labels_yellow = set(labels_yellow)
             n_clusters_y = len(unique_labels_yellow) - (1 if -1 in labels_yellow else 0)
-            self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
-
-        # ==== CURVE FITTING ====
-        cluster_curves = []
-
-        # === White Curve Fitting: Fit curve per white cluster ===
-        if len(clustered_white_points) > 0:
-            points_xy_white = clustered_white_points[:, :2]
-            clustering_white_final = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy_white)
-            labels_white_final = clustering_white_final.labels_
-            unique_labels_white = set(labels_white_final)
-
-            for label in unique_labels_white:
-                if label == -1:
-                    continue
-                cluster_points = points_xy_white[labels_white_final == label]
-                if len(cluster_points) < 10:
-                    continue
-                x_vals = cluster_points[:, 0]
-                y_vals = cluster_points[:, 1]
-                coeffs = np.polyfit(x_vals, y_vals, deg=2)
-                cluster_curves.append((label, coeffs, 'white'))
+            # self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
 
         # === Yellow Curve Fitting: Single global fit on all yellow points ===
         if len(clustered_yellow_points) >= 10:
@@ -335,6 +364,8 @@ class LaneFollowerNode(Node):
 
         # === Final Lane Visualization ===
         self.publish_lane_visualization(msg, None, cluster_curves, white_ground_points, final_yellow_points)
+
+
         
 
 def main(args=None):
