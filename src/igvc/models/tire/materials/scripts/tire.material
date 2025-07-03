@@ -1,0 +1,18 @@
+material Gazebo/TireDisk
+{
+    technique
+    {
+        pass
+        {
+            ambient 0.2 0.2 0.2 1
+            diffuse 1 1 1 1
+            specular 0.05 0.05 0.05 1
+            emissive 0 0 0 1
+
+            texture_unit
+            {
+                texture tire_diffuse.png 
+            }
+        }
+    }
+}
