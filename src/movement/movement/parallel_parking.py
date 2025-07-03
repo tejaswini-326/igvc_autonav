@@ -93,24 +93,32 @@ class ParallelParkingDetector(Node):
             label, center = centers[0]
             current_dist = np.linalg.norm(center)
 
-            if self.sidelane_dist is None:
-                self.sidelane_dist = current_dist - 0.3
-                self.get_logger().info(f"Set target approach distance: {self.sidelane_dist:.2f} m")
+            # Initialize target travel distance only once
+            if not hasattr(self, 'sidelane_target_travel'):
+                self.sidelane_target_travel = current_dist - 0.3
+                self.sidelane_distance_travelled = 0.0
+                self.last_approach_time = self.get_clock().now()
+                self.get_logger().info(f"Set target travel distance: {self.sidelane_target_travel:.2f} m")
 
-            if self.sidelane_dist <= 0:
-                self.state = "TURN_TO_FINAL"
-                self.sidelane_dist = None
-                self.get_logger().info("Reached target distance to sideline. Turning to face stop line.")
-                return
-
+            # Movement command
             cmd = Twist()
             speed = -0.3
             cmd.linear.x = speed
             cmd.angular.z = 0.0
             self.cmd_pub.publish(cmd)
 
-            dt = 0.1  
-            self.sidelane_dist -= abs(speed) * dt
+            # Update how far we’ve travelled
+            current_time = self.get_clock().now()
+            dt = (current_time - self.last_approach_time).nanoseconds / 1e9
+            self.last_approach_time = current_time
+            self.sidelane_distance_travelled += abs(speed) * dt
+
+            if self.sidelane_distance_travelled >= self.sidelane_target_travel:
+                self.get_logger().info("Reached required travel distance. Turning to final.")
+                self.state = "TURN_TO_FINAL"
+                del self.sidelane_target_travel
+                del self.sidelane_distance_travelled
+                del self.last_approach_time
 
         elif self.state == "TURN_TO_FINAL":
             if self.msg_2 is None:

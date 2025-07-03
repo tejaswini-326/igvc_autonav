@@ -335,8 +335,6 @@ class LaneFollowerNode(Node):
 
         # === Final Lane Visualization ===
         self.publish_lane_visualization(msg, None, cluster_curves, white_ground_points, final_yellow_points)
-
-
         
 
 def main(args=None):
