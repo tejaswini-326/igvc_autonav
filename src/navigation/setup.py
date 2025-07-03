@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'costmap'
+package_name = 'navigation'
 
 setup(
     name=package_name,
@@ -10,6 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/launch', ['launch/path_planner.launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -20,7 +21,10 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-        'costmap_node= costmap.costmap:main' 
+        'goal_pub= navigation.goal_publisher:main', 
+        'costmap= navigation.costmap:main', 
+        'path_planner= navigation.path_planning:main', 
+        'curve_fit= navigation.lane_curvefitting:main', 
         ],
     },
 )
