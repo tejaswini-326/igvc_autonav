@@ -21,15 +21,11 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-<<<<<<< HEAD:src/costmap/setup.py
-        'costmap_node= costmap.costmap:main',
-        'controller_node=costmap.controller:main' 
-=======
         'goal_pub= navigation.goal_publisher:main', 
         'costmap= navigation.costmap:main', 
         'path_planner= navigation.path_planning:main', 
         'curve_fit= navigation.lane_curvefitting:main', 
->>>>>>> fe502660a0c05a2ff3549cc021a9e1ee136f51d6:src/navigation/setup.py
+        'controller = navigation.controller:main'
         ],
     },
 )

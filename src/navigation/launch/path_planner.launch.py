@@ -37,6 +37,13 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
         output='screen'
     )
+    controller_node = Node(
+        package=pkg_name,
+        executable='controller',
+        name='controller',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+        output='screen'
+    )
 
     return LaunchDescription(
             [
@@ -47,6 +54,7 @@ def generate_launch_description():
                 goal_publisher_node,
                 costmap_publisher_node,
                 path_publisher_node,
-                curve_fit_node
+                curve_fit_node,
+                controller_node
             ]
         )
