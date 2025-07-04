@@ -26,24 +26,6 @@ class PathPlanner(Node):
             self.g = float('inf')  # Cost from start to this cell
             self.h = 0  # Heuristic cost from this cell to destination
 
-<<<<<<< HEAD
-		self.costmap = None
-		self.robot_pose = None
-		self.goal_point = None
-		self.costmap_grid = None
-		
-	def costmap_cb(self, msg):
-		self.get_logger().info("received costmap")
-		self.costmap = msg
-		self.origin_x = msg.info.origin.position.x
-		self.origin_y = msg.info.origin.position.y
-		self.resolution = msg.info.resolution
-		self.width = msg.info.width
-		self.height = msg.info.height 
-		data = np.array(msg.data, dtype=np.int8).reshape((self.height, self.width))
-		self.costmap_grid = (data.astype(np.float32) / 100.0 * 255).astype(np.uint8)
-	
-=======
     def __init__(self):
         super().__init__("path_planner_node")
         self.costmap_sub = self.create_subscription(OccupancyGrid, '/costmap', self.costmap_cb, 10)
@@ -56,7 +38,6 @@ class PathPlanner(Node):
 
         self.param_file_path = os.path.expanduser('~/.config/config_igvc_ui/config.yaml')
 
->>>>>>> da0a8b8d9dff33ad4eb8f1a1ea9aed7af13c431a
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)

@@ -51,7 +51,7 @@ class Controller(Node):
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
-        self.goal_reached = False
+        #self.goal_reached = False
 
 
         self.get_logger().info("Controller initialized.")
@@ -92,8 +92,12 @@ class Controller(Node):
             self.imu_yaw = yaw
 
     def path_callback(self, msg: Path):
-        self.path = [(pose.pose.position.x, pose.pose.position.y) for pose in msg.poses]
-        self.get_logger().info(f"Received path with {len(self.path)} points.")
+        transformed = [
+        self.transform_to_odom(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z)
+            for pose in msg.poses
+        ]
+        self.path = [(x, y) for xyz in transformed if xyz is not None for x, y in [xyz[:2]]]
+        self.get_logger().info(f"Received path with {len(self.path)} valid points.")
 
     def adaptive_lookahead(self, base_distance=0.75):
         yaw_variability = np.std(self.yaw_buffer) if len(self.yaw_buffer) > 2 else 0.0
@@ -180,7 +184,7 @@ class Controller(Node):
         dx = gx - self.pose.position.x
         dy = gy - self.pose.position.y
         if math.hypot(dx, dy) < self.goal_tolerance:
-            self.goal_reached = True
+            #self.goal_reached = True
             self.log_info_throttled("Reached goal.")
             self.cmd_pub.publish(Twist())
             return
@@ -240,8 +244,7 @@ class Controller(Node):
         self.prev_angular_z = twist.angular.z
         twist.angular.z = np.clip(twist.angular.z, -1.0, 1.0)
         self.cmd_pub.publish(twist)
-        if self.goal_reached:
-            return
+        
 
 
     def publish_marker_timer(self):
@@ -295,6 +298,32 @@ class Controller(Node):
 
         self.marker_pub.publish(MarkerArray(markers=markers))
 
+    def transform_to_odom(self, x, y, z, frame_id='base_link'):
+        try:
+            point = PointStamped()
+            point.header.frame_id = frame_id
+            point.header.stamp = self.get_clock().now().to_msg()
+            point.point.x = x
+            point.point.y = y
+            point.point.z = z
+
+            #checks for latest transforms
+            if self.tf_buffer.can_transform('odom', frame_id, rclpy.time.Time()):
+                transform = self.tf_buffer.lookup_transform(
+                    'odom',
+                    frame_id,
+                    rclpy.time.Time(),
+                )
+            else:
+                self.get_logger().warn(f"Transform from {frame_id} to odom not available")
+                return None
+
+            transformed_point = tf2_geometry_msgs.do_transform_point(point, transform)
+            return (transformed_point.point.x, transformed_point.point.y, transformed_point.point.z)
+
+        except Exception as e:
+            self.get_logger().warn(f"Transform failed: {e}")
+            return None
 
 def main(args=None):
     rclpy.init(args=args)

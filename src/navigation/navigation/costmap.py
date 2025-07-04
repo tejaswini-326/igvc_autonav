@@ -12,8 +12,6 @@ from scipy.ndimage import gaussian_filter
 from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
 from geometry_msgs.msg import PointStamped
-import yaml
-
 
 class CostmapNode(Node): #constructor for costmap node
     def __init__(self):
@@ -44,8 +42,6 @@ class CostmapNode(Node): #constructor for costmap node
         self.yellow_map = None
         self.object_map = None
         
-        self.param_file_path = '/home/sinan/.config/config_igvc_ui/config.yaml'  # change this
-
 
     #callback functions for point cloud data
     def object_pc_callback(self, msg):
@@ -59,18 +55,6 @@ class CostmapNode(Node): #constructor for costmap node
 
     #function to generate costmap
     def generate_costmap(self, msg, tag="lane"):
-
-        try:
-            with open(self.param_file_path, 'r') as file:
-                data = yaml.safe_load(file)
-                costmap_config = data.get('parameters', {}).get('costmap', {})
-                self.sigma = float(costmap_config.get('sigma', 3.0))
-                self.k = float(costmap_config.get('k', 1.0))
-                print(f"sigma: {self.sigma}, k: {self.k}")
-        except Exception as e:
-            self.get_logger().warn(f"Error reading YAML: {e}")
-            self.sigma = 3.0
-            self.k = 1.0
 
         #tranform pc with real time tranforms for accuracy, and set bot's position as center of grid
         try:
@@ -110,13 +94,13 @@ class CostmapNode(Node): #constructor for costmap node
 
         #apply gaussian blur to get a small dilation 
         binary = costmap.astype(np.float32)
-        gradient = gaussian_filter(binary, sigma=self.sigma)
+        gradient = gaussian_filter(binary, sigma=3)
 
         if gradient.max() > 0: 
             if tag == "object":
                 scaled = ((gradient / (gradient.max() ** 2)) * 100).astype(np.uint8) #applying a greater blur for objects 
             else:
-                scaled = ((gradient / gradient.max() ** self.k) * 100).astype(np.uint8) #applying blur to lane data
+                scaled = ((gradient / gradient.max() ** .8) * 100).astype(np.uint8) #applying blur to lane data
         else:
             scaled = np.zeros_like(costmap) #no blur if no weights
 
