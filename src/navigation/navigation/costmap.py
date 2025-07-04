@@ -1,4 +1,5 @@
-'''Description: Node that creates and publishes a costmap od bot's surroundings'''
+'''Description: Node that creates and publishes a costmap of bot's surroundings
+4/7 optimised the node'''
 
 #importing libraries
 import rclpy
@@ -110,7 +111,7 @@ class CostmapNode(Node): #constructor for costmap node
             return
 
 
-        # Grid indices
+        #grid indices
         mx_raw = (points[:, 0] - self.origin_x) / self.resolution
         my_raw = (points[:, 1] - self.origin_y) / self.resolution
 
@@ -123,7 +124,7 @@ class CostmapNode(Node): #constructor for costmap node
         my = my_raw[valid].astype(int)
 
 
-        # Value based on tag
+        #value based on tag
         if tag == "object":
             value = 100
         elif tag == "white":
@@ -133,12 +134,12 @@ class CostmapNode(Node): #constructor for costmap node
         else:
             value = 0
 
-        # Apply values only where cell < 255
+        #apply values only where cell < 255
         mask = costmap[my, mx] < 255
         costmap[my[mask], mx[mask]] = value
 
 
-        # Apply OpenCV Gaussian blur (faster than scipy)
+        #apply OpenCV Gaussian blur (faster than scipy)
         if not np.any(costmap):
             return
 
@@ -155,7 +156,7 @@ class CostmapNode(Node): #constructor for costmap node
 
         costmap = np.maximum(costmap, scaled)
 
-        # Store updated layer
+        #store updated layer
         if tag == "white":
             self.white_map = costmap
         elif tag == "yellow":
@@ -183,7 +184,7 @@ class CostmapNode(Node): #constructor for costmap node
         msg.info.width = self.width
         msg.info.height = self.height
 
-        # Ensure origin values are floats and not None or NaN
+        #Ensure origin values are floats and not None or NaN
         try:
             msg.info.origin.position.x = float(self.origin_x)
             msg.info.origin.position.y = float(self.origin_y)
