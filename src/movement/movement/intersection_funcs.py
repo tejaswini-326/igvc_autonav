@@ -100,6 +100,35 @@ def get_xy_of_all_white_and_yellow_points_from_pointcloud_msg(msg):
 
 
 
+def voxel_downsample_xy(pts_xy: np.ndarray,
+						voxel: float = 0.05,
+						max_points: int | None = None) -> np.ndarray:
+	"""
+	Keep at most one point per `voxel`-metre square cell in the XY plane.
+
+	• pts_xy      –  (N,2) float32 or float64 array
+	• voxel       –  edge length of the square voxel in metres  
+					 (try 2–3× GRID_RES; tune to taste)
+	• max_points  –  optional hard cap; a final uniform random draw
+					 enforces this number if the voxel filter still leaves
+					 too many points.
+	"""
+	# Quantise XY to integer voxel indices
+	keys = np.floor_divide(pts_xy, voxel).astype(np.int32)
+
+	# Unique rows → indices of the *first* occurrence of every voxel
+	_, unique_idx = np.unique(keys, axis=0, return_index=True)
+
+	pts_xy = pts_xy[unique_idx]
+
+	if max_points is not None and pts_xy.shape[0] > max_points:
+		idx = np.random.choice(pts_xy.shape[0], max_points, replace=False)
+		pts_xy = pts_xy[idx]
+
+	return pts_xy
+
+
+
 def radial_scans(pts_xy, mode, yaw, turn_start_yaw, angle_tolerance, debug_stuff):
 	'''
 	ptx_xy - Output from previous funct
@@ -118,6 +147,13 @@ def radial_scans(pts_xy, mode, yaw, turn_start_yaw, angle_tolerance, debug_stuff
 	# So that every 'grid' in our representation contains at least some point of the pointcloud to create a continuous white stretch where the lanes are there
 	# On top of this, we'll do cv2 morpology and dilation to ensure there are no holes
 	# If you turn on DEBUG, you can see the grid made in the topic 'intersection_llane_scan_2d_debug'
+
+	# --- SPEED HACK:  down-sample in XY before anything expensive -----------
+	pts_xy = voxel_downsample_xy(
+				 np.asarray(pts_xy, dtype=np.float32),
+				 voxel       = 0.2,
+				 max_points  = 20000      # or whatever feels safe
+			 )
 
 	binary = np.zeros((GRID_SIZE, GRID_SIZE), dtype=np.uint8)
 

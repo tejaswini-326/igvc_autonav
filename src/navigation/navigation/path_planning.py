@@ -86,61 +86,7 @@ class PathPlanner(Node):
             self.get_logger().warn("Goal is outside map bounds")
 
 
-    def estimate_goal_from_markers(self, marker_array):
-        lane_markers = [m for m in marker_array.markers if m.ns == "lane_curves" and m.type == Marker.LINE_STRIP]
-
-        if len(lane_markers) < 2:
-            self.get_logger().warn("Not enough lane markers to estimate goal")
-            return None
-
-        sorted_markers = sorted(lane_markers, key=lambda m: m.points[0].y)
-
-        if(self.lane == 'right'):
-            right_marker = sorted_markers[0]
-            right_points = right_marker.points
-            mid_marker = sorted_markers[1]
-            mid_points = mid_marker.points
-            # Use last few points to compute average goal
-            N = min(5, len(right_points), len(mid_points))
-
-            # Average the last N points
-            avg_rx = sum(p.x for p in right_points[-N:]) / N
-            avg_ry = sum(p.y for p in right_points[-N:]) / N
-        else:
-            left_marker = sorted_markers[2]
-            left_points = left_marker.points
-            mid_marker = sorted_markers[1]
-            mid_points = mid_marker.points
-            N = min(5, len(left_points), len(mid_points))
-            avg_lx = sum(p.x for p in left_points[-N:]) / N
-            avg_ly = sum(p.y for p in left_points[-N:]) / N
-
-
-        if N < 2:
-            self.get_logger().warn("Too few points in lane markers")
-            return None
-
-        avg_mx = sum(p.x for p in mid_points[-N:]) / N
-        avg_my = sum(p.y for p in mid_points[-N:]) / N
-
-        # Midpoint
-        if(self.lane == 'right'):
-            mid_x = (avg_rx + avg_mx) / 2.0
-            mid_y = (avg_ry + avg_my) / 2.0
-            mid_z = 0.0
-            # Transform to odom
-            result = self.transform_to_odom(mid_x, mid_y, mid_z, frame_id=right_marker.header.frame_id)
-        else:
-            mid_x = (avg_lx + avg_mx) / 2.0
-            mid_y = (avg_ly + avg_my) / 2.0
-            mid_z = 0.0
-            result = self.transform_to_odom(mid_x, mid_y, mid_z, frame_id=left_marker.header.frame_id)
-
-        if result is None:
-            self.get_logger().warn("Failed to transform midpoint to odom frame")
-            return None
-
-        x_odom, y_odom, z_odom = result
+   
 
         # uncomment if goal point needs to be visualized
         # try:
@@ -174,16 +120,6 @@ class PathPlanner(Node):
 
         # except Exception as e:
         #     self.get_logger().warn(f"Transform to base_footprint failed: {e}")
-
-
-        self.get_logger().info(f"Goal (odom): ({x_odom:.2f}, {y_odom:.2f})")
-        map_coords = self.base_link_to_costmap(x_odom, y_odom)
-
-        if map_coords is not None:
-            self.goal_x, self.goal_y = map_coords
-            print(f"Goal in map frame: cell_x={self.goal_x}, cell_y={self.goal_y}")
-        else:
-            print("Goal is outside the map bounds!")
 
     
     def transform_to_odom(self, x, y, z, frame_id='camera_link'):

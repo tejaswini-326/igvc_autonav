@@ -16,6 +16,11 @@ import sensor_msgs_py.point_cloud2 as pc2
 from ultralytics import YOLO
 from cv_bridge import CvBridge
 from sklearn.cluster import DBSCAN
+import os
+from ament_index_python.packages import get_package_share_directory
+
+
+CONFIDENCE_THRESHOLD = 0.5
 
 
 class ObjectDataNode(Node): #node constructor
@@ -31,10 +36,15 @@ class ObjectDataNode(Node): #node constructor
         self.object_pub = self.create_publisher(ObjectData, 'object_data', 10)
         self.pc_pub = self.create_publisher(PointCloud2, 'object_pc', 10)
         self.annotated_img_pub = self.create_publisher(Image, '/detected_object_img', 10) #changed to raw image for rviz
-
-        #model and utils
         self.bridge = CvBridge()
+<<<<<<< HEAD
         self.model = YOLO('/home/tejaswini/Desktop/abhiyaan/best.pt') #add model path here
+=======
+        #model and utils
+        pkg_share = get_package_share_directory('object_detection')
+        model_path = os.path.join(pkg_share, 'models', 'best.pt')
+        self.model = YOLO(model_path)
+>>>>>>> 60c1f9d9815fda2e3bcd729a682682f26452bb59
         self.model.eval()
         self.get_logger().info('YOLOv8 model loaded.')
 
@@ -42,10 +52,10 @@ class ObjectDataNode(Node): #node constructor
         self.depth_img = None
         self.latest_pc = None
         #camera intrinsics from urdf
-        self.fx = 102.7348185494929
-        self.fy = 102.7348185494929
-        self.cx = 160.0
-        self.cy = 120.0
+        self.fx = 328.6571260705443
+        self.fy = 328.6571260705443
+        self.cx = 400.0
+        self.cy = 400.0
         self.frame_count = 0  #used to skip frames for speed
 
         # White color thresholds (HSV space)
@@ -197,6 +207,8 @@ class ObjectDataNode(Node): #node constructor
             cls_id = int(box.cls[0].item())
             label = self.model.names[cls_id]
             confidence = float(box.conf[0])
+            if confidence < CONFIDENCE_THRESHOLD:
+                continue
             #drawing the bounding box
             cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
             text = f"{label} ({confidence:.2f})"
