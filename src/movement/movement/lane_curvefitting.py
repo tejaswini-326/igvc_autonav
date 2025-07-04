@@ -26,7 +26,8 @@ class LaneFollowerNode(Node):
             self.pointcloud_callback,
             10
         )
-        self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
+        #self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
+        self.curve_marker_pub = self.create_publisher(MarkerArray, '/lane_fitted_curves', 10)
         self.markers_pub = self.create_publisher(MarkerArray, '/lane_visualization', 10)
         self.white_pub = self.create_publisher(PointCloud2, "/white_lane_points", 10)
         self.yellow_pub = self.create_publisher(PointCloud2, "/yellow_lane_points", 10)    
@@ -174,10 +175,15 @@ class LaneFollowerNode(Node):
             target_marker.pose.orientation.w = 1.0
             
             marker_array.markers.append(target_marker)
-        
+        curve_only_array = MarkerArray()
+        for marker in marker_array.markers:
+            if marker.ns == "lane_curves":
+                curve_only_array.markers.append(marker)
+
+        self.curve_marker_pub.publish(curve_only_array)
         # Publish marker array
         self.markers_pub.publish(marker_array)
-
+    
     def pointcloud_callback(self, msg):
         height = msg.height
         width = msg.width
