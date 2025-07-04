@@ -71,18 +71,23 @@ class IntersectionStraightDriver(Node):
 		# '3. radial scan'
 		self.stage = '0. waiting for /intersection'
 
+		self.qualification = False
 		self.turn_start_yaw = None
 		self.best_theta = None
 		self.linx_angz_to_publish = None
 
 		self.bridge = CvBridge()
-		self.timer = self.create_timer(0.1, self.publish_cmd)
+		self.timer = self.create_timer(0.05, self.publish_cmd)
 
 
 	def intersection_cb(self, msg: String):
 		if msg.data.lower() == "straight":
 			self.stage = '1. straight'
 			self.get_logger().info("🟢 Received 'straight' from /intersection.")
+		elif msg.data.lower() == "qualification_straight":
+			self.stage = '1. straight'
+			self.qualification = True
+			self.get_logger().info("🟢 Received 'qualification_straight' from /intersection.")
 		else:
 			self.stage = '0. waiting for /intersection'
 			self.get_logger().info(f"🛑 Ignoring '{msg.data}' from /intersection.")
@@ -144,7 +149,8 @@ class IntersectionStraightDriver(Node):
 		if forward_disp >= TARGET_FORWARD_DISPLACEMENT:
 			self.get_logger().info("✅ Intersection Straight Drive Complete. Publishing 'none' into /intersection")
 			msg = String()
-			msg.data = "none"
+			if self.qualification: msg.data = "follow_barrel_and_stop"
+			else: msg.data = "none"
 			self.intersection_pub.publish(msg)
 			self.stage = '0. waiting for /intersection'
 			self.start_x_y = None
