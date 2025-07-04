@@ -19,8 +19,14 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ObjectData.msg"
   DEPENDENCIES geometry_msgs sensor_msgs std_msgs builtin_interfaces
 )
+
 install(PROGRAMS
   src/object_data_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  src/back_object_data_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
