@@ -34,7 +34,7 @@ class ObjectDataNode(Node): #node constructor
 
         #model and utils
         self.bridge = CvBridge()
-        self.model = YOLO('/home/naresh/best.pt') #add model path here
+        self.model = YOLO('/home/tejaswini/Desktop/abhiyaan/best.pt') #add model path here
         self.model.eval()
         self.get_logger().info('YOLOv8 model loaded.')
 
