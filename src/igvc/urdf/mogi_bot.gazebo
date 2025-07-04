@@ -48,13 +48,8 @@
       <camera>
         <horizontal_fov>1.765994316</horizontal_fov>
         <image>
-<<<<<<< HEAD
-          <width>960</width>
-          <height>720</height>
-=======
           <width>800</width>
           <height>800</height>
->>>>>>> 813bc613a56eba2c9b56ee4034ffca0550a7106b
         </image>
         <clip>
           <near>0.02</near>

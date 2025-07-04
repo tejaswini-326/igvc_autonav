@@ -134,10 +134,10 @@ class RaycastNavigator(Node):
         return obstacle_penalty
 
     def move_in_direction(self, angle_rad):
-        # twist = Twist()
-        # twist.linear.x = 0.1
-        # twist.angular.z = -math.sin(angle_rad) * 0.8
-        # self.cmd_pub.publish(twist)
+        twist = Twist()
+        twist.linear.x = 0.1
+        twist.angular.z = -math.sin(angle_rad) * 0.8
+        self.cmd_pub.publish(twist)
         pass
 
 
