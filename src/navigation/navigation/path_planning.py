@@ -29,15 +29,13 @@ class PathPlanner(Node):
     def __init__(self):
         super().__init__("path_planner_node")
         self.costmap_sub = self.create_subscription(OccupancyGrid, '/costmap', self.costmap_cb, 10)
-        self.line_marker_sub = self.create_subscription(MarkerArray, '/lane_visualization', self.marker_cb, 10)
         self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
-        self.goal_sub = self.create_subscription(Point, '/goal_point', self.goal_cb, 10)
+        self.goal_sub = self.create_subscription(PoseStamped, '/goal_point', self.goal_cb, 10)
         # self.path_pub = self.create_publisher(Path, '/planned_path', 10)
         self.sm_path_pub = self.create_publisher(Path, '/sm_planned_path', 10)
         self.lane = 'right'
 
         self.param_file_path = os.path.expanduser('~/.config/config_igvc_ui/config.yaml')
-
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -60,131 +58,25 @@ class PathPlanner(Node):
         if(self.goal_y != -1 and self.goal_y != -1):
             # Convert flat costmap to 2D list
             self.grid_2d = np.array(self.costmap.data,dtype = np.int8).reshape((self.height,self.width)).tolist()
-            self.robot_pose.x, self.robot_pose.y = self.base_link_to_costmap(self.robot_pose.x, self.robot_pose.y)
+            self.robot_pose.x, self.robot_pose.y = self.odom_to_costmap(self.robot_pose.x, self.robot_pose.y)
             self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [self.goal_x, self.goal_y])
-
+            # self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [350,250])
 
     def odom_cb(self, msg):
         self.robot_pose = msg.pose.pose.position
 
-    def marker_cb(self, msg):
-        if self.costmap is None:
-            self.get_logger().warn("Costmap not received yet. Skipping marker callback.")
-            return
-        self.estimate_goal_from_markers(msg)
-
-    def goal_cb(self, goal):
+    def goal_cb(self, goal:PoseStamped):
+        
         if self.costmap is None:
             self.get_logger().warn("Costmap not received yet. Ignoring goal.")
             return
 
-        result = self.base_link_to_costmap(goal.x, goal.y)
+        result = self.odom_to_costmap(goal.pose.position.x, goal.pose.position.y)
         if result is not None:
             self.goal_x, self.goal_y = result
             self.get_logger().info(f"Goal received and converted to grid: ({self.goal_x}, {self.goal_y})")
         else:
             self.get_logger().warn("Goal is outside map bounds")
-
-
-    def estimate_goal_from_markers(self, marker_array):
-        lane_markers = [m for m in marker_array.markers if m.ns == "lane_curves" and m.type == Marker.LINE_STRIP]
-
-        if len(lane_markers) < 2:
-            self.get_logger().warn("Not enough lane markers to estimate goal")
-            return None
-
-        sorted_markers = sorted(lane_markers, key=lambda m: m.points[0].y)
-
-        if(self.lane == 'right'):
-            right_marker = sorted_markers[0]
-            right_points = right_marker.points
-            mid_marker = sorted_markers[1]
-            mid_points = mid_marker.points
-            # Use last few points to compute average goal
-            N = min(5, len(right_points), len(mid_points))
-
-            # Average the last N points
-            avg_rx = sum(p.x for p in right_points[-N:]) / N
-            avg_ry = sum(p.y for p in right_points[-N:]) / N
-        else:
-            left_marker = sorted_markers[2]
-            left_points = left_marker.points
-            mid_marker = sorted_markers[1]
-            mid_points = mid_marker.points
-            N = min(5, len(left_points), len(mid_points))
-            avg_lx = sum(p.x for p in left_points[-N:]) / N
-            avg_ly = sum(p.y for p in left_points[-N:]) / N
-
-
-        if N < 2:
-            self.get_logger().warn("Too few points in lane markers")
-            return None
-
-        avg_mx = sum(p.x for p in mid_points[-N:]) / N
-        avg_my = sum(p.y for p in mid_points[-N:]) / N
-
-        # Midpoint
-        if(self.lane == 'right'):
-            mid_x = (avg_rx + avg_mx) / 2.0
-            mid_y = (avg_ry + avg_my) / 2.0
-            mid_z = 0.0
-            # Transform to odom
-            result = self.transform_to_odom(mid_x, mid_y, mid_z, frame_id=right_marker.header.frame_id)
-        else:
-            mid_x = (avg_lx + avg_mx) / 2.0
-            mid_y = (avg_ly + avg_my) / 2.0
-            mid_z = 0.0
-            result = self.transform_to_odom(mid_x, mid_y, mid_z, frame_id=left_marker.header.frame_id)
-
-        if result is None:
-            self.get_logger().warn("Failed to transform midpoint to odom frame")
-            return None
-
-        x_odom, y_odom, z_odom = result
-
-        # uncomment if goal point needs to be visualized
-        # try:
-        #     point_in_odom = PointStamped()
-        #     point_in_odom.header.frame_id = 'odom'
-        #     point_in_odom.header.stamp = self.get_clock().now().to_msg()
-        #     point_in_odom.point.x = x_odom
-        #     point_in_odom.point.y = y_odom
-        #     point_in_odom.point.z = 0.0
-
-        #     if self.tf_buffer.can_transform('base_footprint', 'odom', rclpy.time.Time()):
-        #         transform = self.tf_buffer.lookup_transform(
-        #             'base_footprint',
-        #             'odom',
-        #             rclpy.time.Time()
-        #         )
-        #         transformed_point = tf2_geometry_msgs.do_transform_point(point_in_odom, transform)
-
-        #         goal_base = PoseStamped()
-        #         goal_base.header.frame_id = 'base_footprint'
-        #         goal_base.header.stamp = self.get_clock().now().to_msg()
-        #         goal_base.pose.position = transformed_point.point
-        #         goal_base.pose.orientation.w = 1.0
-
-        #         # Publish transformed point in base_footprint frame
-        #         self.goal_pub.publish(goal_base)
-        #         self.get_logger().info(f"Published goal in base_footprint: x={goal_base.pose.position.x:.2f}, y={goal_base.pose.position.y:.2f}")
-
-        #     else:
-        #         self.get_logger().warn("Transform from odom to base_footprint not available")
-
-        # except Exception as e:
-        #     self.get_logger().warn(f"Transform to base_footprint failed: {e}")
-
-
-        self.get_logger().info(f"Goal (odom): ({x_odom:.2f}, {y_odom:.2f})")
-        map_coords = self.base_link_to_costmap(x_odom, y_odom)
-
-        if map_coords is not None:
-            self.goal_x, self.goal_y = map_coords
-            print(f"Goal in map frame: cell_x={self.goal_x}, cell_y={self.goal_y}")
-        else:
-            print("Goal is outside the map bounds!")
-
     
     def transform_to_odom(self, x, y, z, frame_id='camera_link'):
         try:
@@ -212,16 +104,16 @@ class PathPlanner(Node):
             self.get_logger().warn(f"Transform failed: {e}")
             return None
         
-    def base_link_to_costmap(self, x, y):
-        mx = int(x / self.resolution)
-        my = int(y / self.resolution)
+    def odom_to_costmap(self, x, y):
+        mx = int((x - self.origin_x) / self.resolution)
+        my = int((y - self.origin_y) / self.resolution)
         if 0 <= mx < self.width and 0 <= my < self.height:
             return (mx, my)
         return None
 
-    def costmap_to_base_link(self, mx, my):
-        x = mx * self.resolution + self.resolution / 2
-        y = my * self.resolution + self.resolution / 2
+    def costmap_to_odom(self, mx, my):
+        x = mx * self.resolution + self.origin_x + self.resolution / 2
+        y = my * self.resolution + self.origin_y + self.resolution / 2
         return (x, y)
     
     def is_valid(self, row, col):
@@ -401,7 +293,7 @@ class PathPlanner(Node):
     #     path_msg.header.frame_id = 'odom'  # Target frame
 
     #     for (mx, my) in path_cells:
-    #         wx, wy = self.costmap_to_base_link(mx, my)
+    #         wx, wy = self.costmap_to_odom(mx, my)
 
     #         # Convert world (map) point to odom frame
     #         world_pt = PointStamped()
@@ -438,10 +330,10 @@ class PathPlanner(Node):
     def publish_sm_path(self, path_cells):
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = 'base_link'  # Target frame
+        path_msg.header.frame_id = 'odom'  # Target frame
 
         for (mx, my) in path_cells:
-            wx, wy = self.costmap_to_base_link(mx, my)
+            wx, wy = self.costmap_to_odom(mx, my)
 
             # Convert world (map) point to odom frame
             world_pt = PointStamped()
@@ -453,11 +345,11 @@ class PathPlanner(Node):
 
             try:
                 # wait for transform to be available
-                if not self.tf_buffer.can_transform('base_link', world_pt.header.frame_id, rclpy.time.Time()):
+                if not self.tf_buffer.can_transform('odom', world_pt.header.frame_id, rclpy.time.Time()):
                     continue
 
                 odom_pt = tf2_geometry_msgs.do_transform_point(world_pt,
-                    self.tf_buffer.lookup_transform('base_link', world_pt.header.frame_id, rclpy.time.Time()))
+                    self.tf_buffer.lookup_transform('odom', world_pt.header.frame_id, rclpy.time.Time()))
 
                 pose = PoseStamped()
                 pose.header = path_msg.header

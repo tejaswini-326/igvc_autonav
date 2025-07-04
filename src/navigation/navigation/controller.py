@@ -21,8 +21,8 @@ class Controller(Node):
         super().__init__('controller')
 
         self.path = []
-        self.lookahead_distance = .75
-        self.linear_speed = .75
+        self.lookahead_distance = .4
+        self.linear_speed = .2
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
@@ -92,11 +92,7 @@ class Controller(Node):
             self.imu_yaw = yaw
 
     def path_callback(self, msg: Path):
-        transformed = [
-        self.transform_to_odom(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z)
-            for pose in msg.poses
-        ]
-        self.path = [(x, y) for xyz in transformed if xyz is not None for x, y in [xyz[:2]]]
+        self.path = [(pose.pose.position.x, pose.pose.position.y)for pose in msg.poses]
         self.get_logger().info(f"Received path with {len(self.path)} valid points.")
 
     def adaptive_lookahead(self, base_distance=0.75):
