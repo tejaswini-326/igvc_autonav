@@ -34,7 +34,7 @@ LEFT_TURN_ANGULAR_SPEED                         = 0.22               # rad/s (+v
 # Intersection Turning Related
 ANGLE_TOLERANCE                                 = radians(30)        # ± deg window around 90° – θ
 INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (3) ** 2           # metres
-TURN_ANGLE                                      = radians(85.0)      # 90 was over-turning for me? I'm not sure why though
+TURN_ANGLE                                      = radians(80.0)      # 90 will overturn if the bot started out a bit turning to the left
 
 # Completion Threshold - After this distance this node will handover control to main lane follower
 TARGET_LEFT_DISPLACEMENT = 9
@@ -66,6 +66,7 @@ class IntersectionLeftTurnDriver(Node):
 		# '3. radial scan'
 		self.stage = '0. waiting for /intersection'
 
+		self.qualification = False
 		self.next_waypoint = None
 		self.start_x_y = None
 		self.turn_start_yaw = None
@@ -73,13 +74,17 @@ class IntersectionLeftTurnDriver(Node):
 		self.linx_angz_to_publish = None
 
 		self.bridge = CvBridge()
-		self.timer = self.create_timer(0.1, self.publish_cmd)
+		self.timer = self.create_timer(0.05, self.publish_cmd)
 
 
 	def intersection_cb(self, msg: String):
 		if msg.data.lower() == "left":
 			self.stage = '1. straight'
 			self.get_logger().info("🟢 Received 'left' from /intersection.")
+		elif msg.data.lower() == "qualification_left":
+			self.stage = '1. straight'
+			self.qualification = True
+			self.get_logger().info("🟢 Received 'qualification_left' from /intersection.")
 		else:
 			self.stage = '0. waiting for /intersection'
 			self.get_logger().info(f"🛑 Ignoring '{msg.data}' from /intersection.")
@@ -151,9 +156,10 @@ class IntersectionLeftTurnDriver(Node):
 			self.get_logger().info(f"📏 Leftward displacement: {left_displacement:.2f} m")
 
 		if left_displacement >= TARGET_LEFT_DISPLACEMENT:
-			self.get_logger().info("✅ Intersection Left Turn Complete. Publishing 'none' into /intersection")
 			msg = String()
-			msg.data = "none"
+			if self.qualification: msg.data = "follow_barrel_and_stop"
+			else: msg.data = "none"
+			self.get_logger().info(f"✅ Intersection Left Turn Complete. Publishing '{msg.data}' into /intersection")
 			self.intersection_pub.publish(msg)
 			self.stage = '0. waiting for /intersection'
 			self.start_x_y = None

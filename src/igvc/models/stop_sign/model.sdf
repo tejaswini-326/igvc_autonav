@@ -44,6 +44,7 @@
         <material>
           <ambient>1 1 1 1</ambient>
           <diffuse>1 1 1 1</diffuse>
+          <emissive>0.1 0 0 0.1</emissive>
           <pbr>
             <metal>
               <albedo_map>file://model://stop_sign/materials/textures/StopSignDiffuse.png</albedo_map>

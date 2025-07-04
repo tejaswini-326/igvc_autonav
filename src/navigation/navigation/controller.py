@@ -1,3 +1,4 @@
+'''Pure pursuit controller for published path'''
 import rclpy
 from rclpy.node import Node
 import numpy as np
@@ -15,14 +16,18 @@ import tf2_geometry_msgs
 from nav_msgs.msg import Path
 
 
-
 class Controller(Node):
     def __init__(self):
         super().__init__('controller')
 
         self.path = []
+<<<<<<< HEAD
         self.lookahead_distance = .4
         self.linear_speed = .2
+=======
+        self.lookahead_distance = .75
+        self.linear_speed = 1
+>>>>>>> faf87e2f9dd9ec1990565e5b9109a9aa3951cbed
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
@@ -93,6 +98,10 @@ class Controller(Node):
 
     def path_callback(self, msg: Path):
         self.path = [(pose.pose.position.x, pose.pose.position.y)for pose in msg.poses]
+<<<<<<< HEAD
+=======
+ 
+>>>>>>> faf87e2f9dd9ec1990565e5b9109a9aa3951cbed
         self.get_logger().info(f"Received path with {len(self.path)} valid points.")
 
     def adaptive_lookahead(self, base_distance=0.75):

@@ -56,6 +56,5 @@ Makefile
 *.log
 
 yolovenv/
-*.pt
 
 src/movement/movement/__pycache__/

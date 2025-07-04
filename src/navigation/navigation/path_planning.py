@@ -66,7 +66,7 @@ class PathPlanner(Node):
         self.robot_pose = msg.pose.pose.position
 
     def goal_cb(self, goal:PoseStamped):
-        
+
         if self.costmap is None:
             self.get_logger().warn("Costmap not received yet. Ignoring goal.")
             return
@@ -77,6 +77,40 @@ class PathPlanner(Node):
             self.get_logger().info(f"Goal received and converted to grid: ({self.goal_x}, {self.goal_y})")
         else:
             self.get_logger().warn("Goal is outside map bounds")
+
+        # uncomment if goal point needs to be visualized
+        # try:
+        #     point_in_odom = PointStamped()
+        #     point_in_odom.header.frame_id = 'odom'
+        #     point_in_odom.header.stamp = self.get_clock().now().to_msg()
+        #     point_in_odom.point.x = x_odom
+        #     point_in_odom.point.y = y_odom
+        #     point_in_odom.point.z = 0.0
+
+        #     if self.tf_buffer.can_transform('base_footprint', 'odom', rclpy.time.Time()):
+        #         transform = self.tf_buffer.lookup_transform(
+        #             'base_footprint',
+        #             'odom',
+        #             rclpy.time.Time()
+        #         )
+        #         transformed_point = tf2_geometry_msgs.do_transform_point(point_in_odom, transform)
+
+        #         goal_base = PoseStamped()
+        #         goal_base.header.frame_id = 'base_footprint'
+        #         goal_base.header.stamp = self.get_clock().now().to_msg()
+        #         goal_base.pose.position = transformed_point.point
+        #         goal_base.pose.orientation.w = 1.0
+
+        #         # Publish transformed point in base_footprint frame
+        #         self.goal_pub.publish(goal_base)
+        #         self.get_logger().info(f"Published goal in base_footprint: x={goal_base.pose.position.x:.2f}, y={goal_base.pose.position.y:.2f}")
+
+        #     else:
+        #         self.get_logger().warn("Transform from odom to base_footprint not available")
+
+        # except Exception as e:
+        #     self.get_logger().warn(f"Transform to base_footprint failed: {e}")
+
     
     def transform_to_odom(self, x, y, z, frame_id='camera_link'):
         try:
