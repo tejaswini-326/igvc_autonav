@@ -25,7 +25,7 @@ class LaneFollowerNode(Node):
         super().__init__('lane_follower_node')
         self.subscription = self.create_subscription(
             PointCloud2,
-            '/camera/points',
+            '/camera/points_downsampled',
             self.pointcloud_callback,
             10
         )
@@ -332,6 +332,7 @@ class LaneFollowerNode(Node):
         yellow_ground_points = xyz[ground_mask & yellow_mask].tolist()
 
         self.get_logger().info(f"[Benchmark] PointCloud parsing took {time.time() - start:.3f} sec")
+        self.get_logger().info(f"no of white ground points : {len(white_ground_points)} and no of yellow ground points is : {len(yellow_ground_points)}")
 
         # ==== Yellow History Buffer ====
         self.yellow_points_history.append(yellow_ground_points)
@@ -360,6 +361,8 @@ class LaneFollowerNode(Node):
         final_yellow_points = dilated_points
 
         self.get_logger().info(f"[Benchmark] Yellow Dilation took {time.time() - start:.3f} sec")
+        self.get_logger().info(f"no of final yellow ground points is : {len(final_yellow_points)}")
+
 
 
         # ==== Clustering ====
@@ -465,7 +468,7 @@ class LaneFollowerNode(Node):
 
             unique_labels_yellow = set(labels_yellow)
             n_clusters_y = len(unique_labels_yellow) - (1 if -1 in labels_yellow else 0)
-            # self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
+            self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
         self.get_logger().info(f"[Benchmark] Yellow DBSCAN took {time.time() - start:.3f} sec")
 
         # === Yellow Curve Fitting: Single global fit on all yellow points ===
