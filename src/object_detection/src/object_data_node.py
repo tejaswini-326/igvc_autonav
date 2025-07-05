@@ -37,10 +37,14 @@ class ObjectDataNode(Node): #node constructor
         self.pc_pub = self.create_publisher(PointCloud2, 'object_pc', 10)
         self.annotated_img_pub = self.create_publisher(Image, '/detected_object_img', 10) #changed to raw image for rviz
         self.bridge = CvBridge()
+<<<<<<< HEAD
+        self.model = YOLO('/home/tejaswini/Desktop/abhiyaan/best.pt') #add model path here
+=======
         #model and utils
         pkg_share = get_package_share_directory('object_detection')
         model_path = os.path.join(pkg_share, 'models', 'best.pt')
         self.model = YOLO(model_path)
+>>>>>>> 60c1f9d9815fda2e3bcd729a682682f26452bb59
         self.model.eval()
         self.get_logger().info('YOLOv8 model loaded.')
 
