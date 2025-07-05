@@ -58,3 +58,4 @@ Makefile
 yolovenv/
 
 src/movement/movement/__pycache__/
+src/navigation/navigation/__pycache__/
