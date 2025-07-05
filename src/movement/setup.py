@@ -28,15 +28,11 @@ setup(
             'intersection_straight = movement.intersection_straight:main',
             'm_horizontal_line_detect = movement.m_horizontal_line_detect:main',
             'gps_waypoint_publisher = movement.gps_waypoint_publisher:main',
-<<<<<<< Updated upstream
             'follow_barrel_and_stop = movement.follow_barrel_and_stop:main',    
-            'pointcloud_downscaler = movement.pointcloud_downscaler:main',      
-=======
-            'follow_barrel_and_stop = movement.follow_barrel_and_stop:main',         
+            'pointcloud_downscaler = movement.pointcloud_downscaler:main',              
             'parking_pullout = movement.parking_pullout:main',   
             'parking_pullin = movement.parking_pullin:main',
-            'parallel_parking = movement.parallel_parking:main'
->>>>>>> Stashed changes
+            'parallel_parking = movement.parallel_parking:main',
         ],
     },
 )
