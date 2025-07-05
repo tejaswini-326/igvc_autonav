@@ -25,11 +25,12 @@ class LaneFollowerNode(Node):
         super().__init__('lane_follower_node')
         self.subscription = self.create_subscription(
             PointCloud2,
-            '/camera/points',
+            '/camera/points_downsampled',
             self.pointcloud_callback,
             10
         )
-        self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
+        #self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
+        self.curve_marker_pub = self.create_publisher(MarkerArray, '/lane_fitted_curves', 10)
         self.markers_pub = self.create_publisher(MarkerArray, '/lane_visualization', 10)
         self.white_pub = self.create_publisher(PointCloud2, "/white_lane_points", 10)
         self.yellow_pub = self.create_publisher(PointCloud2, "/yellow_lane_points", 10)    
@@ -176,10 +177,15 @@ class LaneFollowerNode(Node):
             target_marker.pose.orientation.w = 1.0
             
             marker_array.markers.append(target_marker)
-        
+        curve_only_array = MarkerArray()
+        for marker in marker_array.markers:
+            if marker.ns == "lane_curves":
+                curve_only_array.markers.append(marker)
+
+        self.curve_marker_pub.publish(curve_only_array)
         # Publish marker array
         self.markers_pub.publish(marker_array)
-
+    
     def pointcloud_callback(self, msg):
         height = msg.height
         width = msg.width
@@ -240,10 +246,17 @@ class LaneFollowerNode(Node):
 
         start = time.time()
         # PointCloud to numpy array
-        cloud_points = np.array([
-            [x, y, z, rgb]
-            for x, y, z, rgb in pc2.read_points(msg, field_names=('x', 'y', 'z', 'rgb'), skip_nans=True)
-        ])
+        gen = pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=True)
+        cloud_points_np = np.fromiter(gen, dtype=np.dtype([
+            ('x', np.float32),
+            ('y', np.float32),
+            ('z', np.float32),
+            ('rgb', np.float32)
+        ]))
+        cloud_points = np.stack(
+            (cloud_points_np['x'], cloud_points_np['y'], cloud_points_np['z'], cloud_points_np['rgb']),
+            axis=-1
+        )
 
         if cloud_points.shape[0] == 0:
             return
@@ -285,6 +298,7 @@ class LaneFollowerNode(Node):
         yellow_ground_points = xyz[ground_mask & yellow_mask].tolist()
 
         self.get_logger().info(f"[Benchmark] PointCloud parsing took {time.time() - start:.3f} sec")
+        self.get_logger().info(f"no of white ground points : {len(white_ground_points)} and no of yellow ground points is : {len(yellow_ground_points)}")
 
         # ==== Yellow History Buffer ====
         self.yellow_points_history.append(yellow_ground_points)
@@ -313,6 +327,8 @@ class LaneFollowerNode(Node):
         final_yellow_points = dilated_points
 
         self.get_logger().info(f"[Benchmark] Yellow Dilation took {time.time() - start:.3f} sec")
+        self.get_logger().info(f"no of final yellow ground points is : {len(final_yellow_points)}")
+
 
 
         # ==== Clustering ====
@@ -418,7 +434,7 @@ class LaneFollowerNode(Node):
 
             unique_labels_yellow = set(labels_yellow)
             n_clusters_y = len(unique_labels_yellow) - (1 if -1 in labels_yellow else 0)
-            # self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
+            self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
         self.get_logger().info(f"[Benchmark] Yellow DBSCAN took {time.time() - start:.3f} sec")
 
         # === Yellow Curve Fitting: Single global fit on all yellow points ===

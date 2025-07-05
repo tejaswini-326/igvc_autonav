@@ -116,7 +116,6 @@ private:
 
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
-
         TIMEIT(__FUNCTION__);
         bt_low_ = this->get_parameter("bt_low").as_double();
         bt_high_ = this->get_parameter("bt_high").as_double();
@@ -130,6 +129,7 @@ private:
 	
         pcl::PointCloud<pcl::PointXYZRGB> cloud;
         pcl::fromROSMsg(*msg, cloud);
+        RCLCPP_INFO(this->get_logger(), "input has %zu points", cloud.size());
 
         // Create a new point cloud for publishing
         pcl::PointCloud<pcl::PointXYZI> filtered_cloud, base_link_cloud;
