@@ -30,7 +30,7 @@ class ObjectDataNode(Node): #node constructor
         #subscribers to camera image, depth image and point cloud
         self.image_sub = self.create_subscription(Image, '/camera/image', self.image_callback, 10)
         self.depth_sub = self.create_subscription(Image, '/camera/depth_image', self.depth_callback, 10)
-        self.pc_sub = self.create_subscription(PointCloud2, '/camera/points', self.pc_callback, 10)
+        self.pc_sub = self.create_subscription(PointCloud2, '/camera/points_downsampled', self.pc_callback, 10)
 
         #publishers to output custom message, object point cloud and image with predictions
         self.object_pub = self.create_publisher(ObjectData, 'object_data', 10)
@@ -41,7 +41,6 @@ class ObjectDataNode(Node): #node constructor
         pkg_share = get_package_share_directory('object_detection')
         model_path = os.path.join(pkg_share, 'models', 'best.pt')
         self.model = YOLO(model_path)
-        self.model.eval()
         self.get_logger().info('YOLOv8 model loaded.')
 
         #initialising variables
@@ -127,7 +126,8 @@ class ObjectDataNode(Node): #node constructor
                     points_for_this_ellipse = np.array(points_for_this_ellipse, dtype=np.float32)
                     # Filter out any NaN or infinite points
                     points_for_this_ellipse = points_for_this_ellipse[np.all(np.isfinite(points_for_this_ellipse), axis=1)]
-                    ellipse_points_3d.extend(points_for_this_ellipse.tolist())
+                    ellipse_points_3d.append(points_for_this_ellipse)
+
 
                     centroid = np.mean(points_for_this_ellipse, axis=0)
                     x, y, z = centroid
@@ -145,7 +145,8 @@ class ObjectDataNode(Node): #node constructor
                     self.get_logger().info(f"Published pothole ObjectData with {len(points_for_this_ellipse)} points.")
 
             if ellipse_points_3d:
-                ellipse_points_3d = np.array(ellipse_points_3d, dtype=np.float32)
+                ellipse_points_3d = np.concatenate(ellipse_points_3d, axis=0)
+
                 # Filter out any NaN or infinite points
                 ellipse_points_3d = ellipse_points_3d[np.all(np.isfinite(ellipse_points_3d), axis=1)]
 
@@ -191,7 +192,7 @@ class ObjectDataNode(Node): #node constructor
         results = self.model(image)[0] #get labels and bounding boxes using model
         detections = results.boxes #get bounding boxes
 
-        if not detections or len(detections) == 0:
+        if len(detections) == 0:
             if all_points:
                 header = Header(stamp=stamp, frame_id=frame_id)
                 combined_pc = pc2.create_cloud_xyz32(header, all_points)
@@ -214,37 +215,36 @@ class ObjectDataNode(Node): #node constructor
 
             if len(points_3d) > 0: 
                 all_points.extend(points_3d.tolist())  #all points stores combined pointcloud multiple objects
-                if len(points_3d) > 0:
                 # Run DBSCAN clustering on the 3D points
-                    clustering = DBSCAN(eps=0.15, min_samples=10).fit(points_3d)
-                    labels_db = clustering.labels_
+                clustering = DBSCAN(eps=0.15, min_samples=10).fit(points_3d)
+                labels_db = clustering.labels_
 
-                    unique_labels = set(labels_db)
-                    for cluster_label in unique_labels:
-                        if cluster_label == -1:
-                            continue  # Skip noise
+                unique_labels = set(labels_db)
+                for cluster_label in unique_labels:
+                    if cluster_label == -1:
+                        continue  # Skip noise
 
-                        # Extract points in this cluster
-                        cluster_points = points_3d[labels_db == cluster_label]
-                        if len(cluster_points) == 0:
-                            continue
+                    # Extract points in this cluster
+                    cluster_points = points_3d[labels_db == cluster_label]
+                    if len(cluster_points) == 0:
+                        continue
 
-                        # Compute centroid
-                        centroid = np.mean(cluster_points, axis=0)
-                        x, y, z = centroid
-                        self.get_logger().debug(f"{label} Cluster {cluster_label}: X={x:.2f}, Y={y:.2f}, Z={z:.2f}")
+                    # Compute centroid
+                    centroid = np.mean(cluster_points, axis=0)
+                    x, y, z = centroid
+                    self.get_logger().debug(f"{label} Cluster {cluster_label}: X={x:.2f}, Y={y:.2f}, Z={z:.2f}")
 
-                        # Fill and publish custom message
-                        msg_out = ObjectData()
-                        msg_out.label = label  # Optional: add cluster index or size if needed
-                        msg_out.position = Point(x=float(x), y=float(y), z=float(z))
+                    # Fill and publish custom message
+                    msg_out = ObjectData()
+                    msg_out.label = label  # Optional: add cluster index or size if needed
+                    msg_out.position = Point(x=float(x), y=float(y), z=float(z))
 
-                        if self.latest_pc: #stores latest pc
-                            header = Header(stamp=stamp, frame_id=frame_id)
-                            msg_out.pointcloud = pc2.create_cloud_xyz32(header, cluster_points.tolist())
+                    if self.latest_pc: #stores latest pc
+                        header = Header(stamp=stamp, frame_id=frame_id)
+                        msg_out.pointcloud = pc2.create_cloud_xyz32(header, cluster_points.tolist())
 
-                        self.object_pub.publish(msg_out) #publishing the pc of a particular object
-                        all_points.extend(cluster_points.tolist())#adding the object pc to a combined pc
+                    self.object_pub.publish(msg_out) #publishing the pc of a particular object
+                    all_points.extend(cluster_points.tolist())#adding the object pc to a combined pc
 
         #publish combined point cloud
         if all_points:
@@ -277,23 +277,25 @@ class ObjectDataNode(Node): #node constructor
         depth = self.depth_img
         height, width = depth.shape
 
-        for v in range(ymin, ymax): #iterate through each point, check validity of data
-            if not (0 <= v < height):
-                continue
-            for u in range(xmin, xmax):
-                if not (0 <= u < width):
-                    continue
-                z = depth[v, u]
-                if not np.isfinite(z) or z <= 0.0:
-                    continue
-                x = (u - self.cx) * z / self.fx  #map points from 2d to 3d using camera intrinsics
-                y = (v - self.cy) * z / self.fy
+        region = depth[ymin:ymax, xmin:xmax]
+        ys, xs = np.indices(region.shape)
+        zs = region
+        mask = np.isfinite(zs) & (zs > 0)
 
-                dist = np.sqrt(x**2 + y**2 + z**2)
-                if dist <= 5.0 and -y > -1.3: #only publishing points within a radius to avoid nans
-                    points.append([z, -x, -y]) #tranformed to align depth img with camera 
+        xs, ys, zs = xs[mask], ys[mask], zs[mask]
+        us = xs + xmin
+        vs = ys + ymin
 
-        return np.array(points, dtype=np.float32)
+        x = (us - self.cx) * zs / self.fx
+        y = (vs - self.cy) * zs / self.fy
+        z = zs
+
+        dist = np.sqrt(x**2 + y**2 + z**2)
+        valid = (dist <= 5.0) & (-y > -1.3)
+
+        points = np.stack([z[valid], -x[valid], -y[valid]], axis=1)
+        return points
+
 
 #instantiation and spinning of the node
 def main(args=None):
