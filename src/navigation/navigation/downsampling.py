@@ -17,11 +17,12 @@ class FastPointCloudDownsamplerNode(Node):
         self.declare_parameter('downsample_factor', 8)  # Keep every 8th point
         self.declare_parameter('input_topic', '/camera/points')
         self.declare_parameter('output_topic', '/camera/points_downsampled')
+        
         # Get parameters
         self.downsample_factor = self.get_parameter('downsample_factor').get_parameter_value().integer_value
         self.input_topic = self.get_parameter('input_topic').get_parameter_value().string_value
         self.output_topic = self.get_parameter('output_topic').get_parameter_value().string_value
-       
+        
         # Subscriber and Publisher
         self.subscription = self.create_subscription(
             PointCloud2,
@@ -35,7 +36,7 @@ class FastPointCloudDownsamplerNode(Node):
             self.output_topic,
             10
         )
-
+        
         self.get_logger().info(f"Fast Point Cloud Downsampler started:")
         self.get_logger().info(f"  Input topic: {self.input_topic}")
         self.get_logger().info(f"  Output topic: {self.output_topic}")
@@ -100,6 +101,7 @@ class FastPointCloudDownsamplerNode(Node):
             
         except Exception as e:
             self.get_logger().error(f"Error processing point cloud: {str(e)}")
+
 
 def main(args=None):
     rclpy.init(args=args)
