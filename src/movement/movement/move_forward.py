@@ -603,7 +603,6 @@ class LaneFollowerNode(Node):
 			self.publish(self.last_cmd)
 		
 			
-			
 	def classify_object_lane(self, odom_pos, current_time):
 		if not self.latest_lane_centers:
 			self.get_logger().warn("Lane center data unavailable — skipping lane check for object")

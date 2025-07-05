@@ -21,8 +21,7 @@ class ParkingPullout(Node):
     def __init__(self):
         super().__init__('yellow_parking_detector')
         self.subscription1 = self.create_subscription(Image, '/camera/image', self.image_callback_1, 10)
-        self.subscription2 = self.create_subscription(PointCloud2, '/bcamera/points', self.pointcloud_callback, 10)
-        self.subscription3 = self.create_subscription()
+        self.subscription2 = self.create_subscription(PointCloud2, '/bcamera/points_downsampled', self.pointcloud_callback, 10)
         self.bridge = CvBridge()
         self.latest_image = None  
         self.pmsg = None
@@ -186,8 +185,6 @@ class ParkingPullout(Node):
 
         return line_centers, yellow_img
 
-    # def detect_barrels(self):
-         
     def control_loop(self):
         if self.state == "IN_SLOT":
             if self.detect_horizontal_stop_line():
@@ -218,6 +215,13 @@ class ParkingPullout(Node):
             self.turn(self.k)
             self.turn_timer = self.create_timer(23, self.stop_robot)    
             self.state = "TURNING_IN_PROGRESS"
+        
+        elif self.state == "TURNING_IN_PROGRESS":
+            if self.detect_horizontal_stop_line():
+                self.get_logger().info("Stop line re-detected — turn complete.")
+                self.stop_robot()
+            else:
+                self.turn(self.k)  
 
 def main(args=None):
     rclpy.init(args=args)
