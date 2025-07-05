@@ -4,40 +4,85 @@ from geometry_msgs.msg import Twist, Point
 from visualization_msgs.msg import Marker, MarkerArray
 import numpy as np
 import math
+from sensor_msgs.msg import PointCloud2
+import sensor_msgs_py.point_cloud2 as pc2
 
 
 class RaycastNavigator(Node):
     def __init__(self):
         super().__init__('raycast_navigator')
-
-        self.subscription = self.create_subscription(
+        self.white_curve_points = []
+        self.yellow_curve_points = []
+        self.white_sub = self.create_subscription(
             MarkerArray,
-            '/lane_fitted_curves',
-            self.curve_callback,
+            '/lane_fitted_white',
+            self.white_callback,
             10
         )
+
+        self.yellow_sub = self.create_subscription(
+            MarkerArray,
+            '/lane_fitted_yellow',
+            self.yellow_callback,
+            10
+        )
+
+        self.obstacle_sub = self.create_subscription(
+            PointCloud2,
+            '/igvc/z_filtered',
+            self.obstacle_callback,
+            10
+        )
+        self.obstacle_points = []
+        self.obstacle_distance_threshold = 0.5  # meters
 
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.cost_marker_pub = self.create_publisher(MarkerArray, '/raycast_costs', 10)
 
         self.curve_points = []
-
+        self.object_detected=True
         self.declare_parameter('raycast_range', 4.0)
         self.declare_parameter('raycast_step_deg', 3)
         self.declare_parameter('raycast_angle_min_deg', -90)
         self.declare_parameter('raycast_angle_max_deg', 90)
 
-    def curve_callback(self, msg):
-        self.curve_points = []
-
+    
+    def white_callback(self, msg):
+        self.white_curve_points = []
         for marker in msg.markers:
             if marker.type == Marker.LINE_STRIP:
                 for p in marker.points:
-                    self.curve_points.append((p.x, p.y))
-
+                    self.white_curve_points.append((p.x, p.y))
         self.navigate()
 
+    def yellow_callback(self, msg):
+        self.yellow_curve_points = []
+        if not self.object_detected:
+            for marker in msg.markers:
+                if marker.type == Marker.LINE_STRIP:
+                    for p in marker.points:
+                        self.yellow_curve_points.append((p.x, p.y))
+        self.navigate()
+
+    def obstacle_callback(self, msg):
+        self.obstacle_points.clear()
+        self.object_detected = False  # reset
+
+        for point in pc2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True):
+            x, y, z = point
+            distance = math.sqrt(x**2 + y**2 + z**2)
+            if distance < self.obstacle_distance_threshold:
+                self.obstacle_points.append((x, y))
+                self.object_detected = True
+
+        self.navigate() 
+
     def navigate(self):
+
+        self.curve_points = self.white_curve_points + self.yellow_curve_points
+        # Add obstacle points
+        if self.obstacle_points:
+            self.curve_points += self.obstacle_points
         if not self.curve_points:
             self.get_logger().warn("No curve points received")
             return
@@ -134,10 +179,10 @@ class RaycastNavigator(Node):
         return obstacle_penalty
 
     def move_in_direction(self, angle_rad):
-        twist = Twist()
-        twist.linear.x = 0.1
-        twist.angular.z = -math.sin(angle_rad) * 0.8
-        self.cmd_pub.publish(twist)
+        # twist = Twist()
+        # twist.linear.x = 0.1
+        # twist.angular.z = -math.sin(angle_rad) * 0.8
+        # self.cmd_pub.publish(twist)
         pass
 
 

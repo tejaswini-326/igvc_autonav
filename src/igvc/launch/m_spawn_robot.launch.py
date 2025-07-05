@@ -23,7 +23,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------------
     rviz_launch_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='true',
+        default_value='false',
         description='Whether to start RViz'
     )
     rviz_config_arg = DeclareLaunchArgument(
@@ -272,7 +272,7 @@ def generate_launch_description():
     ld.add_action(ekf_node)
 
     ld.add_action(robot_state_publisher_node)
-    ld.add_action(gz_bimage_bridge_node)
-    ld.add_action(pointcloud_downscaler_node)
+    ld.add_action(gz_bimage_bridge_node) 
+    # ld.add_action(pointcloud_downscaler_node)
     
     return ld
