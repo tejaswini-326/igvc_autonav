@@ -21,7 +21,7 @@ LINEAR_SPEED_WHEN_RADIAL_SCAN_TURNING           = 0.5
 LEFT_TURN_ANGULAR_SPEED                         = 0.22   
 
 # Needs to be changed in the real bot
-DISTANCE_SQUARED_BEFORE_STOPPING_AT_BARREL = 5
+DISTANCE_SQUARED_BEFORE_STOPPING_AT_BARREL = 6
 
 
 
@@ -96,6 +96,7 @@ class FollowBarrelAndStop(Node):
 				return
 			
 			a, b, c = base_link_pos
+			self.get_logger().info(f"{a**2 + b**2} and {DISTANCE_SQUARED_BEFORE_STOPPING_AT_BARREL}")
 			if a**2 + b**2 < DISTANCE_SQUARED_BEFORE_STOPPING_AT_BARREL:
 				self.stopping = True
 			else:

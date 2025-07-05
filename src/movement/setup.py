@@ -31,7 +31,8 @@ setup(
             'm_horizontal_line_detect = movement.m_horizontal_line_detect:main',
 
             'gps_waypoint_publisher = movement.gps_waypoint_publisher:main',
-            'follow_barrel_and_stop = movement.follow_barrel_and_stop:main',         
+            'follow_barrel_and_stop = movement.follow_barrel_and_stop:main',    
+            'pointcloud_downscaler = movement.pointcloud_downscaler:main',      
         ],
     },
 )

@@ -104,7 +104,7 @@ class IntersectionStraightDriver(Node):
 		if not DEBUG:
 			self.best_theta = radial_scans(pts_xy, 'straight', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, None)
 		else:
-			debug_stuff = msg.header, self.marker_publisher, self.lane_scan_2d_debug_publisher, self.intersection_filtered_points_publisher, self.bridge
+			debug_stuff = (msg.header, self.marker_publisher, self.lane_scan_2d_debug_publisher, self.intersection_filtered_points_publisher, self.bridge, self)
 			self.best_theta = radial_scans(pts_xy, 'straight', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, debug_stuff)
 
 
