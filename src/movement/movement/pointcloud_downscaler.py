@@ -93,9 +93,6 @@ def fast_xyz_white_yellow(msg):
         np.ascontiguousarray(not_black_xyz),
     )
 
-
-
-
 class PointCloudDownscaler(Node):
 	def __init__(self):
 		super().__init__("pointcloud_downscaler")
