@@ -9,11 +9,19 @@ import math
 class RaycastNavigator(Node):
     def __init__(self):
         super().__init__('raycast_navigator')
-
-        self.subscription = self.create_subscription(
+        self.white_curve_points = []
+        self.yellow_curve_points = []
+        self.white_sub = self.create_subscription(
             MarkerArray,
-            '/lane_fitted_curves',
-            self.curve_callback,
+            '/lane_fitted_white',
+            self.white_callback,
+            10
+        )
+
+        self.yellow_sub = self.create_subscription(
+            MarkerArray,
+            '/lane_fitted_yellow',
+            self.yellow_callback,
             10
         )
 
@@ -21,23 +29,33 @@ class RaycastNavigator(Node):
         self.cost_marker_pub = self.create_publisher(MarkerArray, '/raycast_costs', 10)
 
         self.curve_points = []
-
+        self.object_detected=True
         self.declare_parameter('raycast_range', 4.0)
         self.declare_parameter('raycast_step_deg', 3)
         self.declare_parameter('raycast_angle_min_deg', -90)
         self.declare_parameter('raycast_angle_max_deg', 90)
 
-    def curve_callback(self, msg):
-        self.curve_points = []
-
+    
+    def white_callback(self, msg):
+        self.white_curve_points = []
         for marker in msg.markers:
             if marker.type == Marker.LINE_STRIP:
                 for p in marker.points:
-                    self.curve_points.append((p.x, p.y))
+                    self.white_curve_points.append((p.x, p.y))
+        self.navigate()
 
+    def yellow_callback(self, msg):
+        self.yellow_curve_points = []
+        if not self.object_detected:
+            for marker in msg.markers:
+                if marker.type == Marker.LINE_STRIP:
+                    for p in marker.points:
+                        self.yellow_curve_points.append((p.x, p.y))
         self.navigate()
 
     def navigate(self):
+
+        self.curve_points = self.white_curve_points + self.yellow_curve_points
         if not self.curve_points:
             self.get_logger().warn("No curve points received")
             return
@@ -134,10 +152,10 @@ class RaycastNavigator(Node):
         return obstacle_penalty
 
     def move_in_direction(self, angle_rad):
-        twist = Twist()
-        twist.linear.x = 0.1
-        twist.angular.z = -math.sin(angle_rad) * 0.8
-        self.cmd_pub.publish(twist)
+        # twist = Twist()
+        # twist.linear.x = 0.1
+        # twist.angular.z = -math.sin(angle_rad) * 0.8
+        # self.cmd_pub.publish(twist)
         pass
 
 

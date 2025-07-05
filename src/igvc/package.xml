@@ -4,15 +4,16 @@
   <name>igvc</name>
   <version>1.0.0</version>
   <description>
-    Simulation of various sensors with Gazebo Harmonic and ROS Jazzy for BME MOGI ROS2 course
+    Igvc 2026
   </description>
-  <maintainer email="david.dudas@outlook.com">David Dudas</maintainer>
+  <maintainer email="abhiyaan@smail.iitm.ac.in">Abhiyaan</maintainer>
   <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <depend>object_detection</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

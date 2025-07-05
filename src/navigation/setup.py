@@ -14,9 +14,9 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='tejaswini',
-    maintainer_email='tejaswinianbazhagan@gmail.com',
-    description='TODO: Package description',
+    maintainer='Abhiyaan',
+    maintainer_email= 'abhiyaan@smail.iitm.ac.in',
+    description='Package for navigation',
     license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
@@ -25,7 +25,9 @@ setup(
         'costmap= navigation.costmap:main', 
         'path_planner= navigation.path_planning:main', 
         'curve_fit= navigation.lane_curvefitting:main', 
-        'controller = navigation.controller:main'
+        'controller = navigation.controller:main',
+        'downsampling = navigation.downsampling:main',
+        'back_downsampling = navigation.back_downsampling:main'
         ],
     },
 )

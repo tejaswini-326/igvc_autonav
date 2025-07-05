@@ -15,8 +15,8 @@ class FastPointCloudDownsamplerNode(Node):
         
         # Parameters
         self.declare_parameter('downsample_factor', 8)  # Keep every 8th point
-        self.declare_parameter('input_topic', '/camera/points')
-        self.declare_parameter('output_topic', '/camera/points_downsampled')
+        self.declare_parameter('input_topic', '/bcamera/points')
+        self.declare_parameter('output_topic', '/bcamera/points_downsampled')
         # Get parameters
         self.downsample_factor = self.get_parameter('downsample_factor').get_parameter_value().integer_value
         self.input_topic = self.get_parameter('input_topic').get_parameter_value().string_value

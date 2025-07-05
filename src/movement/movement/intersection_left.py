@@ -12,7 +12,7 @@ from std_msgs.msg import String, Float64MultiArray
 from cv_bridge import CvBridge
 from visualization_msgs.msg import Marker
 
-from movement.intersection_funcs import get_xy_of_all_white_and_yellow_points_from_pointcloud_msg, radial_scans, normalise_angle
+from movement.intersection_funcs import get_xy_of_all_white_and_yellow_points_from_pointcloud_msg, radial_scans, normalise_angle, fast_xy_white_yellow
 
 
 
@@ -72,6 +72,7 @@ class IntersectionLeftTurnDriver(Node):
 		self.turn_start_yaw = None
 		self.best_theta = None
 		self.linx_angz_to_publish = None
+		self.pointcloud_msg = None
 
 		self.bridge = CvBridge()
 		self.timer = self.create_timer(0.05, self.publish_cmd)
@@ -89,26 +90,11 @@ class IntersectionLeftTurnDriver(Node):
 			self.stage = '0. waiting for /intersection'
 			self.get_logger().info(f"🛑 Ignoring '{msg.data}' from /intersection.")
 
+
 	def pointcloud_cb(self, msg: PointCloud2):
 		if self.stage != '3. radial scan':
 			return
-
-		pts_xy = get_xy_of_all_white_and_yellow_points_from_pointcloud_msg(msg)
-
-		if len(pts_xy) < MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED:
-			return
-
-		if self.turn_start_yaw is None:
-			if DEBUG:
-				self.get_logger().info("Turn start yaw is None")
-			return
-		
-		if not DEBUG:
-			self.best_theta = radial_scans(pts_xy, 'left', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, None)
-		else:
-			debug_stuff = (msg.header, self.marker_publisher, self.lane_scan_2d_debug_publisher, self.intersection_filtered_points_publisher, self.bridge)
-			self.best_theta = radial_scans(pts_xy, 'left', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, debug_stuff)
-
+		self.pointcloud_msg = msg
 
 
 	def odom_cb(self, msg: Odometry): 
@@ -168,9 +154,25 @@ class IntersectionLeftTurnDriver(Node):
 			self.linx_angz_to_publish = None
 
 
+
 	def publish_cmd(self):
 		if self.stage == '0. waiting for /intersection':
 			return
+		
+		if self.stage == '3. radial scan' and self.pointcloud_msg:
+			msg = self.pointcloud_msg
+			pts_xy = fast_xy_white_yellow(msg)
+			if len(pts_xy) < MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED:
+				return
+			if self.turn_start_yaw is None:
+				if DEBUG:
+					self.get_logger().info("Turn start yaw is None")
+				return
+			if not DEBUG:
+				self.best_theta = radial_scans(pts_xy, 'left', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, None)
+			else:
+				debug_stuff = (msg.header, self.marker_publisher, self.lane_scan_2d_debug_publisher, self.intersection_filtered_points_publisher, self.bridge, self)
+				self.best_theta = radial_scans(pts_xy, 'left', self.yaw, self.turn_start_yaw, ANGLE_TOLERANCE, debug_stuff)
 
 		if self.linx_angz_to_publish:
 			cmd = Twist()

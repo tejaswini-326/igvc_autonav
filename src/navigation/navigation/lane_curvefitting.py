@@ -29,8 +29,8 @@ class LaneFollowerNode(Node):
             self.pointcloud_callback,
             10
         )
-        #self.marker_pub = self.create_publisher(Marker, '/lane_marker', 10)
-        self.curve_marker_pub = self.create_publisher(MarkerArray, '/lane_fitted_curves', 10)
+        self.white_curve_pub = self.create_publisher(MarkerArray, '/lane_fitted_white', 10)
+        self.yellow_curve_pub = self.create_publisher(MarkerArray, '/lane_fitted_yellow', 10)
         self.markers_pub = self.create_publisher(MarkerArray, '/lane_visualization', 10)
         self.white_pub = self.create_publisher(PointCloud2, "/white_lane_points", 10)
         self.yellow_pub = self.create_publisher(PointCloud2, "/yellow_lane_points", 10)    
@@ -177,12 +177,46 @@ class LaneFollowerNode(Node):
             target_marker.pose.orientation.w = 1.0
             
             marker_array.markers.append(target_marker)
-        curve_only_array = MarkerArray()
-        for marker in marker_array.markers:
-            if marker.ns == "lane_curves":
-                curve_only_array.markers.append(marker)
+        white_array = MarkerArray()
+        yellow_array = MarkerArray()
 
-        self.curve_marker_pub.publish(curve_only_array)
+        for i, (label, coeffs, color_type) in enumerate(cluster_curves):
+            curve_marker = Marker()
+            curve_marker.header.frame_id = msg.header.frame_id
+            curve_marker.header.stamp = self.get_clock().now().to_msg()
+            curve_marker.ns = "lane_curves"
+            curve_marker.id = i + 2
+            curve_marker.type = Marker.LINE_STRIP
+            curve_marker.action = Marker.ADD
+            curve_marker.scale.x = 0.05
+            curve_marker.color.a = 1.0
+
+            # Color and curve assignment
+            if color_type == 'white':
+                curve_marker.color.r = 1.0 if i == 0 else 0.0
+                curve_marker.color.g = 0.0 if i == 0 else (1.0 if i == 1 else 0.0)
+                curve_marker.color.b = 0.0 if i == 0 else (0.0 if i == 1 else 1.0)
+                white_array.markers.append(curve_marker)
+            else:
+                curve_marker.color.r = 1.0
+                curve_marker.color.g = 1.0 if i == 0 else (0.5 if i == 1 else 0.8)
+                curve_marker.color.b = 0.0
+                yellow_array.markers.append(curve_marker)
+
+            # Points along the curve
+            x_line = np.linspace(0.0, 4.0, 50)
+            a, b, c = coeffs
+            for x_val in x_line:
+                y_val = a * x_val**2 + b * x_val + c
+                pt = Point()
+                pt.x = float(x_val)
+                pt.y = float(y_val)
+                pt.z = -1.35
+                curve_marker.points.append(pt)
+
+        self.white_curve_pub.publish(white_array)
+        self.yellow_curve_pub.publish(yellow_array)
+
         # Publish marker array
         self.markers_pub.publish(marker_array)
     
@@ -246,23 +280,18 @@ class LaneFollowerNode(Node):
 
         start = time.time()
         # PointCloud to numpy array
-        gen = pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=True)
-        cloud_points_np = np.fromiter(gen, dtype=np.dtype([
-            ('x', np.float32),
-            ('y', np.float32),
-            ('z', np.float32),
-            ('rgb', np.float32)
-        ]))
-        cloud_points = np.stack(
-            (cloud_points_np['x'], cloud_points_np['y'], cloud_points_np['z'], cloud_points_np['rgb']),
-            axis=-1
+        cloud_points = np.fromiter(
+            pc2.read_points(msg, field_names=('x', 'y', 'z', 'rgb'), skip_nans=True),
+            dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('rgb', 'f4')]
         )
+        cloud_points_np = np.vstack([cloud_points['x'], cloud_points['y'], cloud_points['z'], cloud_points['rgb']]).T
+
 
         if cloud_points.shape[0] == 0:
             return
 
-        xyz = cloud_points[:, :3]
-        rgb_floats = cloud_points[:, 3].astype(np.float32)
+        xyz = np.stack([cloud_points['x'], cloud_points['y'], cloud_points['z']], axis=-1)
+        rgb_floats = cloud_points['rgb'].astype(np.float32)
 
         # Fast float -> uint32 conversion
         rgb_uint32 = rgb_floats.view(np.uint32)
@@ -271,8 +300,13 @@ class LaneFollowerNode(Node):
         b = rgb_uint32 & 0xFF
 
         # Stack as BGR image and convert to HSV
+        start = time.perf_counter()
+        #hsv_image = fast_rgb_to_hsv(r.astype(np.uint8), g.astype(np.uint8), b.astype(np.uint8))
         bgr_image = np.stack([b, g, r], axis=1).astype(np.uint8).reshape(-1, 1, 3)
         hsv_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+        end= time.perf_counter()
+        elapsed = end - start
+        self.get_logger().info(f"[Benchmark] Block took {elapsed:.6f} seconds")
         h, s, v = hsv_image[:, 0], hsv_image[:, 1], hsv_image[:, 2]
 
         # Ground plane mask
