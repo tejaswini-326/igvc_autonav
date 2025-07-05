@@ -27,6 +27,9 @@
       <real_time_update_rate>200</real_time_update_rate>
     </physics>
     <scene>
+      <sky>
+        <time>12</time>
+      </sky>
       <ambient>0.4 0.4 0.4 1</ambient>
       <background>0.7 0.7 0.7 1</background>
       <shadows>1</shadows>
@@ -134,6 +137,17 @@
         <outer_angle>0</outer_angle>
         <falloff>0</falloff>
       </spot>
+    </light>
+    <light type="point" name="ambient">
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <attenuation>
+        <range>20</range>
+        <constant>0.8</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
     </light>
   </world>
 </sdf>
