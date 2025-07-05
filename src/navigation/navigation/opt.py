@@ -15,8 +15,8 @@ import os
 import yaml
 
 # Define the size of the grid
-ROW = 300
-COL = 300
+WIDTH = 300
+HEIGHT = 300
 class PathPlanner(Node):
     class Cell:
         def __init__(self):
@@ -57,9 +57,10 @@ class PathPlanner(Node):
         self.height = msg.info.height
         if(self.goal_y != -1 and self.goal_y != -1):
             # Convert flat costmap to 2D list
-            self.grid_2d = np.array(self.costmap.data,dtype = np.int8).reshape((self.height,self.width)).tolist()
-            self.robot_pose.x, self.robot_pose.y = self.odom_to_costmap(self.robot_pose.x, self.robot_pose.y)
-            self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [self.goal_x, self.goal_y])
+            self.grid_2d = self.costmap.data
+            # self.robot_pose.x, self.robot_pose.y = self.odom_to_costmap(self.robot_pose.x, self.robot_pose.y)
+            # self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [self.goal_x, self.goal_y])
+            self.a_star_search(self.grid_2d, [150, 150], [self.goal_x, self.goal_y])
             # self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [350,250])
 
     def odom_cb(self, msg):
@@ -151,10 +152,10 @@ class PathPlanner(Node):
         return (x, y)
     
     def is_valid(self, row, col):
-        return (row >= 0) and (row < ROW) and (col >= 0) and (col < COL)
+        return (row >= 0) and (row < WIDTH) and (col >= 0) and (col < HEIGHT)
     
     def is_unblocked(self, grid, row, col):
-        return grid[row][col] < 50
+        return grid[row * WIDTH + col] < 50
 
     # Check if a cell is the destination
     def is_destination(self, row, col, dest):
@@ -242,9 +243,9 @@ class PathPlanner(Node):
             return
 
         # Initialize the closed list (visited cells)
-        closed_list = [[False for _ in range(COL)] for _ in range(ROW)]
+        closed_list = [[False for _ in range(HEIGHT)] for _ in range(WIDTH)]
         # Initialize the details of each cell
-        cell_details = [[self.Cell() for _ in range(COL)] for _ in range(ROW)]
+        cell_details = [[self.Cell() for _ in range(HEIGHT)] for _ in range(WIDTH)]
 
         # Initialize the start cell details
         i = src[0]

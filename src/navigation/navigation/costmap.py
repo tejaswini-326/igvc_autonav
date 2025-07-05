@@ -81,11 +81,14 @@ class CostmapNode(Node): #constructor for costmap node
 
         combined = np.maximum.reduce([white, yellow, objects])
         self.publish_costmap(combined, self.get_clock().now().to_msg())
+        self.white_map = None
+        self.yellow_map = None
+        self.object_map = None
 
     #function to generate costmap
     def generate_costmap(self, msg, tag="lane"):
         try:
-            transform = self.latest_transform
+            transform = self.tf_buffer.lookup_transform('odom', msg.header.frame_id, rclpy.time.Time())
         except Exception as e:
             self.get_logger().warn(f"TF error: {e}")
             return

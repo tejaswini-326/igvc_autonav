@@ -25,7 +25,7 @@ class LaneFollowerNode(Node):
         super().__init__('lane_follower_node')
         self.subscription = self.create_subscription(
             PointCloud2,
-            '/camera/points_downsampled',
+            '/camera/points',
             self.pointcloud_callback,
             10
         )
