@@ -1,5 +1,4 @@
-'''Description: Node that creates and publishes a costmap of bot's surroundings
-4/7 optimised the node'''
+'''Description: Node that creates and publishes a costmap od bot's surroundings'''
 
 #importing libraries
 import rclpy
@@ -27,9 +26,6 @@ class CostmapNode(Node): #constructor for costmap node
         self.origin_x = 0.0
         self.origin_y = 0.0
         self.frame_id = 'odom'
-        self.latest_white_pc = None
-        self.latest_yellow_pc = None
-        self.latest_object_pc = None
 
         #costmap publisher
         self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', 10)
@@ -42,72 +38,85 @@ class CostmapNode(Node): #constructor for costmap node
         #TF listener
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-        self.latest_transform = None
 
         # Timer for costmap callback
         self.timer = self.create_timer(0.1, self.timer_callback)  # 10 Hz
         self.empty_layer = np.zeros((self.height, self.width), dtype=np.uint8)
         #internal maps
-        self.white_map = None
-        self.yellow_map = None
-        self.object_map = None
+        self.white_map = self.empty_layer
+        self.yellow_map = self.empty_layer
+        self.object_map = self.empty_layer
+        self.latest_white_pc = None
+        self.latest_yellow_pc = None
+        self.latest_object_pc = None
+        self.new_white = False
+        self.new_yellow = False
+        self.new_object = False
+
 
     #callback functions for point cloud data
     def object_pc_callback(self, msg):
-        self.generate_costmap(msg, tag="object")
+        self.latest_object_pc = msg
+        self.new_object = True
 
     def white_lane_pc_callback(self, msg):
-        self.generate_costmap(msg, tag="white")
+        self.latest_white_pc = msg
+        self.new_white = True
 
     def yellow_lane_pc_callback(self, msg):
-        self.generate_costmap(msg, tag="yellow")
-
+        self.latest_yellow_pc = msg
+        self.new_yellow = True
 
     def timer_callback(self):
         try:
-            self.latest_transform = self.tf_buffer.lookup_transform('odom', 'camera_link', rclpy.time.Time())
-            transform = self.latest_transform
+            transform = self.tf_buffer.lookup_transform('odom', 'camera_link', rclpy.time.Time())
             self.robot_x = transform.transform.translation.x
             self.robot_y = transform.transform.translation.y
             self.origin_x = self.robot_x - (self.width * self.resolution) / 2
             self.origin_y = self.robot_y - (self.height * self.resolution) / 2
+            self.cached_tranform = transform
         except Exception as e:
             self.get_logger().warn(f"TF lookup failed in timer: {e}")
             return
 
-        white = self.white_map if self.white_map is not None else self.empty_layer
-        yellow = self.yellow_map if self.yellow_map is not None else self.empty_layer
-        objects = self.object_map if self.object_map is not None else self.empty_layer
+        if self.new_white and self.latest_white_pc:
+            self.white_map = self.generate_costmap(self.latest_white_pc, "white")
+            self.new_white = False
 
-        combined = np.maximum.reduce([white, yellow, objects])
+        if self.new_yellow and self.latest_yellow_pc:
+            self.yellow_map = self.generate_costmap(self.latest_yellow_pc, "yellow")
+            self.new_yellow = False
+
+        if self.new_object and self.latest_object_pc:
+            self.object_map = self.generate_costmap(self.latest_object_pc, "object")
+            self.new_object = False
+
+        # Combine and publish
+        combined = np.maximum.reduce([self.white_map, self.yellow_map, self.object_map])
         self.publish_costmap(combined, self.get_clock().now().to_msg())
 
-    #function to generate costmap
     def generate_costmap(self, msg, tag="lane"):
         try:
-            transform = self.latest_transform
+            transform = self.cached_tranform
         except Exception as e:
             self.get_logger().warn(f"TF error: {e}")
-            return
+            return self.empty_layer
 
         try:
             transformed_msg = do_transform_cloud(msg, transform)
         except Exception as e:
             self.get_logger().warn(f"PointCloud transform failed: {e}")
-            return
+            return self.empty_layer
 
-        costmap = self.empty_layer
+        costmap = np.zeros((self.height, self.width), dtype=np.uint8)
 
-        # Read transformed points
-                # Read and convert to numpy array
         gen = point_cloud2.read_points(transformed_msg, field_names=["x", "y"], skip_nans=True)
         points = np.fromiter(gen, dtype=np.dtype([('x', np.float32), ('y', np.float32)]))
         points = np.stack((points['x'], points['y']), axis=-1)
 
         if points.shape[0] == 0:
-            return
+            return self.empty_layer
 
-        #grid indices
         mx_raw = (points[:, 0] - self.origin_x) / self.resolution
         my_raw = (points[:, 1] - self.origin_y) / self.resolution
 
@@ -119,8 +128,6 @@ class CostmapNode(Node): #constructor for costmap node
         mx = mx_raw[valid].astype(int)
         my = my_raw[valid].astype(int)
 
-
-        #value based on tag
         if tag == "object":
             value = 100
         elif tag == "white":
@@ -130,33 +137,32 @@ class CostmapNode(Node): #constructor for costmap node
         else:
             value = 0
 
-        #apply values only where cell < 255
         mask = costmap[my, mx] < 255
         costmap[my[mask], mx[mask]] = value
 
         if not np.any(costmap):
-            return
+            return self.empty_layer
 
         binary = costmap.astype(np.float32)
-        gradient = cv2.GaussianBlur(binary, (15, 15), sigmaX=3.3)
+        gradient = cv2.GaussianBlur(binary, (15, 15), sigmaX=2.3)
 
         grad_max = gradient.max()
         if grad_max > 0:
             power = 2.0 if tag == "object" else 0.8
             scaled = ((gradient / (grad_max ** power)) * 100).astype(np.uint8)
-
         else:
             scaled = np.zeros_like(costmap)
 
-        costmap = np.maximum(costmap, scaled)
+        return np.maximum(costmap, scaled)
 
-        #store updated layer
-        if tag == "white":
+    
+        # Store updated layer
+        '''if tag == "white":
             self.white_map = costmap
         elif tag == "yellow":
             self.yellow_map = costmap
         elif tag == "object":
-            self.object_map = costmap
+            self.object_map = costmap'''
 
         # clears
         '''if tag == "white":
@@ -165,7 +171,6 @@ class CostmapNode(Node): #constructor for costmap node
             self.yellow_map = None
         elif tag == "object":
             self.object_map = None'''
-
 
     #function to construct and publish costmap message
     def publish_costmap(self, costmap, stamp):
@@ -178,7 +183,7 @@ class CostmapNode(Node): #constructor for costmap node
         msg.info.width = self.width
         msg.info.height = self.height
 
-        #Ensure origin values are floats and not None or NaN
+        # Ensure origin values are floats and not None or NaN
         try:
             msg.info.origin.position.x = float(self.origin_x)
             msg.info.origin.position.y = float(self.origin_y)
