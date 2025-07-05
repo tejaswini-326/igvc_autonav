@@ -13,9 +13,9 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='David Dudas',
-    maintainer_email='david.dudas@outlook.com',
-    description='Python nodes for simulation of various sensors with Gazebo Harmonic and ROS Jazzy for BME MOGI ROS2 course',
+    maintainer='Abhiyaan',
+    maintainer_email='abhiyaan@smail.iitm.ac.in',
+    description='Python nodes for various function tests in self drive',
     license='Apache License 2.0',
     tests_require=['pytest'],
     entry_points={
@@ -23,16 +23,20 @@ setup(
             'image_republisher = movement.image_republisher:main',
             'chase_the_ball = movement.chase_the_ball:main',
             'transformed_pointcloud = movement.pointcloud_transform:main',
-
             'move_forward = movement.move_forward:main',
-
             'intersection_left = movement.intersection_left:main',
             'intersection_straight = movement.intersection_straight:main',
             'm_horizontal_line_detect = movement.m_horizontal_line_detect:main',
-
             'gps_waypoint_publisher = movement.gps_waypoint_publisher:main',
+<<<<<<< Updated upstream
             'follow_barrel_and_stop = movement.follow_barrel_and_stop:main',    
             'pointcloud_downscaler = movement.pointcloud_downscaler:main',      
+=======
+            'follow_barrel_and_stop = movement.follow_barrel_and_stop:main',         
+            'parking_pullout = movement.parking_pullout:main',   
+            'parking_pullin = movement.parking_pullin:main',
+            'parallel_parking = movement.parallel_parking:main'
+>>>>>>> Stashed changes
         ],
     },
 )
