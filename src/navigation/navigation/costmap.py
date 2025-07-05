@@ -27,6 +27,9 @@ class CostmapNode(Node): #constructor for costmap node
         self.origin_x = 0.0
         self.origin_y = 0.0
         self.frame_id = 'odom'
+        self.latest_white_pc = None
+        self.latest_yellow_pc = None
+        self.latest_object_pc = None
 
         #costmap publisher
         self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', 10)
@@ -39,6 +42,7 @@ class CostmapNode(Node): #constructor for costmap node
         #TF listener
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.latest_transform = None
 
         # Timer for costmap callback
         self.timer = self.create_timer(0.1, self.timer_callback)  # 10 Hz
@@ -61,7 +65,8 @@ class CostmapNode(Node): #constructor for costmap node
 
     def timer_callback(self):
         try:
-            transform = self.tf_buffer.lookup_transform('odom', 'camera_link', rclpy.time.Time())
+            self.latest_transform = self.tf_buffer.lookup_transform('odom', 'camera_link', rclpy.time.Time())
+            transform = self.latest_transform
             self.robot_x = transform.transform.translation.x
             self.robot_y = transform.transform.translation.y
             self.origin_x = self.robot_x - (self.width * self.resolution) / 2
@@ -80,7 +85,7 @@ class CostmapNode(Node): #constructor for costmap node
     #function to generate costmap
     def generate_costmap(self, msg, tag="lane"):
         try:
-            transform = self.tf_buffer.lookup_transform('odom', msg.header.frame_id, rclpy.time.Time())
+            transform = self.latest_transform
         except Exception as e:
             self.get_logger().warn(f"TF error: {e}")
             return
@@ -91,25 +96,16 @@ class CostmapNode(Node): #constructor for costmap node
             self.get_logger().warn(f"PointCloud transform failed: {e}")
             return
 
-        # Set robot's current pose as center of costmap
-        #robot_x = transform.transform.translation.x
-        #robot_y = transform.transform.translation.y
-
-        # self.origin_x = self.robot_x - (self.width * self.resolution) / 2
-        # self.origin_y = self.robot_y - (self.height * self.resolution) / 2
-
-        # initialize costmap
-        costmap = np.zeros((self.height, self.width), dtype=np.uint8)
+        costmap = self.empty_layer
 
         # Read transformed points
                 # Read and convert to numpy array
-        points = np.array([(x, y)for x, y, _ in point_cloud2.read_points(transformed_msg, field_names=["x", "y", "z"], skip_nans=True)], dtype=np.float32)
-
-
+        gen = point_cloud2.read_points(transformed_msg, field_names=["x", "y"], skip_nans=True)
+        points = np.fromiter(gen, dtype=np.dtype([('x', np.float32), ('y', np.float32)]))
+        points = np.stack((points['x'], points['y']), axis=-1)
 
         if points.shape[0] == 0:
             return
-
 
         #grid indices
         mx_raw = (points[:, 0] - self.origin_x) / self.resolution
@@ -138,13 +134,11 @@ class CostmapNode(Node): #constructor for costmap node
         mask = costmap[my, mx] < 255
         costmap[my[mask], mx[mask]] = value
 
-
-        #apply OpenCV Gaussian blur (faster than scipy)
         if not np.any(costmap):
             return
 
         binary = costmap.astype(np.float32)
-        gradient = cv2.GaussianBlur(binary, (21, 21), sigmaX=6)
+        gradient = cv2.GaussianBlur(binary, (15, 15), sigmaX=3.3)
 
         grad_max = gradient.max()
         if grad_max > 0:
