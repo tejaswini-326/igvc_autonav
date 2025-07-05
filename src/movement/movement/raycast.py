@@ -29,18 +29,18 @@ class RaycastNavigator(Node):
 
         self.obstacle_sub = self.create_subscription(
             PointCloud2,
-            '/igvc/z_filtered',
+            'igvc/midz_points',
             self.obstacle_callback,
             10
         )
         self.obstacle_points = []
-        self.obstacle_distance_threshold = 0.5  # meters
+        self.obstacle_distance_threshold = 3.0  # meters
 
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.cost_marker_pub = self.create_publisher(MarkerArray, '/raycast_costs', 10)
 
         self.curve_points = []
-        self.object_detected=True
+        self.object_detected=False
         self.declare_parameter('raycast_range', 4.0)
         self.declare_parameter('raycast_step_deg', 3)
         self.declare_parameter('raycast_angle_min_deg', -90)
