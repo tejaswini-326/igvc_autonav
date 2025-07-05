@@ -86,6 +86,7 @@ def fast_xyz_white_yellow(msg):
     yellow_xyz = np.column_stack((xs[is_yellow], ys[is_yellow], zs[is_yellow])).astype(np.float32)
     not_black_xyz = np.column_stack((xs[not_black_mask], ys[not_black_mask], zs[not_black_mask])).astype(np.float32)
 
+	
     # ensure contiguous for downstream use
     return (
         np.ascontiguousarray(white_xyz),
@@ -103,6 +104,7 @@ class PointCloudDownscaler(Node):
 		self.white_publisher = self.create_publisher(PointCloud2, "/igvc/white_points", 10)
 		self.yellow_publisher = self.create_publisher(PointCloud2, "/igvc/yellow_points", 10)
 		self.notblack_publisher = self.create_publisher(PointCloud2, "/igvc/notblack_points", 10)
+		self.z_filtered_publisher = self.create_publisher(PointCloud2, "/igvc/z_filtered", 10)
 		self.timer = self.create_timer(0.05, self.publish_my_processed_points)
 
 		self.clouds = None
@@ -121,14 +123,41 @@ class PointCloudDownscaler(Node):
 		header.stamp = msg.header.stamp
 
 		white_xyz, yellow_xyz, not_black_xyz = fast_xyz_white_yellow(msg)
-		self.clouds = pc2.create_cloud_xyz32(msg.header, white_xyz), pc2.create_cloud_xyz32(msg.header, yellow_xyz), pc2.create_cloud_xyz32(msg.header, not_black_xyz)
+		
+		all_points = np.array([
+			[x, y, z]
+			for x, y, z, *_ in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=True)
+			if -1.2 < z < -0.7
+		], dtype=np.float32)
 
+		if all_points.size > 0:
+			self.z_filtered_cloud = pc2.create_cloud_xyz32(msg.header, all_points)
+		else:
+			self.z_filtered_cloud = None
+
+		# Only create PointCloud2 messages if non-empty
+		self.clouds = []
+		for pts in [white_xyz, yellow_xyz, not_black_xyz]:
+			if pts.size > 0:
+				self.clouds.append(pc2.create_cloud_xyz32(msg.header, pts))
+			else:
+				self.clouds.append(None)
+
+		
+				
+				
 	def publish_my_processed_points(self):
 		if self.clouds:
-			self.white_publisher.publish(self.clouds[0])
-			self.yellow_publisher.publish(self.clouds[1])
-			self.notblack_publisher.publish(self.clouds[2])
-		
+			if self.clouds[0] is not None:
+				self.white_publisher.publish(self.clouds[0])
+			if self.clouds[1] is not None:
+				self.yellow_publisher.publish(self.clouds[1])
+			if self.clouds[2] is not None:
+				self.notblack_publisher.publish(self.clouds[2])
+		if self.z_filtered_cloud is not None:
+			self.z_filtered_publisher.publish(self.z_filtered_cloud)
+
+
 
 def main(args=None):
 	rclpy.init(args=args)

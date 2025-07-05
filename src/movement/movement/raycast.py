@@ -4,6 +4,8 @@ from geometry_msgs.msg import Twist, Point
 from visualization_msgs.msg import Marker, MarkerArray
 import numpy as np
 import math
+from sensor_msgs.msg import PointCloud2
+import sensor_msgs_py.point_cloud2 as pc2
 
 
 class RaycastNavigator(Node):
@@ -24,6 +26,15 @@ class RaycastNavigator(Node):
             self.yellow_callback,
             10
         )
+
+        self.obstacle_sub = self.create_subscription(
+            PointCloud2,
+            '/igvc/z_filtered',
+            self.obstacle_callback,
+            10
+        )
+        self.obstacle_points = []
+        self.obstacle_distance_threshold = 0.5  # meters
 
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.cost_marker_pub = self.create_publisher(MarkerArray, '/raycast_costs', 10)
@@ -53,9 +64,25 @@ class RaycastNavigator(Node):
                         self.yellow_curve_points.append((p.x, p.y))
         self.navigate()
 
+    def obstacle_callback(self, msg):
+        self.obstacle_points.clear()
+        self.object_detected = False  # reset
+
+        for point in pc2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True):
+            x, y, z = point
+            distance = math.sqrt(x**2 + y**2 + z**2)
+            if distance < self.obstacle_distance_threshold:
+                self.obstacle_points.append((x, y))
+                self.object_detected = True
+
+        self.navigate() 
+
     def navigate(self):
 
         self.curve_points = self.white_curve_points + self.yellow_curve_points
+        # Add obstacle points
+        if self.obstacle_points:
+            self.curve_points += self.obstacle_points
         if not self.curve_points:
             self.get_logger().warn("No curve points received")
             return
