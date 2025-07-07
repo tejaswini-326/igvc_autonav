@@ -24,11 +24,162 @@ GRID_RES   = 0.1             # 0.1 metres per pixel
 GRID_SIZE  = 200             # Number of pixels
 CX = CY    = GRID_SIZE // 2  # robot centred
 
-
 def normalise_angle(angle: float) -> float:
 	"""Wrap `angle` to the interval [-π, π].""" 
 	return (angle + pi) % (2 * pi) - pi
 
+def get_xy_of_all_white_and_yellow_points_from_pointcloud_msg(msg):
+    """
+    Return all (x, y) pairs that lie below z = 0 m and whose RGB encodes
+    either a white-paint pixel or a yellow-paint pixel.
+
+    * Identical thresholds and logic as the original version
+    * Uses a single vectorised BGR→HSV conversion for speed
+    """
+    height, width = msg.height, msg.width
+    white_img = np.zeros((height, width, 3), dtype=np.uint8)   # debug only
+
+    # Temporary storage ----------------------------------------------------
+    rows, cols      = [], []
+    xs, ys          = [], []
+    rgb_ints_uint32 = []
+
+    # ─────────────────── first pass — quick rejects, collect data ─────────
+    index = 0
+    for x, y, z, rgb in pc2.read_points(
+            msg, field_names=("x", "y", "z", "rgb"),
+            skip_nans=False):
+
+        row, col = divmod(index, width)
+        index += 1
+
+        # Reject invalid / above-ground early (no colour work yet)
+        if (rgb is None or not (-1.3 > z > -2.0) or not math.isfinite(x) or not math.isfinite(y) or not math.isfinite(z)):
+            continue
+
+        try:
+            rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
+        except struct.error:
+            continue
+
+        rows.append(row)
+        cols.append(col)
+        xs.append(x)
+        ys.append(y)
+        rgb_ints_uint32.append(rgb_int)
+
+    if not rgb_ints_uint32:               # nothing survived the quick reject
+        return np.empty((0, 2), dtype=np.float32)
+
+    # ─────────────────── vectorised colour checks ─────────────────────────
+    rgb_arr = np.asarray(rgb_ints_uint32, dtype=np.uint32)
+    b = (rgb_arr & 0xFF).astype(np.uint8)
+    g = ((rgb_arr >> 8) & 0xFF).astype(np.uint8)
+    r = ((rgb_arr >> 16) & 0xFF).astype(np.uint8)
+
+    bgr = np.stack([b, g, r], axis=1).reshape(-1, 1, 3)
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    h, s, v = hsv[:, 0], hsv[:, 1], hsv[:, 2]
+
+    # --- white test (RGB) -------------------------------------------------
+    avg_rgb = (r.astype(np.int16) + g + b) / 3
+    is_white = (
+        (r > WHITE_THRESH) &
+        (g > WHITE_THRESH) &
+        (b > WHITE_THRESH) &
+        (np.abs(r - avg_rgb) < BALANCE_THRESH) &
+        (np.abs(g - avg_rgb) < BALANCE_THRESH) &
+        (np.abs(b - avg_rgb) < BALANCE_THRESH)
+    )
+
+    # --- yellow test (HSV) ------------------------------------------------
+    is_yellow = (
+        (h >= Y_H_MIN) & (h <= Y_H_MAX) &
+        (s >= Y_S_MIN) &
+        (v >= Y_V_MIN)
+    )
+
+    keep_mask = is_white | is_yellow
+    if not keep_mask.any():
+        return np.empty((0, 2), dtype=np.float32)
+
+    # ─────────────────── build outputs ────────────────────────────────────
+    rows_np = np.asarray(rows, dtype=np.int32)[keep_mask]
+    cols_np = np.asarray(cols, dtype=np.int32)[keep_mask]
+    white_img[rows_np, cols_np] = (255, 255, 255)     # optional debug bitmap
+
+    pts_xy = np.column_stack((np.asarray(xs, dtype=np.float32)[keep_mask],
+                              np.asarray(ys, dtype=np.float32)[keep_mask]))
+    return pts_xy
+
+
+def fast_xy_white_yellow(msg):
+    """
+    Fast white-/yellow-point extractor for arbitrary PointCloud2 layouts.
+    Returns (N,2) float32 array of (x,y).
+    """
+    n_pts   = msg.width * msg.height
+    step    = msg.point_step          # bytes per point
+    endian  = '>' if msg.is_bigendian else '<'   # ROS flag
+
+    # --- build a float32 view of the buffer --------------------------------
+    # One row = step//4 float32s (because 4 bytes == 1 float32)
+    row_floats = step // 4
+    cloud_f32  = np.frombuffer(msg.data, dtype=endian + 'f4')
+    cloud_f32  = cloud_f32.reshape(n_pts, row_floats)
+
+    # Map each field name to its float-index
+    fld_idx = {f.name: f.offset // 4 for f in msg.fields}
+
+    xs   = cloud_f32[:, fld_idx['x']]
+    ys   = cloud_f32[:, fld_idx['y']]
+    z    = cloud_f32[:, fld_idx['z']]
+    rgbf = cloud_f32[:, fld_idx['rgb']]
+
+    # --- spatial filter ----------------------------------------------------
+    good = np.isfinite(z) & (z > -2.0) & (z < -1.3)
+    if not good.any():
+        return np.empty((0, 2), dtype=np.float32)
+
+    xs, ys, rgbf = xs[good], ys[good], rgbf[good]
+
+    # --- colour decode -----------------------------------------------------
+    rgb_u32 = rgbf.view(np.uint32)
+    b = (rgb_u32 & 0xFF).astype(np.uint8)
+    g = ((rgb_u32 >> 8)  & 0xFF).astype(np.uint8)
+    r = ((rgb_u32 >> 16) & 0xFF).astype(np.uint8)
+
+    # white test (cheap, RGB only)
+    avg = (r.astype(np.int16) + g + b) // 3
+    is_white = (
+        (r > WHITE_THRESH) &
+        (g > WHITE_THRESH) &
+        (b > WHITE_THRESH) &
+        (np.abs(r - avg) < BALANCE_THRESH) &
+        (np.abs(g - avg) < BALANCE_THRESH) &
+        (np.abs(b - avg) < BALANCE_THRESH)
+    )
+
+    # yellow test (HSV, but only on non-white candidates)
+    need_hsv = ~is_white
+    is_yellow = np.zeros_like(is_white)
+    if need_hsv.any():
+        bgr = np.stack([b[need_hsv], g[need_hsv], r[need_hsv]],
+                       axis=1).reshape(-1, 1, 3)
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+        h, s, v = hsv[:, 0], hsv[:, 1], hsv[:, 2]
+        is_yellow_sub = (
+            (h >= Y_H_MIN) & (h <= Y_H_MAX) &
+            (s >= Y_S_MIN) &
+            (v >= Y_V_MIN)
+        )
+        is_yellow[need_hsv] = is_yellow_sub
+
+    keep = is_white | is_yellow
+    if not keep.any():
+        return np.empty((0, 2), dtype=np.float32)
+
+    return np.column_stack((xs[keep], ys[keep])).astype(np.float32)
 
 
 MAX_MAP_XY = (GRID_SIZE // 2 - 1) * GRID_RES   # 9.9 m for GRID_SIZE=200

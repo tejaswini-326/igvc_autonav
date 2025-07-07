@@ -151,16 +151,14 @@ def fast_xyz_white_yellow(msg, log):
 
 	return white_xyz, yellow_xyz, not_black_xyz, mid_xyz
 
-
-
 class PointCloudDownscaler(Node):
 	def __init__(self):
 		super().__init__("pointcloud_downscaler")
-		self.create_subscription(PointCloud2, "/camera/points", self.pointcloud_cb, 10)
-		self.white_publisher = self.create_publisher(PointCloud2, "/igvc/white_points", 10)
-		self.yellow_publisher = self.create_publisher(PointCloud2, "/igvc/yellow_points", 10)
-		self.notblack_publisher = self.create_publisher(PointCloud2, "/igvc/notblack_points", 10)
-		self.midz_publisher = self.create_publisher(PointCloud2, "/igvc/midz_points", 10)
+		self.create_subscription(PointCloud2, "/bcamera/points", self.pointcloud_cb, 10)
+		self.white_publisher = self.create_publisher(PointCloud2, "/igvc/back_white_points", 10)
+		self.yellow_publisher = self.create_publisher(PointCloud2, "/igvc/back_yellow_points", 10)
+		self.notblack_publisher = self.create_publisher(PointCloud2, "/igvc/back_notblack_points", 10)
+		self.midz_publisher = self.create_publisher(PointCloud2, "/igvc/back_midz_points", 10)
 
 		self.clouds = None
 
