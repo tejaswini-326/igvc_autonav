@@ -259,19 +259,19 @@ class LaneFollowerNode(Node):
         msg = white_msg  # Use white_msg for consistent header (needed for publishing)
     
         # ==== Yellow History Buffer ====
-        self.yellow_points_history.append(self.yellow_ground_points)
-        if len(self.yellow_points_history) > self.history_length:
-            self.yellow_points_history.pop(0)
+        # self.yellow_points_history.append(self.yellow_ground_points)
+        # if len(self.yellow_points_history) > self.history_length:
+        #     self.yellow_points_history.pop(0)
 
-        # Combine history
-        combined_yellow_points = [p for frame in self.yellow_points_history for p in frame]
+        # # Combine history
+        # combined_yellow_points = [p for frame in self.yellow_points_history for p in frame]
 
         start = time.time()
 
         # ==== Spatial Dilation ====
         dilation_range = 0.02  
         dilated_points = []
-        for p in combined_yellow_points:
+        for p in self.yellow_ground_points:
             x, y, z = p
             dilated_points.extend([
                 [x, y, z],

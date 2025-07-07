@@ -1,7 +1,7 @@
 from math import pi
 import math
 import rclpy
-from sensor_msgs.msg import PointField
+from sensor_msgs.msg import PointField, PointCloud2
 import sensor_msgs_py.point_cloud2 as pc2
 import numpy as np
 from math import degrees
@@ -24,12 +24,9 @@ GRID_RES   = 0.1             # 0.1 metres per pixel
 GRID_SIZE  = 200             # Number of pixels
 CX = CY    = GRID_SIZE // 2  # robot centred
 
-
 def normalise_angle(angle: float) -> float:
 	"""Wrap `angle` to the interval [-π, π].""" 
 	return (angle + pi) % (2 * pi) - pi
-
-
 
 def get_xy_of_all_white_and_yellow_points_from_pointcloud_msg(msg):
     """
@@ -187,47 +184,33 @@ def fast_xy_white_yellow(msg):
 
 MAX_MAP_XY = (GRID_SIZE // 2 - 1) * GRID_RES   # 9.9 m for GRID_SIZE=200
 
-def clean_xy(pts_xy: np.ndarray) -> np.ndarray:
-    """Drop NaN/Inf and anything outside the map box."""
-    pts_xy = np.asarray(pts_xy, dtype=np.float32)
 
-    # A. keep only finite rows
-    finite_mask = np.isfinite(pts_xy).all(axis=1)
-    pts_xy = pts_xy[finite_mask]
+# ---------- zero-copy helper ------------------------------------------------
+def zero_copy_xy_pointcloud_reader_view(msg: PointCloud2) -> np.ndarray:
+	n_pts   = msg.width * msg.height
+	step    = msg.point_step             # bytes per point
+	endian  = '>' if msg.is_bigendian else '<'
 
-    # B. clip to map extent (optional but saves work)
-    in_map = (np.abs(pts_xy[:, 0]) <= MAX_MAP_XY) & \
-             (np.abs(pts_xy[:, 1]) <= MAX_MAP_XY)
-    return pts_xy[in_map]
+	# One contiguous float32 view of the *entire* data section
+	cloud_f32 = np.frombuffer(msg.data, dtype=endian + 'f4')
+	cloud_f32 = cloud_f32.reshape(n_pts, step // 4)
+
+	# Fast field-index lookup
+	fld_idx = {f.name: f.offset // 4 for f in msg.fields}
+
+	# Return a (N, 2) view – still shared with the original buffer!
+	return cloud_f32[:, (fld_idx['x'], fld_idx['y'])]
 
 
-def voxel_downsample_xy(pts_xy: np.ndarray,
-						voxel: float = 0.05,
-						max_points: int | None = None) -> np.ndarray:
-	"""
-	Keep at most one point per `voxel`-metre square cell in the XY plane.
+def get_merged_xy_points(white_msg: PointCloud2, yellow_msg: PointCloud2):
+	white_xy  = zero_copy_xy_pointcloud_reader_view(white_msg)
+	yellow_xy = zero_copy_xy_pointcloud_reader_view(yellow_msg)
 
-	• pts_xy      –  (N,2) float32 or float64 array
-	• voxel       –  edge length of the square voxel in metres  
-					 (try 2–3× GRID_RES; tune to taste)
-	• max_points  –  optional hard cap; a final uniform random draw
-					 enforces this number if the voxel filter still leaves
-					 too many points.
-	"""
-	# Quantise XY to integer voxel indices
-	keys = np.floor_divide(pts_xy, voxel).astype(np.int32)
-
-	# Unique rows → indices of the *first* occurrence of every voxel
-	_, unique_idx = np.unique(keys, axis=0, return_index=True)
-
-	pts_xy = pts_xy[unique_idx]
-
-	if max_points is not None and pts_xy.shape[0] > max_points:
-		idx = np.random.choice(pts_xy.shape[0], max_points, replace=False)
-		pts_xy = pts_xy[idx]
-
-	return pts_xy
-
+	# Allocate *once* for the merged result
+	merged_xy = np.empty((white_xy.shape[0] + yellow_xy.shape[0], 2), dtype=np.float32)
+	merged_xy[:white_xy.shape[0], :]  = white_xy
+	merged_xy[white_xy.shape[0]:, :]  = yellow_xy
+	return merged_xy
 
 
 def radial_scans(pts_xy, mode, yaw, turn_start_yaw, angle_tolerance, debug_stuff):
@@ -250,16 +233,11 @@ def radial_scans(pts_xy, mode, yaw, turn_start_yaw, angle_tolerance, debug_stuff
 	# If you turn on DEBUG, you can see the grid made in the topic 'intersection_llane_scan_2d_debug'
 
 	# ------------------------------------------------------------------
-	# 0) Clean up raw XY points  (drop NaN / Inf / off-map outliers)
+	# 0) Clean up raw XY points  (Off-map outliers)
 	# ------------------------------------------------------------------
-	pts_xy = clean_xy(pts_xy)
-
-	# --- SPEED HACK:  down-sample in XY before anything expensive -----------
-	pts_xy = voxel_downsample_xy(
-				 np.asarray(pts_xy, dtype=np.float32),
-				 voxel       = 0.2,
-				 max_points  = 5000      # or whatever feels safe
-			 )
+	# B. clip to map extent (optional but saves work)
+	in_map = (np.abs(pts_xy[:, 0]) <= MAX_MAP_XY) & (np.abs(pts_xy[:, 1]) <= MAX_MAP_XY)
+	pts_xy = pts_xy[in_map]
 
 	binary = np.zeros((GRID_SIZE, GRID_SIZE), dtype=np.uint8)
 
