@@ -108,7 +108,7 @@ class CostmapNode(Node): #constructor for costmap node
             self.get_logger().warn(f"PointCloud transform failed: {e}")
             return self.empty_layer
 
-        costmap = np.zeros((self.height, self.width), dtype=np.uint8)
+        costmap = self.empty_layer.copy()
 
         gen = point_cloud2.read_points(transformed_msg, field_names=["x", "y"], skip_nans=True)
         points = np.fromiter(gen, dtype=np.dtype([('x', np.float32), ('y', np.float32)]))
@@ -191,7 +191,7 @@ class CostmapNode(Node): #constructor for costmap node
             return
 
         msg.info.origin.orientation.w = 1.0
-        msg.data = [int(v / 255 * 100) for v in costmap.flatten()]
+        msg.data = (costmap.flatten() * 100 // 255).astype(int).tolist()
         self.costmap_pub.publish(msg)
 
 
