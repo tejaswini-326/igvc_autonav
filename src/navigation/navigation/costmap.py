@@ -13,7 +13,6 @@ Implements:
 import os
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
 import numpy as np
 import cv2
 

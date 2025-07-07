@@ -6,7 +6,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image, PointCloud2
 from std_msgs.msg import Header
 from geometry_msgs.msg import Point
-from object_detection.msg import ObjectData
+from object_detection.msg import ObjectData, ObjectArray
 import cv2
 import numpy as np
 import sensor_msgs_py.point_cloud2 as pc2
@@ -26,7 +26,7 @@ class ObjectDataNode(Node):
 		self.depth_sub = self.create_subscription(Image, '/camera/depth_image', self.depth_callback, 10)
 		self.pc_sub = self.create_subscription(PointCloud2, '/camera/points_downsampled', self.pc_callback, 10)
 
-		self.object_pub = self.create_publisher(ObjectData, 'object_data', 10)
+		self.object_pub = self.create_publisher(ObjectArray, 'object_data', 10)
 		self.pc_pub = self.create_publisher(PointCloud2, 'object_pc', 10)
 		self.annotated_img_pub = self.create_publisher(Image, '/detected_object_img', 10)
 
@@ -39,7 +39,7 @@ class ObjectDataNode(Node):
 		self.depth_img = None
 		self.latest_pc = None
 
-		self.fx = 246.49
+		self.fx = 246.49 #camera intrinsics
 		self.fy = 246.49
 		self.cx = 300.0
 		self.cy = 300.0
@@ -56,12 +56,12 @@ class ObjectDataNode(Node):
 		self.latest_pc = msg
 
 	def image_callback(self, msg):
-		if self.depth_img is None:
+		if self.depth_img is None:  #get depth image
 			self.get_logger().warn("No depth image yet.")
 			return
 
 		self.frame_count += 1
-		if self.frame_count % FRAME_SKIP != 0:
+		if self.frame_count % FRAME_SKIP != 0: #skip every 2-3 frames for improved speed
 			return
 
 		try:
@@ -70,7 +70,7 @@ class ObjectDataNode(Node):
 			self.get_logger().error(f'Image decoding error: {e}')
 			return
 
-		results = self.model(image)[0]
+		results = self.model(image)[0] #get predictions from model
 		detections = results.boxes
 		if not detections or len(detections) == 0:
 			return
@@ -78,9 +78,11 @@ class ObjectDataNode(Node):
 		stamp = self.get_clock().now().to_msg()
 		frame_id = self.latest_pc.header.frame_id if self.latest_pc else "camera_link"
 		clustered_pointclouds = []
+		msg_out = ObjectArray()
+		msg_out.objects = [] 
 
 		for box in detections:
-			if float(box.conf[0]) < CONFIDENCE_THRESHOLD:
+			if float(box.conf[0]) < CONFIDENCE_THRESHOLD:  #check if 
 				continue
 
 			xmin, ymin, xmax, ymax = map(int, box.xyxy[0].tolist())
@@ -96,8 +98,10 @@ class ObjectDataNode(Node):
 			if points_3d.shape[0] == 0:
 				continue
 
+			 # Initialize the list
+
 			clustering = DBSCAN(eps=0.15, min_samples=10).fit(points_3d)
-			for cluster_id in set(clustering.labels_):
+			for i, cluster_id in enumerate(set(clustering.labels_)):
 				if cluster_id == -1:
 					continue
 				cluster_points = points_3d[clustering.labels_ == cluster_id]
@@ -109,15 +113,17 @@ class ObjectDataNode(Node):
 				centroid = np.mean(cluster_points, axis=0)
 				x, y, z = centroid
 
-				msg_out = ObjectData()
-				msg_out.label = label
-				msg_out.position = Point(x=float(x), y=float(y), z=float(z))
+				obj = ObjectData()
+				obj.label = label 
+				obj.position = Point(x=float(x), y=float(y), z=float(z))
 
 				if self.latest_pc:
 					header = Header(stamp=stamp, frame_id=frame_id)
-					msg_out.pointcloud = pc2.create_cloud_xyz32(header, cluster_points.tolist())
+					obj.pointcloud = pc2.create_cloud_xyz32(header, cluster_points.tolist())
 
-				self.object_pub.publish(msg_out)
+				msg_out.objects.append(obj)
+
+		self.object_pub.publish(msg_out)
 
 		if clustered_pointclouds:
 			all_points = np.concatenate(clustered_pointclouds, axis=0)

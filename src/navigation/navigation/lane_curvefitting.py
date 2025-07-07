@@ -41,7 +41,7 @@ class LaneFollowerNode(Node):
         
         self.white_pub = self.create_publisher(PointCloud2, "/white_lane_points", 10)
         self.yellow_pub = self.create_publisher(PointCloud2, "/yellow_lane_points", 10)    
-        self.timer_period = 0.05
+        self.timer_period = 0.033  # 30 Hz
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
 
         self.yellow_points_history = []
