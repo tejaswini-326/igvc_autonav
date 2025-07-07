@@ -17,6 +17,7 @@ find_package(rosidl_default_generators REQUIRED)
 # Message generation
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ObjectData.msg"
+  "msg/ObjectArray.msg"
   DEPENDENCIES geometry_msgs sensor_msgs std_msgs builtin_interfaces
 )
 
