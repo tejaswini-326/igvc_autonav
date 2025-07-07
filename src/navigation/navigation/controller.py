@@ -20,15 +20,10 @@ class Controller(Node):
     def __init__(self):
         super().__init__('controller')
 
-        # Sine curve path: moves forward (x) while oscillating sideways (y)
-        length = 20.0             # total forward distance (meters)
-        num_points = 200          # how smooth the path is
-
         self.path = []
 
-
         self.lookahead_distance = .75
-        self.linear_speed = 1
+        self.linear_speed = .5
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
@@ -208,7 +203,7 @@ class Controller(Node):
         if lookahead is None:
             return
 
-        xr, yr = lookahead
+        xr, yr = self.transform_point_to_base_link(lookahead)
         lookahead_dist = math.hypot(xr, yr)
         angle = math.atan2(yr, xr)
         if abs(math.degrees(angle)) < .5:
