@@ -42,10 +42,10 @@ class ObjectDataNode(Node): #node constructor
         self.depth_img = None
         self.latest_pc = None
         #camera intrinsics from urdf
-        self.fx = 102.7348185494929
-        self.fy = 102.7348185494929
-        self.cx = 160.0
-        self.cy = 120.0
+        self.fx = 246.4928
+        self.fy = 246.4928
+        self.cx = 300.0
+        self.cy = 300.0
         self.frame_count = 0  #used to skip frames for speed
 
         # White color thresholds (HSV space)

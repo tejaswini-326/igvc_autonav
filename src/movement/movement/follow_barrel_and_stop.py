@@ -105,7 +105,6 @@ class FollowBarrelAndStop(Node):
 
 
 		if self.stopping and msg.twist.twist.linear.x == 0 and msg.twist.twist.linear.y == 0 and msg.twist.twist.angular.z == 0:
-			return
 			self.active = False
 			self.stopping = False
 			intersection_msg = String()
@@ -116,7 +115,6 @@ class FollowBarrelAndStop(Node):
 
 
 	def publish_cmd(self):
-		return
 		if not self.active:
 			return
 		
