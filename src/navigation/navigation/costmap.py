@@ -139,27 +139,16 @@ class CostmapNode(Node): #constructor for costmap node
 
         mask = costmap[my, mx] < 255
         costmap[my[mask], mx[mask]] = value
-        costmap[my[mask+1], mx[mask+1]] = value/2
-        costmap[my[mask+2], mx[mask+2]] = value/4
-        costmap[my[mask+3], mx[mask+3]] = value/8
-        costmap[my[mask+4], mx[mask+4]] = value/16
-        costmap[my[mask+5] , mx[mask+5]] = value/32
-        costmap[my[mask-1], mx[mask-1]] = value/2
-        costmap[my[mask-2], mx[mask-2]] = value/4
-        costmap[my[mask-3], mx[mask-3]] = value/8
-        costmap[my[mask-4], mx[mask-4]] = value/16
-        costmap[my[mask-5] , mx[mask-5]] = value/32
-
         if not np.any(costmap):
             return self.empty_layer
 
         binary = costmap.astype(np.float32)
-        #gradient = cv2.GaussianBlur(binary, (15, 15), sigmaX=2.3)
+        gradient = cv2.GaussianBlur(binary, (15, 15), sigmaX=2.3)
 
-        grad_max = binary.max()
+        grad_max = gradient.max()
         if grad_max > 0:
             power = 2.0 if tag == "object" else 0.8
-            scaled = ((binary / (grad_max ** power)) * 100).astype(np.uint8)
+            scaled = ((gradient / (grad_max ** power)) * 100).astype(np.uint8)
         else:
             scaled = np.zeros_like(costmap)
 
