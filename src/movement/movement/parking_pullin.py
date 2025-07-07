@@ -21,7 +21,7 @@ class YellowParkingDetector(Node):
         super().__init__('yellow_parking_detector')
         self.subscription = self.create_subscription(
             PointCloud2,
-            '/camera/points',
+            '/igvc/yellow_points',
             self.pointcloud_callback,
             10
         )
@@ -154,77 +154,91 @@ class YellowParkingDetector(Node):
     def find_parking_slot(self, msg):
         height = msg.height
         width = msg.width
-        
+
         if height == 0 or width == 0:
             return None, None
 
-        yellow_img = np.zeros((height, width, 3), dtype=np.uint8)
-        yellow_ground_points = []
+        raw_points = []
 
-        index = 0
-        for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
-            x, y, z, rgb = point
-            row = index // width
-            col = index % width
+        for point in pc2.read_points(msg, field_names=("x", "y", "z"), skip_nans=False):
+            x, y, z = point
 
-            if rgb is None or math.isnan(x) or math.isnan(y) or math.isnan(z):
-                index += 1
+            if math.isnan(x) or math.isnan(y) or math.isnan(z):
                 continue
 
-            try:
-                rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
-            except:
-                index += 1
-                continue
+            if -2.0 < z < -1.3 and 1.0 < x < 3.0:  # ground-level + in front
+                raw_points.append((x, y, z))
 
-            r = (rgb_int >> 16) & 0xFF
-            g = (rgb_int >> 8) & 0xFF
-            b = rgb_int & 0xFF
+        if len(raw_points) < 20:
+            return None, None
 
-            # Check if pixel is yellow/pale yellow
-            if self.detect_yellow_color(r, g, b):
-                if -2.0 < z < -1.3 and 1.0 < x < 3.0:  # Ground level, ahead of robot
-                    if 0 <= row < height and 0 <= col < width:
-                        yellow_img[row, col] = (0, 255, 255)  # Yellow in BGR
-                    yellow_ground_points.append([x, y, z])
-            index += 1
-
-        try:
-            if yellow_img.size > 0:
-                cv2.imshow("Pale Yellow Parking Lines", yellow_img)
-                cv2.waitKey(1)
-        except:
-            pass
-
-        # Need enough points for clustering
-        if len(yellow_ground_points) < 20:
-            return None, yellow_img
-
-        # Cluster the yellow points using DBSCAN
-        points_np = np.array(yellow_ground_points)
-        points_xy = points_np[:, :2]  
-
-        eps = 0.3  
-        min_samples = 15
+        # Step 1: Downsample using voxel filter
+        voxel_size = 0.05  # meters (5cm grid)
+        voxel_grid = {}
         
+        for pt in raw_points:
+            voxel_key = (
+                int(pt[0] / voxel_size),
+                int(pt[1] / voxel_size),
+                int(pt[2] / voxel_size),
+            )
+            if voxel_key not in voxel_grid:
+                voxel_grid[voxel_key] = pt
+
+        downsampled_points = list(voxel_grid.values())
+        if len(downsampled_points) < 20:
+            return None, None
+
+        points_np = np.array(downsampled_points)
+        points_xy = points_np[:, :2]
+
+        # Step 2: Cluster
+        eps = 0.3
+        min_samples = 15
         clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points_xy)
         labels = clustering.labels_
         unique_labels = set(labels)
 
-        # Find parking slot boundaries
         line_centers = []
+
+        # Step 3: Visualization
+        debug_img = np.zeros((500, 500, 3), dtype=np.uint8)
+        scale = 100
+        offset_x = 100
+        offset_y = 250
+
+        import random
+        random.seed(42)
+        color_map = {}
+
         for label in unique_labels:
-            if label == -1:  # Skip noise
+            if label == -1:
                 continue
-                
+
             cluster_points = points_xy[labels == label]
             if len(cluster_points) < 10:
                 continue
-                
+
             center = np.mean(cluster_points, axis=0)
             line_centers.append(center)
 
-        return line_centers, yellow_img
+            color = tuple(random.randint(100, 255) for _ in range(3))
+            color_map[label] = color
+
+            for x, y in cluster_points:
+                img_x = int(x * scale) + offset_x
+                img_y = int(y * scale) + offset_y
+                if 0 <= img_x < 500 and 0 <= img_y < 500:
+                    debug_img[img_y, img_x] = color
+
+        # try:
+        #     cv2.imshow("Yellow Clusters Debug", debug_img)
+        #     cv2.waitKey(1)
+        # except:
+        #     pass
+
+        return line_centers, debug_img
+
 
     # HELPER FUNCTION TO VALIDATE PARKING SLOT
     def validate_parking_slot(self, line_centers):

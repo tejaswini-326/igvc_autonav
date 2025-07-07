@@ -24,12 +24,9 @@ GRID_RES   = 0.1             # 0.1 metres per pixel
 GRID_SIZE  = 200             # Number of pixels
 CX = CY    = GRID_SIZE // 2  # robot centred
 
-
 def normalise_angle(angle: float) -> float:
 	"""Wrap `angle` to the interval [-π, π].""" 
 	return (angle + pi) % (2 * pi) - pi
-
-
 
 def get_xy_of_all_white_and_yellow_points_from_pointcloud_msg(msg):
     """

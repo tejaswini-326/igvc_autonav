@@ -7,7 +7,11 @@ import numpy as np
 from geometry_msgs.msg import Twist
 from sklearn.cluster import DBSCAN
 from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import Imu
 import sensor_msgs_py.point_cloud2 as pc2
+from tf2_ros import TransformListener, Buffer
+from geometry_msgs.msg import Quaternion
+import tf2_geometry_msgs
 import struct
 import math
 
@@ -21,7 +25,10 @@ class ParkingPullout(Node):
     def __init__(self):
         super().__init__('yellow_parking_detector')
         self.subscription1 = self.create_subscription(Image, '/camera/image', self.image_callback_1, 10)
-        self.subscription2 = self.create_subscription(PointCloud2, '/bcamera/points_downsampled', self.pointcloud_callback, 10)
+        self.subscription2 = self.create_subscription(PointCloud2, '/igvc/back_yellow_points', self.pointcloud_callback, 10)
+        self.imu_sub = self.create_subscription(Imu, '/imu', self.imu_callback, 10)
+        self.current_yaw = 0.0
+        self.initial_yaw = None
         self.bridge = CvBridge()
         self.latest_image = None  
         self.pmsg = None
@@ -29,10 +36,17 @@ class ParkingPullout(Node):
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.state = "IN_SLOT"
         self.k = 0
-        self.turn_timer = None
         self.control_timer = self.create_timer(0.1, self.control_loop)
         self.barrel_found = False
-
+    
+    @staticmethod
+    def get_yaw_from_quaternion(q: Quaternion):
+        x, y, z, w = q.x, q.y, q.z, q.w
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = math.atan2(siny_cosp, cosy_cosp)
+        return yaw
+    
     def pull_back(self):
         cmd = Twist()
         cmd.linear.x = -0.5
@@ -42,7 +56,7 @@ class ParkingPullout(Node):
 
     def turn(self, direction_factor):
         cmd = Twist()
-        cmd.linear.x = -0.5
+        cmd.linear.x = -0.7
         cmd.angular.z = direction_factor*0.4
         self.cmd_pub.publish(cmd) 
 
@@ -54,15 +68,16 @@ class ParkingPullout(Node):
         self.get_logger().info("Turn complete, robot stopped")
         self.state = "FINISHED"
 
-        if self.turn_timer is not None:
-            self.turn_timer.cancel()
-            self.turn_timer = None
-
     def image_callback_1(self, msg):
         self.latest_image = msg
     
     def pointcloud_callback(self, msg):
         self.pmsg = msg 
+
+    def imu_callback(self, msg):
+        orientation_q = msg.orientation
+        orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
+        self.current_yaw = self.get_yaw_from_quaternion(msg.orientation)
 
     def detect_horizontal_stop_line(self):
         if self.latest_image is None:
@@ -103,87 +118,42 @@ class ParkingPullout(Node):
             self.get_logger().error(f"Error in stop line detection: {e}")
             return False
 
-    def detect_yellow_color(self, r, g, b):
-        pale_threshold = 80  
-        color_balance_threshold = 30  
-        avg_color = (r + g + b) / 3
-        is_bright_enough = (r > pale_threshold and g > pale_threshold)
-        has_yellow_tint = (r > b and g > b)  
-        is_balanced = (abs(r - avg_color) < color_balance_threshold and abs(g - avg_color) < color_balance_threshold)
-        yellow_factor = (r + g) / (2 * max(b, 1)) 
-        
-        return (is_bright_enough and has_yellow_tint and is_balanced and yellow_factor > 1.1 and avg_color > 70)  
-
     def find_parking_slot(self, msg):
         height = msg.height
         width = msg.width
-        
+
         if height == 0 or width == 0:
             return None, None
 
-        yellow_img = np.zeros((height, width, 3), dtype=np.uint8)
-        yellow_ground_points = []
+        ground_points = []
 
-        index = 0
-        for point in pc2.read_points(msg, field_names=("x", "y", "z", "rgb"), skip_nans=False):
-            x, y, z, rgb = point
-            row = index // width
-            col = index % width
+        for point in pc2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True):
+            x, y, z = point
+            if -2.0 < z < -1.3 and 1.0 < x < 3.0:
+                ground_points.append([x, y])
 
-            if rgb is None or math.isnan(x) or math.isnan(y) or math.isnan(z):
-                index += 1
-                continue
+        if len(ground_points) < 20:
+            return None, None
 
-            try:
-                rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
-            except:
-                index += 1
-                continue
+        points_np = np.array(ground_points)
 
-            r = (rgb_int >> 16) & 0xFF
-            g = (rgb_int >> 8) & 0xFF
-            b = rgb_int & 0xFF
-
-            if self.detect_yellow_color(r, g, b):
-                if -2.0 < z < -1.3 and 1.0 < x < 3.0:
-                    if 0 <= row < height and 0 <= col < width:
-                        yellow_img[row, col] = (0, 255, 255)  
-                    yellow_ground_points.append([x, y, z])
-            index += 1
-
-        try:
-            if yellow_img.size > 0:
-                cv2.imshow("Pale Yellow Parking Lines", yellow_img)
-                cv2.waitKey(1)
-        except:
-            pass
-
-        if len(yellow_ground_points) < 20:
-            return None, yellow_img
-
-        points_np = np.array(yellow_ground_points)
-        points_xy = points_np[:, :2]  
-
-        eps = 0.3  
+        eps = 0.3
         min_samples = 15
-        
-        clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points_xy)
+        clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points_np)
         labels = clustering.labels_
         unique_labels = set(labels)
 
         line_centers = []
         for label in unique_labels:
-            if label == -1: 
+            if label == -1:
                 continue
-                
-            cluster_points = points_xy[labels == label]
+            cluster_points = points_np[labels == label]
             if len(cluster_points) < 10:
                 continue
-                
             center = np.mean(cluster_points, axis=0)
             line_centers.append(center)
 
-        return line_centers, yellow_img
+        return line_centers, None
 
     def control_loop(self):
         if self.state == "IN_SLOT":
@@ -208,20 +178,25 @@ class ParkingPullout(Node):
                 self.get_logger().warn("No point cloud data available yet.")
 
         if self.state == "TURNING":
-            if self.direction == 'right':
-                self.k = 1
-            else:
-                self.k = -1
-            self.turn(self.k)
-            self.turn_timer = self.create_timer(23, self.stop_robot)    
-            self.state = "TURNING_IN_PROGRESS"
-        
-        elif self.state == "TURNING_IN_PROGRESS":
-            if self.detect_horizontal_stop_line():
-                self.get_logger().info("Stop line re-detected — turn complete.")
+            if self.initial_yaw is None:
+                self.initial_yaw = self.current_yaw
+                self.get_logger().info("Initial yaw recorded for turn")
+            delta_yaw = abs(self.current_yaw - self.initial_yaw)
+            if delta_yaw > math.pi:
+                delta_yaw = 2 * math.pi - delta_yaw  
+            target_angle = math.radians(80)  
+            if delta_yaw >= target_angle:
+                self.get_logger().info("Turn completed based on IMU yaw")
                 self.stop_robot()
+                self.state = "FINISHED"
             else:
-                self.turn(self.k)  
+                direction_factor = 1 if self.direction == 'right' else -1
+                self.turn(direction_factor)
+        
+        if self.state == "FINISHED":
+            self.get_logger().info("Shutting down node...")
+            self.destroy_node()
+            rclpy.shutdown()
 
 def main(args=None):
     rclpy.init(args=args)
