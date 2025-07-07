@@ -23,22 +23,40 @@ MIN_CLUSTERING_POINTS = 20
 class LaneFollowerNode(Node):
     def __init__(self):
         super().__init__('lane_follower_node')
-        self.subscription = self.create_subscription(
+        self.subscription_white = self.create_subscription(
             PointCloud2,
-            '/camera/points_downsampled',
-            self.pointcloud_callback,
+            '/igvc/white_points',
+            self.white_pointcloud_callback,
+            10
+        )
+        self.subsctrption_yellow= self.create_subscription(
+            PointCloud2,
+            '/igvc/yellow_points',
+            self.yellow_pointcloud_callback,
             10
         )
         self.white_curve_pub = self.create_publisher(MarkerArray, '/lane_fitted_white', 10)
         self.yellow_curve_pub = self.create_publisher(MarkerArray, '/lane_fitted_yellow', 10)
         self.markers_pub = self.create_publisher(MarkerArray, '/lane_visualization', 10)
+        
         self.white_pub = self.create_publisher(PointCloud2, "/white_lane_points", 10)
         self.yellow_pub = self.create_publisher(PointCloud2, "/yellow_lane_points", 10)    
+        self.timer_period = 0.05
+        self.timer = self.create_timer(self.timer_period, self.timer_callback)
 
         self.yellow_points_history = []
         self.history_length = 1  # Keep last 5 frames of yellow points
+        
+        self.white_msg = None
+        self.yellow_msg = None
 
-    # FUNCTION TO PUBLISH STUFF FOR LANE VISUALISATION IN RVIZ
+    def extract_xyz(self, msg):
+        return [
+            [x, y, z]
+            for x, y, z in pc2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True)
+        ]
+    
+        # FUNCTION TO PUBLISH STUFF FOR LANE VISUALISATION IN RVIZ
     def publish_lane_visualization(self, msg, target_point, cluster_curves, white_ground_points, yellow_ground_points):
         marker_array = MarkerArray()
         
@@ -218,124 +236,30 @@ class LaneFollowerNode(Node):
         self.yellow_curve_pub.publish(yellow_array)
 
         # Publish marker array
+
         self.markers_pub.publish(marker_array)
+    def white_pointcloud_callback(self, msg):
+        self.white_msg=msg
     
-    def pointcloud_callback(self, msg):
-        height = msg.height
-        width = msg.width
+    def yellow_pointcloud_callback(self, msg):
+        self.yellow_msg=msg
+    
+    def timer_callback(self):
+        if self.white_msg is None or self.yellow_msg is None:
+            return  # Wait until we have both clouds
 
-    # ==========INSTEAD OF USING THE COMMEENTED PART BELOW (A NORAL FOR LOOP) USE NUMPY FOR BETTER SPEED....NUMPY AURA=========
-        # white_ground_points = []
-        # yellow_ground_points = []
-        # index = 0
+        # Use latest messages
+        white_msg = self.white_msg
+        yellow_msg = self.yellow_msg
 
-        # wh_h_min = 0
-        # wh_h_max = 180
-        # wh_s_min = 0
-        # wh_s_max = 20
-        # wh_v_min = 95
-        # wh_v_max = 255
+        # Extract and store points
+        self.white_ground_points = self.extract_xyz(white_msg)
+        self.yellow_ground_points = self.extract_xyz(yellow_msg)
 
-        # yl_h_min = 20
-        # yl_h_max = 30
-        # yl_s_min = 140
-        # yl_s_max = 255
-        # yl_v_min = 90
-        # yl_v_max = 255
-
-        # start = time.time()
-
-        # for x, y, z, rgb in pc2.read_points(msg, field_names=('x','y','z','rgb'), skip_nans=True):
-        #     # unpack RGB float
-        #     rgb_int = struct.unpack('I', struct.pack('f', rgb))[0]
-        #     b = rgb_int & 0xFF
-        #     g = (rgb_int >> 8) & 0xFF
-        #     r = (rgb_int >> 16) & 0xFF
-
-        #     # convert BGR to HSV
-        #     hsv = cv2.cvtColor(np.uint8([[[b, g, r]]]), cv2.COLOR_BGR2HSV)[0][0]
-        #     h, s, v = int(hsv[0]), int(hsv[1]), int(hsv[2])
-
-        #     # ground-plane filter
-        #     if not (-2.0 < z < -1.3 and 0.0 < x < 10.0):
-        #         continue
-
-        #     # white?
-        #     if (wh_h_min <= h <= wh_h_max and
-        #         wh_s_min <= s <= wh_s_max and
-        #         wh_v_min <= v <= wh_v_max):
-        #         white_ground_points.append([x, y, z])
-
-        #     # yellow?
-        #     elif (yl_h_min <= h <= yl_h_max and
-        #         yl_s_min <= s <= yl_s_max and
-        #         yl_v_min <= v <= yl_v_max):
-        #         yellow_ground_points.append([x, y, z])
-        #     index += 1
-
-        # self.get_logger().info(f"[Benchmark] PointCloud parsing took {time.time() - start:.3f} sec")
-
-        white_ground_points = []
-        yellow_ground_points = []
-
-        start = time.time()
-        # PointCloud to numpy array
-        cloud_points = np.fromiter(
-            pc2.read_points(msg, field_names=('x', 'y', 'z', 'rgb'), skip_nans=True),
-            dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('rgb', 'f4')]
-        )
-        cloud_points_np = np.vstack([cloud_points['x'], cloud_points['y'], cloud_points['z'], cloud_points['rgb']]).T
-
-
-        if cloud_points.shape[0] == 0:
-            return
-
-        xyz = np.stack([cloud_points['x'], cloud_points['y'], cloud_points['z']], axis=-1)
-        rgb_floats = cloud_points['rgb'].astype(np.float32)
-
-        # Fast float -> uint32 conversion
-        rgb_uint32 = rgb_floats.view(np.uint32)
-        r = (rgb_uint32 >> 16) & 0xFF
-        g = (rgb_uint32 >> 8) & 0xFF
-        b = rgb_uint32 & 0xFF
-
-        # Stack as BGR image and convert to HSV
-        start = time.perf_counter()
-        #hsv_image = fast_rgb_to_hsv(r.astype(np.uint8), g.astype(np.uint8), b.astype(np.uint8))
-        bgr_image = np.stack([b, g, r], axis=1).astype(np.uint8).reshape(-1, 1, 3)
-        hsv_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2HSV).reshape(-1, 3)
-        end= time.perf_counter()
-        elapsed = end - start
-        self.get_logger().info(f"[Benchmark] Block took {elapsed:.6f} seconds")
-        h, s, v = hsv_image[:, 0], hsv_image[:, 1], hsv_image[:, 2]
-
-        # Ground plane mask
-        z = xyz[:, 2]
-        x_vals = xyz[:, 0]
-        ground_mask = (-2.0 < z) & (z < -1.3) & (0.0 < x_vals) & (x_vals < 10.0)
-
-        # White and yellow masks
-        white_mask = (
-            (0 <= h) & (h <= 180) &
-            (0 <= s) & (s <= 20) &
-            (95 <= v) & (v <= 255)
-        )
-
-        yellow_mask = (
-            (20 <= h) & (h <= 30) &
-            (140 <= s) & (s <= 255) &
-            (90 <= v) & (v <= 255)
-        )
-
-        # Apply masks
-        white_ground_points = xyz[ground_mask & white_mask].tolist()
-        yellow_ground_points = xyz[ground_mask & yellow_mask].tolist()
-
-        self.get_logger().info(f"[Benchmark] PointCloud parsing took {time.time() - start:.3f} sec")
-        self.get_logger().info(f"no of white ground points : {len(white_ground_points)} and no of yellow ground points is : {len(yellow_ground_points)}")
-
+        msg = white_msg  # Use white_msg for consistent header (needed for publishing)
+    
         # ==== Yellow History Buffer ====
-        self.yellow_points_history.append(yellow_ground_points)
+        self.yellow_points_history.append(self.yellow_ground_points)
         if len(self.yellow_points_history) > self.history_length:
             self.yellow_points_history.pop(0)
 
@@ -364,31 +288,9 @@ class LaneFollowerNode(Node):
         self.get_logger().info(f"no of final yellow ground points is : {len(final_yellow_points)}")
 
 
-
-        # ==== Clustering ====
-        # all_lane_points = white_ground_points + final_yellow_points
-
-        # if len(all_lane_points) < 10:
-        #     self.get_logger().warn(f"Not enough lane points for detection (white: {len(white_ground_points)}, yellow: {len(final_yellow_points)})")
-        #     self.publish_lane_visualization(msg, None, [], white_ground_points, final_yellow_points)
-        #     return
-
-        # points_np_all = np.array(all_lane_points)
-        # points_xy_all = points_np_all[:, :2]
-
-        # # DBSCAN on all lane points together (white + yellow)
-        # clustering_all = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy_all)
-        # labels_all = clustering_all.labels_
-
-        # unique_labels_all = set(labels_all)
-        # n_clusters_all = len(unique_labels_all) - (1 if -1 in labels_all else 0)
-        # self.get_logger().info(f"Total lane clusters (white + yellow): {n_clusters_all}")
-
-        # Now do white and yellow pointcloud publishing separately
-
         # === WHITE DBSCAN and clustering ===
         start = time.time()
-        points_np_white = np.array(white_ground_points)
+        points_np_white = np.array(self.white_ground_points)
         clustered_white_points = []
         cluster_curves = []
 
@@ -480,7 +382,7 @@ class LaneFollowerNode(Node):
 
         # === Final Lane Visualization ===
         start = time.time()
-        self.publish_lane_visualization(msg, None, cluster_curves, white_ground_points, final_yellow_points)
+        self.publish_lane_visualization(msg, None, cluster_curves, self.white_ground_points, final_yellow_points)
         self.get_logger().info(f"[Benchmark] Marker publishing took {time.time() - start:.3f} sec")
 
         
