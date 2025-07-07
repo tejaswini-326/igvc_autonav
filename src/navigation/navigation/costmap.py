@@ -122,8 +122,8 @@ class CostmapNode(Node): #constructor for costmap node
         valid = (
             (mx_raw >= 0) & (mx_raw < self.width) &
             (my_raw >= 0) & (my_raw < self.height) &
-            (mx_raw < 100)  # skip bottom (back) part of map
-        )
+            (mx_raw > 100)) # skip bottom (back) part of map
+        
         mx = mx_raw[valid].astype(int)
         my = my_raw[valid].astype(int)
 
