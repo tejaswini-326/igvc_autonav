@@ -133,6 +133,15 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
+    pointcloud_downscaler_node = Node(
+        package='movement',
+        executable='pointcloud_downscaler',
+        name='PointCloudDownscaler',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+
+
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
     # ------------------------------------------------------------------------
@@ -280,6 +289,6 @@ def generate_launch_description():
     ld.add_action(intersection_left_node)
     ld.add_action(gps_waypoint_publisher_node)
     ld.add_action(follow_barrel_and_stop_node)
-
+    ld.add_action(pointcloud_downscaler_node)
 
     return ld

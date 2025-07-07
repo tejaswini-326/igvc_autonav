@@ -18,7 +18,7 @@ from rclpy.duration import Duration
 
 
 LINEAR_SPEED_WHEN_RADIAL_SCAN_TURNING           = 0.5
-LEFT_TURN_ANGULAR_SPEED                         = 0.22   
+LEFT_TURN_ANGULAR_SPEED                         = 0.4   
 
 # Needs to be changed in the real bot
 DISTANCE_SQUARED_BEFORE_STOPPING_AT_BARREL = 6
@@ -34,7 +34,7 @@ class FollowBarrelAndStop(Node):
 
 		self.cmd_vel_publisher = self.create_publisher(Twist, "cmd_vel", 10)
 		self.intersection_pub = self.create_publisher(String, '/intersection', 10)
-		self.object_position_label = None
+		self.object_position = None
 
 		self.active = False
 		self.stopping  = False
@@ -45,7 +45,7 @@ class FollowBarrelAndStop(Node):
 		self.tf_buffer   = tf2_ros.Buffer(cache_time=Duration(seconds=10))
 		self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-	def transform_to_odom(self, x, y, z, frame_id="camera_link"):
+	def transform_to_base_link(self, x, y, z, frame_id="camera_link"):
 		try:
 			point = PointStamped()
 			point.header.frame_id = frame_id
@@ -61,8 +61,7 @@ class FollowBarrelAndStop(Node):
 				self.get_logger().debug(f"TF {frame_id}base_link not ready")
 				return None
 
-			transform = self.tf_buffer.lookup_transform(
-				"base_link", frame_id, rclpy.time.Time())
+			transform = self.tf_buffer.lookup_transform("base_link", frame_id, rclpy.time.Time())
 			base_link_point = tf2_geometry_msgs.do_transform_point(point, transform)
 			return base_link_point.point.x, base_link_point.point.y, base_link_point.point.z
 
@@ -82,21 +81,23 @@ class FollowBarrelAndStop(Node):
 	def yolo_object_data_cb(self, msg:ObjectData):
 		if not self.active:
 			return
-		self.object_position_label = (msg.position, msg.label)
+		if msg.label == 'traffic barrel':
+			self.object_position = msg.position
+			self.get_logger().info(f"{msg.position.x} {msg.position.y} {msg.position.z}")
 
 	def odom_cb(self, msg: Odometry):
 		if not self.active:
 			return
 
-		if self.object_position_label:
-			raw_pos, label = self.object_position_label
-			base_link_pos = self.transform_to_odom(raw_pos.x, raw_pos.y, raw_pos.z, frame_id="camera_link")
+		if self.object_position:
+			raw_pos = self.object_position
+			base_link_pos = self.transform_to_base_link(raw_pos.x, raw_pos.y, raw_pos.z, frame_id="camera_link")
 
 			if base_link_pos is None:
 				return
 			
 			a, b, c = base_link_pos
-			self.get_logger().info(f"{a**2 + b**2} and {DISTANCE_SQUARED_BEFORE_STOPPING_AT_BARREL}")
+			#self.get_logger().info(f"{a**2 + b**2}")
 			if a**2 + b**2 < DISTANCE_SQUARED_BEFORE_STOPPING_AT_BARREL:
 				self.stopping = True
 			else:
@@ -104,6 +105,7 @@ class FollowBarrelAndStop(Node):
 
 
 		if self.stopping and msg.twist.twist.linear.x == 0 and msg.twist.twist.linear.y == 0 and msg.twist.twist.angular.z == 0:
+			return
 			self.active = False
 			self.stopping = False
 			intersection_msg = String()
@@ -114,6 +116,7 @@ class FollowBarrelAndStop(Node):
 
 
 	def publish_cmd(self):
+		return
 		if not self.active:
 			return
 		

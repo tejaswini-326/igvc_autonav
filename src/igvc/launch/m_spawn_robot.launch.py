@@ -273,6 +273,6 @@ def generate_launch_description():
 
     ld.add_action(robot_state_publisher_node)
     ld.add_action(gz_bimage_bridge_node) 
-    # ld.add_action(pointcloud_downscaler_node)
+    ld.add_action(pointcloud_downscaler_node)
     
     return ld
