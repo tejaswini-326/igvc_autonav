@@ -15,7 +15,7 @@ class GoalPublisher(Node):
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_point', 10)
         self.marker_sub = self.create_subscription(MarkerArray, '/lane_visualization', self.marker_callback, 10)
         self.debug_marker_pub = self.create_publisher(MarkerArray, '/lane_debug_points', 10)
-
+        self.horizontal_line_pos = None
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -28,14 +28,13 @@ class GoalPublisher(Node):
         self.get_logger().info(self.current_lane)
         lane_markers = [m for m in msg.markers if m.ns == "lane_curves" and m.type == Marker.LINE_STRIP]
 
-        # if len(lane_markers) < 3:
-        #     self.get_logger().warn(f"Expected at least 3 lane markers (left, mid, right), got {len(lane_markers)}")
-        #     return
-
-        # Sort by y to guess left < mid < right
-        lane_markers.sort(key=lambda m: m.points[-1].y)
-
         try:
+            averaged_points = [(marker, self.average_last_n_points(marker.points, 5)) for marker in lane_markers]
+            averaged_points = [tup for tup in averaged_points if tup[1] != (0.0, 0.0)]  # Remove invalid ones
+
+            averaged_points.sort(key=lambda tup: tup[1][1])  # sort by avg_y
+            lane_markers = [tup[0] for tup in averaged_points]
+
             if len(lane_markers) == 3:
                 left_marker, mid_marker, right_marker = lane_markers[-1], lane_markers[1], lane_markers[0]
 
@@ -46,18 +45,16 @@ class GoalPublisher(Node):
                 self.last_lp = lp
                 self.last_mp = mp
 
-                # Midpoint
                 if self.target_lane == 'right':
                     goal_x = (rp[0] + mp[0]) / 2.0
                     goal_y = (rp[1] + mp[1]) / 2.0
-                    goal_z = 0.0
                     self.current_lane = 'right'
                 else:
                     goal_x = (lp[0] + mp[0]) / 2.0
                     goal_y = (lp[1] + mp[1]) / 2.0
-                    goal_z = 0.0
                     self.current_lane = 'left'
 
+                goal_z = 0.0
 
             elif len(lane_markers) == 2:
                 if self.current_lane == 'right':
@@ -79,36 +76,44 @@ class GoalPublisher(Node):
                 self.last_lp = lp
                 self.last_mp = mp
 
-                # Midpoint
                 if self.target_lane == 'right':
                     goal_x = (rp[0] + mp[0]) / 2.0
                     goal_y = (rp[1] + mp[1]) / 2.0
-                    goal_z = 0.0
                     self.current_lane = 'right'
                 else:
                     goal_x = (lp[0] + mp[0]) / 2.0
                     goal_y = (lp[1] + mp[1]) / 2.0
-                    goal_z = 0.0
                     self.current_lane = 'left'
+
+                goal_z = 0.0
+            else:
+                self.get_logger().warn("Not enough lane markers for goal computation.")
+                return
 
             transformed = self.transform_to_odom(goal_x, goal_y, goal_z)
             if transformed:
                 self.publish_goal(transformed)
                 self.publish_debug_markers()
-
             else:
                 self.get_logger().warn("Could not transform goal point to base_link")
 
         except Exception as e:
             self.get_logger().error(f"Failed to estimate goal: {e}")
 
-    def average_last_n_points(self, points, n):
-        n = min(n, len(points))
-        avg_x = sum(p.x for p in points[-n:]) / n
-        avg_y = sum(p.y for p in points[-n:]) / n
+    def average_last_n_points(self, points, n, max_distance=4.0): #added a dsitance threshold for goal calc
+        # Only include points within max_distance from origin
+        filtered = [p for p in points if (p.x**2 + p.y**2)**0.5 <= max_distance]
+
+        if not filtered:
+            self.get_logger().warn("No points within distance threshold.")
+            return (0.0, 0.0)
+
+        n = min(n, len(filtered))
+        avg_x = sum(p.x for p in filtered[-n:]) / n
+        avg_y = sum(p.y for p in filtered[-n:]) / n
         return (avg_x, avg_y)
 
-    def transform_to_odom(self, x, y, z, frame_id = 'camera_link'):
+    def transform_to_odom(self, x, y, z, frame_id='camera_link'):
         try:
             stamped_point = PointStamped()
             stamped_point.header.stamp = self.get_clock().now().to_msg()
@@ -117,13 +122,7 @@ class GoalPublisher(Node):
             stamped_point.point.y = y
             stamped_point.point.z = z
 
-            transform = self.tf_buffer.lookup_transform(
-                'odom',
-                frame_id,
-                rclpy.time.Time(),
-                timeout=Duration(seconds=0.5)
-            )
-
+            transform = self.tf_buffer.lookup_transform('odom', frame_id, rclpy.time.Time(), timeout=Duration(seconds=0.5))
             transformed_point = tf2_geometry_msgs.do_transform_point(stamped_point, transform)
             return transformed_point.point
 
@@ -137,11 +136,11 @@ class GoalPublisher(Node):
         goal_pose.header.frame_id = 'odom'
         goal_pose.pose.position = point
         goal_pose.pose.position.z = 0.0
-        goal_pose.pose.orientation.w = 1.0  # No rotation
+        goal_pose.pose.orientation.w = 1.0
 
         self.goal_pub.publish(goal_pose)
         self.get_logger().info(f"Published goal at ({point.x:.2f}, {point.y:.2f}) in odom")
-        
+
     def publish_debug_markers(self):
         marker_array = MarkerArray()
         marker_id = 0
@@ -171,13 +170,11 @@ class GoalPublisher(Node):
             return m
 
         if self.last_rp:
-            marker_array.markers.append(make_marker(self.last_rp, (1.0, 0.0, 0.0), "right_point"))  # Red
-
+            marker_array.markers.append(make_marker(self.last_rp, (1.0, 0.0, 0.0), "right_point"))
         if self.last_lp:
-            marker_array.markers.append(make_marker(self.last_lp, (0.0, 1.0, 0.0), "left_point"))   # Green
-
+            marker_array.markers.append(make_marker(self.last_lp, (0.0, 1.0, 0.0), "left_point"))
         if self.last_mp:
-            marker_array.markers.append(make_marker(self.last_mp, (0.0, 0.0, 1.0), "mid_point"))    # Blue
+            marker_array.markers.append(make_marker(self.last_mp, (0.0, 0.0, 1.0), "mid_point"))
 
         self.debug_marker_pub.publish(marker_array)
 
