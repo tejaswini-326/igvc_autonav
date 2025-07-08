@@ -136,7 +136,7 @@ class CostmapNode(Node):
             self.yellow_map[:] = self._make_layer(self._yellow_pc, 250, 'yellow')
             self._new_yellow = False
         if self._new_object and self._object_pc is not None:
-            self.object_map[:] = self._make_layer(self._object_pc, 100, 'object')
+            self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
             self._new_object = False
 
         # ---------- fuse + publish ---------------------------------------
@@ -168,12 +168,8 @@ class CostmapNode(Node):
         if vcount == 0:
             return self._empty
 
-<<<<<<< HEAD
-        costmap = self.empty_layer.copy()
-=======
         mx = mx_raw[valid].astype(np.int32)
         my = my_raw[valid].astype(np.int32)
->>>>>>> f21f25843ea9fc01cc3fd98b1e7ca3b3b1e79e23
 
         # 4) draw points ---------------------------------------------------
         layer = self._scratch
@@ -186,7 +182,7 @@ class CostmapNode(Node):
         gmax = float(blurred.max())
         self.get_logger().debug(f"[{tag}] gmax before scale: {gmax:.1f}")
         if gmax > 0.0:
-            power = 2.0 if value == 100 else 0.8
+            power = 2.0 if value == 245 else 0.8
             blurred = ((blurred / (gmax ** power)) * 100).astype(np.uint8)
             np.maximum(layer, blurred, out=layer)
 
@@ -211,15 +207,11 @@ class CostmapNode(Node):
         msg.info.origin.position.x = float(self.origin_x)
         msg.info.origin.position.y = float(self.origin_y)
         msg.info.origin.orientation.w = 1.0
-<<<<<<< HEAD
-        msg.data = (costmap.flatten() * 100 // 255).astype(int).tolist()
-=======
 
         scaled = self._scale_to_ogrid(grid)
         nz = int(np.count_nonzero(scaled))
         self.get_logger().debug(f"publish grid: non-zero cells = {nz}")
         msg.data = scaled.flatten().tolist()
->>>>>>> f21f25843ea9fc01cc3fd98b1e7ca3b3b1e79e23
         self.costmap_pub.publish(msg)
 
 

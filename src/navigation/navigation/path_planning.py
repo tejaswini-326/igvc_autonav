@@ -307,11 +307,11 @@ class PathPlanner(Node):
                         # Calculate the new f, g, and h values
                         #
                         index = new_i * self.width + new_j
-                        cell_cost = self.grid_2d[index] if 0 <= index < len(self.grid_2d) else 0
+                        #cell_cost = self.grid_2d[index] if 0 <= index < len(self.grid_2d) else 0
 
                         # Optional: Scale cost (so that 0–100 becomes 1–101, or 1–10)
                         # You can also clamp high values like 100 or 255
-                        cell_cost = max(1, min(cell_cost, 100))  # Make sure at least cost is 1
+                        cell_cost = 0#max(1, min(cell_cost, 100))  # Make sure at least cost is 1
 
                         g_new = cell_details[i][j].g + cell_cost
 
