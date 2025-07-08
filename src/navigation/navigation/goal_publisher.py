@@ -132,7 +132,7 @@ class GoalPublisher(Node):
     def publish_goal(self, point):
         goal_pose = PoseStamped()
         goal_pose.header.stamp = self.get_clock().now().to_msg()
-        goal_pose.header.frame_id = 'odom'
+        goal_pose.header.frame_id = 'camera_link'
         goal_pose.pose.position = point
         goal_pose.pose.position.z = 0.0
         goal_pose.pose.orientation.w = 1.0
