@@ -17,7 +17,7 @@ import time
 import ctypes
 
 
-MIN_CLUSTERING_DISTANCE = 0.4
+MIN_CLUSTERING_DISTANCE = 0.8
 MIN_CLUSTERING_POINTS = 20
 
 class LaneFollowerNode(Node):
@@ -302,69 +302,110 @@ class LaneFollowerNode(Node):
         self.get_logger().info(f"no of final yellow ground points is : {len(final_yellow_points)}")
 
 
-        # === WHITE DBSCAN and clustering ===
+        # === WHITE DBSCAN, clustering & colourised publish =========================
         start = time.time()
-        points_np_white = np.array(self.white_ground_points)
-        clustered_white_points = []
-        cluster_curves = []
+        points_np_white = np.asarray(self.white_ground_points, dtype=np.float32)  # local var
+        cluster_curves = []           # (label, coeffs, 'white', points_xy_cluster)
+        coloured_points = []          # rows: [x, y, z, rgb_float]
 
-        if len(points_np_white) >= MIN_CLUSTERING_POINTS:
+        # ---------------------------------------------------------------------------
+        # Helper: RGB → packed float32 for PointCloud2’s `rgb` field
+        import struct
+        def rgb_to_float(r: int, g: int, b: int) -> float:
+            return struct.unpack('f', struct.pack('I', (r << 16) | (g << 8) | b))[0]
+
+        # Five easy-to-see colours, none of them yellow
+        _PALETTE = [
+            rgb_to_float(255,   0,   0),   # red
+            rgb_to_float(  0, 255,   0),   # green
+            rgb_to_float(  0,   0, 255),   # blue
+            rgb_to_float(255,   0, 255),   # magenta
+            rgb_to_float(  0, 255, 255),   # cyan
+        ]
+        # ---------------------------------------------------------------------------
+
+        if points_np_white.shape[0] >= MIN_CLUSTERING_POINTS:
+
+            # --- DBSCAN on XY -------------------------------------------------------
             points_xy_white = points_np_white[:, :2]
-            clustering_white = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy_white)
+            clustering_white = DBSCAN(
+                eps=MIN_CLUSTERING_DISTANCE,
+                min_samples=MIN_CLUSTERING_POINTS
+            ).fit(points_xy_white)
             labels_white = clustering_white.labels_
             unique_labels_white = set(labels_white)
 
-            # Compute yellow stats (used for proximity filtering)
-            yellow_y_mean = None
-            yellow_point_count = 0
+            # --- Yellow-lane stats (for proximity filter) --------------------------
+            yellow_y_mean, yellow_point_count = None, 0
             if len(final_yellow_points) >= 10:
-                y_vals_yellow = np.array(final_yellow_points)[:, 1]
-                yellow_y_mean = np.mean(y_vals_yellow)
-                yellow_point_count = len(final_yellow_points)
+                y_vals_yellow = np.asarray(final_yellow_points)[:, 1]
+                yellow_y_mean  = float(np.mean(y_vals_yellow))
+                yellow_point_count = y_vals_yellow.size
 
+            # --- Iterate over white clusters ---------------------------------------
             for label in unique_labels_white:
                 if label == -1:
-                    continue
+                    continue  # DBSCAN noise
 
-                cluster_indices = np.where(labels_white == label)[0]
-                cluster_points = points_np_white[cluster_indices]
+                cluster_idx       = np.where(labels_white == label)[0]
+                cluster_points    = points_np_white[cluster_idx]      # (N,3)
                 points_xy_cluster = cluster_points[:, :2]
-                num_white_pts = len(points_xy_cluster)
+                num_white_pts     = points_xy_cluster.shape[0]
 
                 if num_white_pts < 100:
                     continue
 
-                # PCA for elongation
-                pca = PCA(n_components=2)
-                pca.fit(points_xy_cluster)
-                eigenvalues = pca.explained_variance_ratio_
-                elongation_ratio = eigenvalues[0] / eigenvalues[1] if eigenvalues[1] != 0 else float('inf')
-
-                if elongation_ratio < 2.0:
-                    self.get_logger().info(f"Skipping white cluster {label} (pothole-like): elongation_ratio = {elongation_ratio:.2f}")
+                # ------ Elongation (PCA) test --------------------------------------
+                pca = PCA(n_components=2).fit(points_xy_cluster)
+                eig = pca.explained_variance_ratio_
+                elong_ratio = eig[0] / eig[1] if eig[1] != 0 else float('inf')
+                if elong_ratio < 2.0:
+                    self.get_logger().info(
+                        f"Skipping white cluster {label} (pothole-like): "
+                        f"elongation_ratio={elong_ratio:.2f}")
                     continue
 
-                center_y_white = np.mean(points_xy_cluster[:, 1])
+                # ------ Proximity to yellow lane -----------------------------------
+                center_y_white = float(np.mean(points_xy_cluster[:, 1]))
                 if yellow_y_mean is not None:
-                    if abs(center_y_white - yellow_y_mean) < 0.5 and num_white_pts < yellow_point_count and num_white_pts < 180:
-                        self.get_logger().info(f"Skipping white cluster {label} near yellow (y={yellow_y_mean:.2f}) with only {num_white_pts} pts")
+                    if (abs(center_y_white - yellow_y_mean) < 0.5 and
+                            num_white_pts < yellow_point_count and
+                            num_white_pts < 180):
+                        self.get_logger().info(
+                            f"Skipping white cluster {label} near yellow "
+                            f"(y={yellow_y_mean:.2f}) with only {num_white_pts} pts")
                         continue
 
-                # Passed all checks: add points to publish
-                clustered_white_points.extend(cluster_points.tolist())
+                # ------ Keep cluster: colourise & record ---------------------------
+                colour = _PALETTE[label % len(_PALETTE)]
+                for pt in cluster_points:                       # append (x,y,z,rgb)
+                    coloured_points.append([pt[0], pt[1], pt[2], colour])
 
-                # Curve fit
-                coeffs = np.polyfit(points_xy_cluster[:, 0], points_xy_cluster[:, 1], deg=2)
+                # Curve-fit bookkeeping
+                coeffs = np.polyfit(points_xy_cluster[:, 0],
+                                    points_xy_cluster[:, 1], deg=2)
                 cluster_curves.append((label, coeffs, 'white', points_xy_cluster))
 
-                center_x = np.mean(points_xy_cluster[:, 0])
-                self.get_logger().info(f"White cluster {label}: center = ({center_x:.2f}, {center_y_white:.2f}), points = {num_white_pts}")
+                center_x = float(np.mean(points_xy_cluster[:, 0]))
+                self.get_logger().info(
+                    f"White cluster {label}: center=({center_x:.2f}, "
+                    f"{center_y_white:.2f}), points={num_white_pts}")
 
-            # === Publish filtered white points only ===
-        if len(clustered_white_points) > 0:
-            white_msg = pc2.create_cloud_xyz32(msg.header, clustered_white_points)
+        # ---------- Publish coloured cloud ----------------------------------------
+        if coloured_points:
+            from sensor_msgs.msg import PointField
+            fields = [
+                PointField(name='x',   offset=0,  datatype=PointField.FLOAT32, count=1),
+                PointField(name='y',   offset=4,  datatype=PointField.FLOAT32, count=1),
+                PointField(name='z',   offset=8,  datatype=PointField.FLOAT32, count=1),
+                PointField(name='rgb', offset=12, datatype=PointField.FLOAT32, count=1),
+            ]
+            white_msg = pc2.create_cloud(msg.header, fields, coloured_points)
             self.white_pub.publish(white_msg)
-        self.get_logger().info(f"[Benchmark] White DBSCAN took {time.time() - start:.3f} sec")
+
+        self.get_logger().info(
+            f"[Benchmark] White DBSCAN took {time.time() - start:.3f} sec")
+        # =========================================================================
 
         # === YELLOW DBSCAN and clustering ===
         start = time.time()
