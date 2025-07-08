@@ -136,7 +136,7 @@ class CostmapNode(Node):
             self.yellow_map[:] = self._make_layer(self._yellow_pc, 250, 'yellow')
             self._new_yellow = False
         if self._new_object and self._object_pc is not None:
-            self.object_map[:] = self._make_layer(self._object_pc, 100, 'object')
+            self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
             self._new_object = False
 
         # ---------- fuse + publish ---------------------------------------
@@ -182,7 +182,7 @@ class CostmapNode(Node):
         gmax = float(blurred.max())
         self.get_logger().debug(f"[{tag}] gmax before scale: {gmax:.1f}")
         if gmax > 0.0:
-            power = 2.0 if value == 100 else 0.8
+            power = 2.0 if value == 245 else 0.8
             blurred = ((blurred / (gmax ** power)) * 100).astype(np.uint8)
             np.maximum(layer, blurred, out=layer)
 

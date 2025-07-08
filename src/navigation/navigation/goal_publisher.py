@@ -38,9 +38,9 @@ class GoalPublisher(Node):
             if len(lane_markers) == 3:
                 left_marker, mid_marker, right_marker = lane_markers[-1], lane_markers[1], lane_markers[0]
 
-                rp = self.average_last_n_points(right_marker.points, 5)
-                lp = self.average_last_n_points(left_marker.points, 5)
-                mp = self.average_last_n_points(mid_marker.points, 5)
+                rp = self.average_last_n_points(right_marker.points, 5, 10.0)
+                lp = self.average_last_n_points(left_marker.points, 5, 10.0)
+                mp = self.average_last_n_points(mid_marker.points, 5, 10.0)
                 self.last_rp = rp
                 self.last_lp = lp
                 self.last_mp = mp
@@ -59,15 +59,15 @@ class GoalPublisher(Node):
             elif len(lane_markers) == 2:
                 if self.current_lane == 'right':
                     mid_marker, right_marker = lane_markers[1], lane_markers[0]
-                    rp = self.average_last_n_points(right_marker.points, 5)
-                    mp = self.average_last_n_points(mid_marker.points, 5)
+                    rp = self.average_last_n_points(right_marker.points, 5, 10.0)
+                    mp = self.average_last_n_points(mid_marker.points, 5, 10.0)
                     dx = rp[0] - mp[0]
                     dy = rp[1] - mp[1]
                     lp = (mp[0] - dx, mp[1] - dy)
                 else:
                     mid_marker, left_marker = lane_markers[0], lane_markers[1]
-                    lp = self.average_last_n_points(left_marker.points, 5)
-                    mp = self.average_last_n_points(mid_marker.points, 5)
+                    lp = self.average_last_n_points(left_marker.points, 5, 10.0)
+                    mp = self.average_last_n_points(mid_marker.points, 5, 10.0)
                     dx = lp[0] - mp[0]
                     dy = lp[1] - mp[1]
                     rp = (mp[0] - dx, mp[1] - dy)
