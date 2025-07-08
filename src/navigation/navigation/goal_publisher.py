@@ -29,7 +29,7 @@ class GoalPublisher(Node):
         lane_markers = [m for m in msg.markers if m.ns == "lane_curves" and m.type == Marker.LINE_STRIP]
 
         try:
-            averaged_points = [(marker, self.average_last_n_points(marker.points, 5, 10.0)) for marker in lane_markers]
+            averaged_points = [(marker, self.average_last_n_points(marker.points, 5)) for marker in lane_markers]
             averaged_points = [tup for tup in averaged_points if tup[1] != (0.0, 0.0)]  # Remove invalid ones
 
             averaged_points.sort(key=lambda tup: tup[1][1])  # sort by avg_y
@@ -100,7 +100,7 @@ class GoalPublisher(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to estimate goal: {e}")
 
-    def average_last_n_points(self, points, n, max_distance=6.5): #added a dsitance threshold for goal calc
+    def average_last_n_points(self, points, n, max_distance=4.0): #added a dsitance threshold for goal calc
         # Only include points within max_distance from origin
         filtered = [p for p in points if (p.x**2 + p.y**2)**0.5 <= max_distance]
 
