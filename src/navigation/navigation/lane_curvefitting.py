@@ -118,7 +118,7 @@ class LaneFollowerNode(Node):
             marker_array.markers.append(yellow_points_marker)
         
         # Markers for fitted curves
-        for i, (label, coeffs, color_type) in enumerate(cluster_curves):
+        for i, (label, coeffs, color_type, cluster_xy) in enumerate(cluster_curves):
             curve_marker = Marker()
             curve_marker.header.frame_id = msg.header.frame_id
             curve_marker.header.stamp = self.get_clock().now().to_msg()
@@ -159,7 +159,12 @@ class LaneFollowerNode(Node):
             curve_marker.color.a = 1.0
             
             # Generate curve points
-            x_line = np.linspace(0.0, 4.0, 50)
+            if cluster_xy is not None and len(cluster_xy) > 0:
+                x_vals = cluster_xy[:, 0]
+                x_min, x_max = np.min(x_vals), np.max(x_vals)
+                x_line = np.linspace(x_min, x_max, 50)
+            else:
+                x_line = np.linspace(0.0, 4.0, 50)  # fallback
             a, b, c = coeffs
             
             for x_val in x_line:
@@ -198,7 +203,7 @@ class LaneFollowerNode(Node):
         white_array = MarkerArray()
         yellow_array = MarkerArray()
 
-        for i, (label, coeffs, color_type) in enumerate(cluster_curves):
+        for i, (label, coeffs, color_type, cluster) in enumerate(cluster_curves):
             curve_marker = Marker()
             curve_marker.header.frame_id = msg.header.frame_id
             curve_marker.header.stamp = self.get_clock().now().to_msg()
@@ -222,7 +227,15 @@ class LaneFollowerNode(Node):
                 yellow_array.markers.append(curve_marker)
 
             # Points along the curve
-            x_line = np.linspace(0.0, 4.0, 50)
+            # Assuming you store cluster points along with the curve
+            # e.g., cluster_curves: List of tuples (label, coeffs, color_type, cluster_points)
+            if len(cluster) > 0:
+                x_vals = np.array(cluster[:, 0])
+                x_min, x_max = np.min(x_vals), np.max(x_vals)
+                x_line = np.linspace(x_min, x_max, 50)
+            else:
+                x_line = np.linspace(0.0, 4.0, 50)  # Fallback
+
             a, b, c = coeffs
             for x_val in x_line:
                 y_val = a * x_val**2 + b * x_val + c
@@ -231,6 +244,7 @@ class LaneFollowerNode(Node):
                 pt.y = float(y_val)
                 pt.z = -1.35
                 curve_marker.points.append(pt)
+
 
         self.white_curve_pub.publish(white_array)
         self.yellow_curve_pub.publish(yellow_array)
@@ -341,7 +355,7 @@ class LaneFollowerNode(Node):
 
                 # Curve fit
                 coeffs = np.polyfit(points_xy_cluster[:, 0], points_xy_cluster[:, 1], deg=2)
-                cluster_curves.append((label, coeffs, 'white'))
+                cluster_curves.append((label, coeffs, 'white', points_xy_cluster))
 
                 center_x = np.mean(points_xy_cluster[:, 0])
                 self.get_logger().info(f"White cluster {label}: center = ({center_x:.2f}, {center_y_white:.2f}), points = {num_white_pts}")
@@ -378,7 +392,8 @@ class LaneFollowerNode(Node):
             x_vals_y = clustered_yellow_points[:, 0]
             y_vals_y = clustered_yellow_points[:, 1]
             coeffs_yellow = np.polyfit(x_vals_y, y_vals_y, deg=2)
-            cluster_curves.append(('yellow_global', coeffs_yellow, 'yellow'))
+            cluster_curves.append(('yellow_global', coeffs_yellow, 'yellow', clustered_yellow_points[:, :2]))
+
 
         # === Final Lane Visualization ===
         start = time.time()
