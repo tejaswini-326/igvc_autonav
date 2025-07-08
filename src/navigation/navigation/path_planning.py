@@ -239,18 +239,6 @@ class PathPlanner(Node):
     
     def a_star_search(self, grid, src, dest):
 
-        #
-        try:
-            with open(self.param_file_path, 'r') as file:
-                data = yaml.safe_load(file)
-                costmap_config = data.get('parameters', {}).get('A*', {})
-                weight = float(costmap_config.get('weight', 0.6))
-                print(f"weight: {weight}")
-        except Exception as e:
-            self.get_logger().warn(f"Error reading YAML: {e}")
-            weight = 0.6
-        #
-
         # Check if the source and destination are valid
         if not self.is_valid(src[0], src[1]) or not self.is_valid(dest[0], dest[1]):
             print("Source or destination is invalid")
@@ -331,6 +319,7 @@ class PathPlanner(Node):
 
                         # g_new = cell_details[i][j].g + 1.0
                         h_new = self.calculate_h_value(new_i, new_j, dest)
+                        weight = 0.8
                         f_new = g_new + h_new * weight
 
                         # If the cell is not in the open list or the new f value is smaller
