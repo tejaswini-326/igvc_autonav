@@ -9,6 +9,7 @@ from sklearn.cluster import DBSCAN
 import math
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
+from object_detection.msg import ObjectData
 
 # The max length of the stop line
 MAX_STOP_LINE_LENGTH = 100 
@@ -33,9 +34,19 @@ class YellowParkingDetector(Node):
             self.image_callback,
             10
         )
+
+        self.object_data_sub = self.create_subscription(
+            ObjectData,
+            'object_data',
+            self.object_data_callback,
+            10
+        )
+
         
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.bridge = CvBridge()
+
+        self.barrel_detected = False
         
         #Storing latest image for stop line detection
         self.latest_image = None
@@ -341,6 +352,18 @@ class YellowParkingDetector(Node):
             return None  # Force proceed
             
         return cmd
+    
+    def is_barrel_detected(self):
+        return self.barrel_detected
+    
+    def object_data_callback(self, msg):
+        if msg.label.lower() == "barrel":
+            x = msg.position.x
+            y = msg.position.y
+            z = msg.position.z
+            self.barrel_detected = True
+        else:
+            self.barrel_detected = False
 
     def pointcloud_callback(self, msg):
         if self.state == "STOPPED":
@@ -388,6 +411,15 @@ class YellowParkingDetector(Node):
             cmd = Twist()
             cmd.linear.x = 0.7
             cmd.angular.z = 0.1
+            self.cmd_pub.publish(cmd)
+
+        elif self.state == "FOUND_LINE_WITHOUT_BARREL":
+            if self.is_barrel_detected:
+                self.state = "FOUND_ONE_LINE"
+                self.get_logger().info("Barrel detected")
+            cmd = Twist()
+            cmd.linear.x = 0.6
+            cmd.angular.z = 0.2
             self.cmd_pub.publish(cmd)
 
         elif self.state == "FOUND_ONE_LINE":

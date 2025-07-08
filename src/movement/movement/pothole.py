@@ -37,8 +37,10 @@ class PotholeDetectorNode(Node):
         self.pc_pub = self.create_publisher(PointCloud2, '/pothole', 10)
 
         #camera intrinsics from urdf
-        self.fx, self.fy = FX, FY
-        self.cx, self.cy = CX, CY
+        self.fx = 246.49
+        self.fy = 246.49
+        self.cx = 300.0
+        self.cy = 300.0
         self.frame_count = 0  #used to skip frames for speed
 
         #initialising variables
