@@ -1,204 +1,223 @@
-'''Description: Node that creates and publishes a costmap od bot's surroundings'''
+#!/usr/bin/env python3
+"""
+Fast cost-map node **with verbose logging**.
 
-#importing libraries
+Implements:
+  •  NumPy point-cloud transform (no do_transform_cloud)
+  •  Zero-copy PointCloud2 → NumPy
+  •  Re-uses scratch buffers
+  •  MultiThreadedExecutor
+  •  Plenty of DEBUG/INFO logs so we can inspect every step
+"""
+
+import os
 import rclpy
-import cv2
 from rclpy.node import Node
 import numpy as np
+import cv2
+
 from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import PointCloud2
-from sensor_msgs_py import point_cloud2
 from std_msgs.msg import Header
 from tf2_ros import Buffer, TransformListener
-from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
-# import tf2_geometry_msgs
-# from geometry_msgs.msg import PointStamped
 
 
-class CostmapNode(Node): #constructor for costmap node
+# ---------------------------------------------------------------------------#
+#                               helper utilities                              #
+# ---------------------------------------------------------------------------#
+def transform_to_matrix(tf_msg) -> np.ndarray:
+    """geometry_msgs/TransformStamped → 4×4 float32 homogeneous matrix"""
+    q = tf_msg.transform.rotation
+    t = tf_msg.transform.translation
+    qx, qy, qz, qw = q.x, q.y, q.z, q.w
+    R = np.array([
+        [1 - 2 * (qy*qy + qz*qz),     2 * (qx*qy - qz*qw),     2 * (qx*qz + qy*qw)],
+        [2 * (qx*qy + qz*qw),         1 - 2 * (qx*qx + qz*qz), 2 * (qy*qz - qx*qw)],
+        [2 * (qx*qz - qy*qw),         2 * (qy*qz + qx*qw),     1 - 2 * (qx*qx + qy*qy)]
+    ], dtype=np.float32)
+    M = np.eye(4, dtype=np.float32)
+    M[:3, :3] = R
+    M[:3, 3]  = np.array([t.x, t.y, t.z], dtype=np.float32)
+    return M
+
+
+def pc2_numpy_xyz(msg: PointCloud2) -> np.ndarray:
+    """
+    Fast zero-copy extraction of an (N,3) float32 array (x,y,z) from a
+    sensor_msgs/PointCloud2, regardless of point_step.
+    """
+    # dtype whose itemsize == point_step so NumPy respects the stride
+    dtype_xyz = np.dtype({'names': ('x', 'y', 'z'),
+                          'formats': ('<f4', '<f4', '<f4'),
+                          'itemsize': msg.point_step})
+    cloud = np.frombuffer(msg.data, dtype=dtype_xyz,
+                          count=msg.width * msg.height)
+    return np.vstack((cloud['x'], cloud['y'], cloud['z'])).T.astype(np.float32)
+
+
+# ---------------------------------------------------------------------------#
+#                                    node                                    #
+# ---------------------------------------------------------------------------#
+class CostmapNode(Node):
     def __init__(self):
-        super().__init__('costmap_node')
+        super().__init__('costmap_node_fast_debug')
 
-        #constmap parameters
-        self.resolution = 0.067  #meters per cell
-        self.width = 300
-        self.height = 300
-        self.origin_x = 0.0
-        self.origin_y = 0.0
-        self.frame_id = 'odom'
+        # ----------------------- map parameters ---------------------------
+        self.resolution = 0.067   # metres / cell
+        self.width      = 300
+        self.height     = 300
+        self.frame_id   = 'odom'
 
-        #costmap publisher
-        self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', 10)
+        # --------------------- pre-allocated buffers ----------------------
+        self._empty   = np.zeros((self.height, self.width),  np.uint8)
+        self._scratch = np.zeros_like(self._empty)           # reusable work buf
+        self.white_map  = self._empty.copy()
+        self.yellow_map = self._empty.copy()
+        self.object_map = self._empty.copy()
 
-        #subbscriptions
-        self.object_pc_sub = self.create_subscription(PointCloud2, '/object_pc', self.object_pc_callback, 10)
-        self.wlane_pc_sub = self.create_subscription(PointCloud2, '/white_lane_points', self.white_lane_pc_callback, 10)
-        self.ylane_pc_sub = self.create_subscription(PointCloud2, '/yellow_lane_points', self.yellow_lane_pc_callback, 10)
-        
-        #TF listener
-        self.tf_buffer = Buffer()
+        # --------------------------- I/O ----------------------------------
+        qos = 10
+        self.create_subscription(PointCloud2, '/object_pc',
+                                 self._object_cb, qos)
+        self.create_subscription(PointCloud2, '/white_lane_points',
+                                 self._white_cb,  qos)
+        self.create_subscription(PointCloud2, '/yellow_lane_points',
+                                 self._yellow_cb, qos)
+        self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', qos)
+
+        # ----------------------------- TF ---------------------------------
+        self.tf_buffer   = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # Timer for costmap callback
-        self.timer = self.create_timer(0.1, self.timer_callback)  # 10 Hz
-        self.empty_layer = np.zeros((self.height, self.width), dtype=np.uint8)
-        #internal maps
-        self.white_map = self.empty_layer
-        self.yellow_map = self.empty_layer
-        self.object_map = self.empty_layer
-        self.latest_white_pc = None
-        self.latest_yellow_pc = None
-        self.latest_object_pc = None
-        self.new_white = False
-        self.new_yellow = False
-        self.new_object = False
+        # --------------------------- state --------------------------------
+        self._object_pc = self._white_pc = self._yellow_pc = None
+        self._new_object = self._new_white = self._new_yellow = False
+        self._T_odom_cam = np.eye(4, dtype=np.float32)
+        self.origin_x = self.origin_y = 0.0
 
+        # ---------------------------- timer -------------------------------
+        self.create_timer(0.05, self._timer_cb)   # 10 Hz
 
-    #callback functions for point cloud data
-    def object_pc_callback(self, msg):
-        self.latest_object_pc = msg
-        self.new_object = True
+        # --------------------- logger level tweak -------------------------
+        # Set ROS_CONSOLE_STDOUT_LINE_BUFFERED=1 for live prints in docker
+        level = os.getenv('COSTMAP_DEBUG_LEVEL', 'info').lower()
+        self.get_logger().info(f'Cost-map node up (log level = {level})')
+        self.get_logger().set_level(
+            rclpy.logging.LoggingSeverity.DEBUG
+            if level == 'debug' else rclpy.logging.LoggingSeverity.INFO)
 
-    def white_lane_pc_callback(self, msg):
-        self.latest_white_pc = msg
-        self.new_white = True
+    # ---------------------- subscriber callbacks --------------------------
+    def _object_cb(self, msg):  self._object_pc, self._new_object = msg, True
+    def _white_cb(self,  msg):  self._white_pc,  self._new_white  = msg, True
+    def _yellow_cb(self, msg):  self._yellow_pc, self._new_yellow = msg, True
 
-    def yellow_lane_pc_callback(self, msg):
-        self.latest_yellow_pc = msg
-        self.new_yellow = True
-
-    def timer_callback(self):
+    # ---------------------------- timer loop -----------------------------
+    def _timer_cb(self):
+        # ---------- TF lookup --------------------------------------------
         try:
-            transform = self.tf_buffer.lookup_transform('odom', 'camera_link', rclpy.time.Time())
-            self.robot_x = transform.transform.translation.x
-            self.robot_y = transform.transform.translation.y
-            self.origin_x = self.robot_x - (self.width * self.resolution) / 2
-            self.origin_y = self.robot_y - (self.height * self.resolution) / 2
-            self.cached_tranform = transform
+            tf = self.tf_buffer.lookup_transform('odom', 'camera_link',
+                                                 rclpy.time.Time())
+            self._T_odom_cam = transform_to_matrix(tf)
+            rx, ry = tf.transform.translation.x, tf.transform.translation.y
+            self.origin_x = rx - (self.width  * self.resolution) / 2.0
+            self.origin_y = ry - (self.height * self.resolution) / 2.0
         except Exception as e:
-            self.get_logger().warn(f"TF lookup failed in timer: {e}")
+            self.get_logger().warn(f'TF lookup failed: {e}')
             return
 
-        if self.new_white and self.latest_white_pc:
-            self.white_map = self.generate_costmap(self.latest_white_pc, "white")
-            self.new_white = False
+        self.get_logger().debug(
+            f"TF OK  | origin=({self.origin_x:.2f},{self.origin_y:.2f})")
 
-        if self.new_yellow and self.latest_yellow_pc:
-            self.yellow_map = self.generate_costmap(self.latest_yellow_pc, "yellow")
-            self.new_yellow = False
+        # ---------- regenerate each layer --------------------------------
+        if self._new_white and self._white_pc is not None:
+            self.white_map[:] = self._make_layer(self._white_pc, 250, 'white')
+            self._new_white = False
+        if self._new_yellow and self._yellow_pc is not None:
+            self.yellow_map[:] = self._make_layer(self._yellow_pc, 250, 'yellow')
+            self._new_yellow = False
+        if self._new_object and self._object_pc is not None:
+            self.object_map[:] = self._make_layer(self._object_pc, 100, 'object')
+            self._new_object = False
 
-        if self.new_object and self.latest_object_pc:
-            self.object_map = self.generate_costmap(self.latest_object_pc, "object")
-            self.new_object = False
+        # ---------- fuse + publish ---------------------------------------
+        combined = np.maximum.reduce([self.white_map,
+                                      self.yellow_map,
+                                      self.object_map])
+        self._publish_costmap(combined, self.get_clock().now().to_msg())
 
-        # Combine and publish
-        combined = np.maximum.reduce([self.white_map, self.yellow_map, self.object_map])
-        self.publish_costmap(combined, self.get_clock().now().to_msg())
-        self.white_map = None
-        self.yellow_map = None
-        self.object_map = None
+    # ------------------------ layer construction -------------------------
+    def _make_layer(self, pc_msg: PointCloud2, value: int, tag: str) -> np.ndarray:
+        # 1) cloud → NumPy -------------------------------------------------
+        pts = pc2_numpy_xyz(pc_msg)
+        self.get_logger().debug(f"[{tag}] cloud points: {pts.shape[0]}")
+        if pts.size == 0:
+            return self._empty
 
-    def generate_costmap(self, msg, tag="lane"):
-        try:
-            transform = self.cached_tranform
-        except Exception as e:
-            self.get_logger().warn(f"TF error: {e}")
-            return self.empty_layer
+        # 2) transform -----------------------------------------------------
+        xyz1 = np.hstack((pts, np.ones((pts.shape[0], 1), np.float32)))
+        xyz  = (self._T_odom_cam @ xyz1.T).T[:, :3]          # (N,3)
 
-        try:
-            transformed_msg = do_transform_cloud(msg, transform)
-        except Exception as e:
-            self.get_logger().warn(f"PointCloud transform failed: {e}")
-            return self.empty_layer
+        # 3) map indices ---------------------------------------------------
+        mx_raw = (xyz[:, 0] - self.origin_x) / self.resolution
+        my_raw = (xyz[:, 1] - self.origin_y) / self.resolution
+        valid  = ((mx_raw >= 0) & (mx_raw < self.width) &
+                  (my_raw >= 0) & (my_raw < self.height))
+                #   (mx_raw > 100))             # ignore rear half
+        vcount = int(np.count_nonzero(valid))
+        self.get_logger().debug(f"[{tag}] valid pts: {vcount}")
+        if vcount == 0:
+            return self._empty
 
-        costmap = np.zeros((self.height, self.width), dtype=np.uint8)
+        mx = mx_raw[valid].astype(np.int32)
+        my = my_raw[valid].astype(np.int32)
 
-        gen = point_cloud2.read_points(transformed_msg, field_names=["x", "y"], skip_nans=True)
-        points = np.fromiter(gen, dtype=np.dtype([('x', np.float32), ('y', np.float32)]))
-        points = np.stack((points['x'], points['y']), axis=-1)
+        # 4) draw points ---------------------------------------------------
+        layer = self._scratch
+        layer.fill(0)
+        layer[my, mx] = value
 
-        if points.shape[0] == 0:
-            return self.empty_layer
+        # 5) gaussian blur -------------------------------------------------
+        blurred = cv2.GaussianBlur(layer.astype(np.float32),
+                                   (15, 15), sigmaX=3.0)
+        gmax = float(blurred.max())
+        self.get_logger().debug(f"[{tag}] gmax before scale: {gmax:.1f}")
+        if gmax > 0.0:
+            power = 2.0 if value == 100 else 0.8
+            blurred = ((blurred / (gmax ** power)) * 100).astype(np.uint8)
+            np.maximum(layer, blurred, out=layer)
 
-        mx_raw = (points[:, 0] - self.origin_x) / self.resolution
-        my_raw = (points[:, 1] - self.origin_y) / self.resolution
+        # copy because scratch will be reused next layer
+        return layer.copy()
 
-        valid = (
-            (mx_raw >= 0) & (mx_raw < self.width) &
-            (my_raw >= 0) & (my_raw < self.height)
-        )
+    # -------------------------- grid publisher ---------------------------
+    @staticmethod
+    def _scale_to_ogrid(grid: np.ndarray) -> np.ndarray:
+        """
+        Convert uint8 [0,255] → int8 [0,100] as required by nav2.
+        We use *float* scaling first to avoid the bug that produced only 0.
+        """
+        return ((grid.astype(np.float32) / 255.0) * 100.0 + 0.5).astype(np.int8)
 
-        mx = mx_raw[valid].astype(int)
-        my = my_raw[valid].astype(int)
-
-        if tag == "object":
-            value = 100
-        elif tag == "white":
-            value = 250
-        elif tag == "yellow":
-            value = 150
-        else:
-            value = 0
-
-        mask = costmap[my, mx] < 255
-        costmap[my[mask], mx[mask]] = value
-
-        if not np.any(costmap):
-            return self.empty_layer
-
-        binary = costmap.astype(np.float32)
-        gradient = cv2.GaussianBlur(binary, (15, 15), sigmaX=2.3)
-
-        grad_max = gradient.max()
-        if grad_max > 0:
-            power = 2.0 if tag == "object" else 0.8
-            scaled = ((gradient / (grad_max ** power)) * 100).astype(np.uint8)
-        else:
-            scaled = np.zeros_like(costmap)
-
-        return np.maximum(costmap, scaled)
-
-    
-        # Store updated layer
-        '''if tag == "white":
-            self.white_map = costmap
-        elif tag == "yellow":
-            self.yellow_map = costmap
-        elif tag == "object":
-            self.object_map = costmap'''
-
-        # clears
-        '''if tag == "white":
-            self.white_map = None
-        elif tag == "yellow":
-            self.yellow_map = None
-        elif tag == "object":
-            self.object_map = None'''
-
-    #function to construct and publish costmap message
-    def publish_costmap(self, costmap, stamp):
+    def _publish_costmap(self, grid: np.ndarray, stamp):
         msg = OccupancyGrid()
-        msg.header = Header()
-        msg.header.stamp = stamp
-        msg.header.frame_id = self.frame_id
-
+        msg.header = Header(stamp=stamp, frame_id=self.frame_id)
         msg.info.resolution = self.resolution
-        msg.info.width = self.width
-        msg.info.height = self.height
-
-        # Ensure origin values are floats and not None or NaN
-        try:
-            msg.info.origin.position.x = float(self.origin_x)
-            msg.info.origin.position.y = float(self.origin_y)
-        except (TypeError, ValueError):
-            self.get_logger().error("Invalid origin_x or origin_y — skipping costmap publish")
-            return
-
+        msg.info.width      = self.width
+        msg.info.height     = self.height
+        msg.info.origin.position.x = float(self.origin_x)
+        msg.info.origin.position.y = float(self.origin_y)
         msg.info.origin.orientation.w = 1.0
-        msg.data = [int(v / 255 * 100) for v in costmap.flatten()]
+
+        scaled = self._scale_to_ogrid(grid)
+        nz = int(np.count_nonzero(scaled))
+        self.get_logger().debug(f"publish grid: non-zero cells = {nz}")
+        msg.data = scaled.flatten().tolist()
         self.costmap_pub.publish(msg)
 
 
+# ---------------------------------------------------------------------------#
+#                                     main                                   #
+# ---------------------------------------------------------------------------#
 def main(args=None):
     rclpy.init(args=args)
     node = CostmapNode()

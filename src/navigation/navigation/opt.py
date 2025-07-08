@@ -33,7 +33,6 @@ class PathPlanner(Node):
         self.goal_sub = self.create_subscription(PoseStamped, '/goal_point', self.goal_cb, 10)
         # self.path_pub = self.create_publisher(Path, '/planned_path', 10)
         self.sm_path_pub = self.create_publisher(Path, '/sm_planned_path', 10)
-        self.lane = 'right'
 
         self.param_file_path = os.path.expanduser('~/.config/config_igvc_ui/config.yaml')
 

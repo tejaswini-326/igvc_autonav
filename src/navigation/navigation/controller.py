@@ -21,8 +21,9 @@ class Controller(Node):
         super().__init__('controller')
 
         self.path = []
-        self.lookahead_distance = .75
-        self.linear_speed = 1
+
+        self.lookahead_distance = .9
+        self.linear_speed = .75
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
@@ -64,11 +65,19 @@ class Controller(Node):
 
     def odom_callback(self, msg):
         self.pose = msg.pose.pose
+        #self.get_logger().info("odom callback received.")
 
     def imu_callback(self, msg):
-        q = msg.orientation
-        quat = [q.x, q.y, q.z, q.w]
-        _, _, yaw = tf_transformations.euler_from_quaternion(quat)
+
+        try:
+            q = msg.orientation
+            quat = [q.x, q.y, q.z, q.w]
+            _, _, yaw = tf_transformations.euler_from_quaternion(quat)
+
+            self.imu_yaw = yaw
+            self.get_logger().info("IMU yaw = {:.2f}".format(yaw))
+        except Exception as e:
+            self.get_logger().warn(f"[IMU callback error] {e}")
 
         self.yaw_buffer.append(yaw)
 
@@ -90,6 +99,7 @@ class Controller(Node):
                 self.imu_yaw = float(median)
         else:
             self.imu_yaw = yaw
+        #self.get_logger().info("IMU callback received.")
 
     def path_callback(self, msg: Path):
         self.path = [(pose.pose.position.x, pose.pose.position.y)for pose in msg.poses]
@@ -100,6 +110,7 @@ class Controller(Node):
         yaw_variability = np.std(self.yaw_buffer) if len(self.yaw_buffer) > 2 else 0.0
         adaptive_factor = np.clip(1.0 + 2.5 * yaw_variability, 1.0, 1.5)
         return base_distance * adaptive_factor
+        #self.get_logger().info("adapted whatever")
 
     def find_lookahead_point(self):
         if self.pose is None or not self.path:
@@ -211,7 +222,11 @@ class Controller(Node):
         if xr < 0:
             self.log_info_throttled("Lookahead behind. Turning.")
             twist.linear.x = 0.0
-            twist.angular.z = np.sign(angle) * self.max_angular_speed
+            twist.linear.y = 0.0
+            twist.linear.z = 0.0
+            twist.angular.z = float(np.sign(angle) * self.max_angular_speed)
+            twist.angular.x = 0.0
+            twist.angular.y = 0.0
             self.cmd_pub.publish(twist)
             return
 
@@ -219,29 +234,51 @@ class Controller(Node):
             if abs(angle) > math.radians(10):
                 self.log_info_throttled("Close to lookahead but misaligned. Rotating in place.")
                 twist.linear.x = 0.0
-                twist.angular.z = np.clip(2.0 * angle, -self.max_angular_speed, self.max_angular_speed)
+                twist.linear.y = 0.0
+                twist.linear.z = 0.0
+                twist.angular.z = float(np.clip(2.0 * angle, -self.max_angular_speed, self.max_angular_speed))
+                twist.angular.x = 0.0
+                twist.angular.y = 0.0
             else:
                 self.log_info_throttled("Lookahead very close and aligned. Continuing cautiously.")
-                twist.linear.x = self.linear_speed * 0.3
+                twist.linear.x = float(self.linear_speed * 0.3)
+                twist.linear.y = 0.0
+                twist.linear.z = 0.0
                 twist.angular.z = 0.0
+                twist.angular.x = 0.0
+                twist.angular.y = 0.0
             self.cmd_pub.publish(twist)
             return
 
         if abs(angle) > math.radians(25):
-            twist.linear.x = self.linear_speed * 0.1
-            twist.angular.z = np.clip(2.0 * angle, -self.max_angular_speed, self.max_angular_speed)
+            twist.linear.x = float(self.linear_speed * 0.1)
+            twist.linear.y = 0.0
+            twist.linear.z = 0.0
+            twist.angular.z = float(np.clip(2.0 * angle, -self.max_angular_speed, self.max_angular_speed))
+            twist.angular.x = 0.0
+            twist.angular.y = 0.0
+
         elif abs(angle) > math.radians(5):
-            twist.linear.x = self.linear_speed * 0.4
-            twist.angular.z = np.clip(1.5 * angle, -self.max_angular_speed, self.max_angular_speed)
+            twist.linear.x = float(self.linear_speed * 0.4)
+            twist.linear.y = 0.0
+            twist.linear.z = 0.0
+            twist.angular.z = float(np.clip(1.5 * angle, -self.max_angular_speed, self.max_angular_speed))
+            twist.angular.x = 0.0
+            twist.angular.y = 0.0
         else:
-            twist.linear.x = self.linear_speed
-            twist.angular.z = np.clip(1.2 * angle, -self.max_angular_speed, self.max_angular_speed)
+            twist.linear.x = float(self.linear_speed)
+            twist.linear.y = 0.0
+            twist.linear.z = 0.0
+            twist.angular.z = float(np.clip(1.2 * angle, -self.max_angular_speed, self.max_angular_speed))
+            twist.angular.x = 0.0
+            twist.angular.y = 0.0
 
         twist.angular.z = (self.angular_damping_factor * self.prev_angular_z +(1 - self.angular_damping_factor) * twist.angular.z)
         self.prev_angular_z = twist.angular.z
-        twist.angular.z = np.clip(twist.angular.z, -1.0, 1.0)
+        twist.angular.z = float(np.clip(twist.angular.z, -1.0, 1.0))
         self.cmd_pub.publish(twist)
-        
+        self.get_logger().info(f"Publishing Twist: linear={twist.linear.x:.2f}, angular={twist.angular.z:.2f}")
+      
 
 
     def publish_marker_timer(self):

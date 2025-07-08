@@ -15,8 +15,8 @@ import os
 import yaml
 
 # Define the size of the grid
-ROW = 300
-COL = 300
+WIDTH = 300
+HEIGHT = 300
 class PathPlanner(Node):
     class Cell:
         def __init__(self):
@@ -31,9 +31,8 @@ class PathPlanner(Node):
         self.costmap_sub = self.create_subscription(OccupancyGrid, '/costmap', self.costmap_cb, 10)
         self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
         self.goal_sub = self.create_subscription(PoseStamped, '/goal_point', self.goal_cb, 10)
-        # self.path_pub = self.create_publisher(Path, '/planned_path', 10)
+        self.path_pub = self.create_publisher(Path, '/planned_path', 10)
         self.sm_path_pub = self.create_publisher(Path, '/sm_planned_path', 10)
-        self.lane = 'right'
 
         self.param_file_path = os.path.expanduser('~/.config/config_igvc_ui/config.yaml')
 
@@ -55,12 +54,10 @@ class PathPlanner(Node):
         self.resolution = msg.info.resolution
         self.width = msg.info.width
         self.height = msg.info.height
-        if(self.goal_y != -1 and self.goal_y != -1):
-            # Convert flat costmap to 2D list
-            self.grid_2d = np.array(self.costmap.data,dtype = np.int8).reshape((self.height,self.width)).tolist()
-            self.robot_pose.x, self.robot_pose.y = self.odom_to_costmap(self.robot_pose.x, self.robot_pose.y)
-            self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [self.goal_x, self.goal_y])
-            # self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [350,250])
+        self.grid_2d = self.costmap.data
+        # self.robot_pose.x, self.robot_pose.y = self.odom_to_costmap(self.robot_pose.x, self.robot_pose.y)
+        # self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [self.goal_x, self.goal_y])
+        # self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [350,250])
 
     def odom_cb(self, msg):
         self.robot_pose = msg.pose.pose.position
@@ -77,6 +74,12 @@ class PathPlanner(Node):
             self.get_logger().info(f"Goal received and converted to grid: ({self.goal_x}, {self.goal_y})")
         else:
             self.get_logger().warn("Goal is outside map bounds")
+
+        if(self.goal_x != -1 and self.goal_y != -1):
+            # self.robot_pose.x, self.robot_pose.y = self.odom_to_costmap(self.robot_pose.x, self.robot_pose.y)
+            # self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [self.goal_x, self.goal_y])
+            self.a_star_search(self.grid_2d, [150, 150], [self.goal_x, self.goal_y])
+            # self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [350,250])
 
         # uncomment if goal point needs to be visualized
         # try:
@@ -151,10 +154,10 @@ class PathPlanner(Node):
         return (x, y)
     
     def is_valid(self, row, col):
-        return (row >= 0) and (row < ROW) and (col >= 0) and (col < COL)
+        return (row >= 0) and (row < WIDTH) and (col >= 0) and (col < HEIGHT)
     
     def is_unblocked(self, grid, row, col):
-        return grid[row][col] < 50
+        return grid[row * WIDTH + col] < 50
 
     # Check if a cell is the destination
     def is_destination(self, row, col, dest):
@@ -189,11 +192,11 @@ class PathPlanner(Node):
             print("->", i, end=" ")
             
         print()
-        # self.publish_path(path)
+        self.publish_path(path)
         smoothed = self.gradient_smooth(path)
         self.publish_sm_path(smoothed)
 
-    def gradient_smooth(self, path, w_data=0.6, w_smooth=0.3, tolerance=1e-4):
+    def gradient_smooth(self, path, w_data=0.009, w_smooth=0.4, tolerance=1e-4):
 
         # uncomment if u want to read the parameters from yaml file
         # try:
@@ -212,6 +215,7 @@ class PathPlanner(Node):
         #     w_data = 0.6
         #     w_smooth = 0.3
         #     tolerance = 1e-4
+        #
 
         new_path = [list(p) for p in path]
         change = tolerance
@@ -242,9 +246,9 @@ class PathPlanner(Node):
             return
 
         # Initialize the closed list (visited cells)
-        closed_list = [[False for _ in range(COL)] for _ in range(ROW)]
+        closed_list = [[False for _ in range(HEIGHT)] for _ in range(WIDTH)]
         # Initialize the details of each cell
-        cell_details = [[self.Cell() for _ in range(COL)] for _ in range(ROW)]
+        cell_details = [[self.Cell() for _ in range(HEIGHT)] for _ in range(WIDTH)]
 
         # Initialize the start cell details
         i = src[0]
@@ -302,7 +306,7 @@ class PathPlanner(Node):
 
                         # g_new = cell_details[i][j].g + 1.0
                         h_new = self.calculate_h_value(new_i, new_j, dest)
-                        weight = 0.85
+                        weight = 0.01
                         f_new = g_new + h_new * weight
 
                         # If the cell is not in the open list or the new f value is smaller
@@ -321,44 +325,44 @@ class PathPlanner(Node):
             print("Failed to find the destination cell")
 
     # uncomment if u want to visualize raw path without smoothening
-    # def publish_path(self, path_cells):
-    #     path_msg = Path()
-    #     path_msg.header.stamp = self.get_clock().now().to_msg()
-    #     path_msg.header.frame_id = 'odom'  # Target frame
+    def publish_path(self, path_cells):
+        path_msg = Path()
+        path_msg.header.stamp = self.get_clock().now().to_msg()
+        path_msg.header.frame_id = 'odom'  # Target frame
 
-    #     for (mx, my) in path_cells:
-    #         wx, wy = self.costmap_to_odom(mx, my)
+        for (mx, my) in path_cells:
+            wx, wy = self.costmap_to_odom(mx, my)
 
-    #         # Convert world (map) point to odom frame
-    #         world_pt = PointStamped()
-    #         world_pt.header.frame_id = self.costmap.header.frame_id  # usually "map"
-    #         world_pt.header.stamp = self.get_clock().now().to_msg()
-    #         world_pt.point.x = wx
-    #         world_pt.point.y = wy
-    #         world_pt.point.z = 0.0
+            # Convert world (map) point to odom frame
+            world_pt = PointStamped()
+            world_pt.header.frame_id = self.costmap.header.frame_id  # usually "map"
+            world_pt.header.stamp = self.get_clock().now().to_msg()
+            world_pt.point.x = wx
+            world_pt.point.y = wy
+            world_pt.point.z = 0.0
 
-    #         try:
-    #             # wait for transform to be available
-    #             if not self.tf_buffer.can_transform('odom', world_pt.header.frame_id, rclpy.time.Time()):
-    #                 self.get_logger().warn("Transform not available, skipping point")
-    #                 continue
+            try:
+                # wait for transform to be available
+                if not self.tf_buffer.can_transform('odom', world_pt.header.frame_id, rclpy.time.Time()):
+                    self.get_logger().warn("Transform not available, skipping point")
+                    continue
 
-    #             odom_pt = tf2_geometry_msgs.do_transform_point(world_pt,
-    #                 self.tf_buffer.lookup_transform('odom', world_pt.header.frame_id, rclpy.time.Time()))
+                odom_pt = tf2_geometry_msgs.do_transform_point(world_pt,
+                    self.tf_buffer.lookup_transform('odom', world_pt.header.frame_id, rclpy.time.Time()))
 
-    #             pose = PoseStamped()
-    #             pose.header = path_msg.header
-    #             pose.pose.position = odom_pt.point
-    #             pose.pose.orientation.w = 1.0  # No orientation needed
+                pose = PoseStamped()
+                pose.header = path_msg.header
+                pose.pose.position = odom_pt.point
+                pose.pose.orientation.w = 1.0  # No orientation needed
 
-    #             path_msg.poses.append(pose)
+                path_msg.poses.append(pose)
 
-    #         except Exception as e:
-    #             self.get_logger().warn(f"Transform error: {e}")
-    #             continue
+            except Exception as e:
+                self.get_logger().warn(f"Transform error: {e}")
+                continue
 
-    #     self.path_pub.publish(path_msg)
-    #     self.get_logger().info(f"Published path with {len(path_msg.poses)} poses.")
+        self.path_pub.publish(path_msg)
+        self.get_logger().info(f"Published path with {len(path_msg.poses)} poses.")
 
 
     def publish_sm_path(self, path_cells):
