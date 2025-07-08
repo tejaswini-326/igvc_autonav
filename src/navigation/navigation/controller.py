@@ -65,7 +65,7 @@ class Controller(Node):
 
     def odom_callback(self, msg):
         self.pose = msg.pose.pose
-        #self.get_logger().info("odom callback received.")
+        self.get_logger().info("odom callback received.")
 
     def imu_callback(self, msg):
 
