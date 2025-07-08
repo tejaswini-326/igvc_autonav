@@ -322,6 +322,7 @@ class LaneFollowerNode(Node):
                 yellow_y_mean = np.mean(y_vals_yellow)
                 yellow_point_count = len(final_yellow_points)
 
+            all_cluster_infos = []
             for label in unique_labels_white:
                 if label == -1:
                     continue
@@ -355,17 +356,28 @@ class LaneFollowerNode(Node):
 
                 # Curve fit
                 coeffs = np.polyfit(points_xy_cluster[:, 0], points_xy_cluster[:, 1], deg=2)
-                cluster_curves.append((label, coeffs, 'white', points_xy_cluster))
 
-                subset = points_xy_cluster[:100]  # First 100 points only (or fewer if cluster has <100)
+                # Compute distances from origin for all points
+                distances = np.linalg.norm(points_xy_cluster, axis=1)
+                # Get indices of the 100 closest points
+                closest_indices = np.argsort(distances)[:100]
+                # Extract those points
+                subset = points_xy_cluster[closest_indices]
                 center_x = np.mean(subset[:, 0])
                 center_y = np.mean(subset[:, 1])
                 white_cluster_centers.append((center_x, center_y))  # CHANGE 2: Store center coordinates
                 self.get_logger().info(f"White cluster {label}: center = ({center_x:.2f}, {center_y_white:.2f}), points = {num_white_pts}")
+                # cluster_curves.append((label, coeffs, 'white', points_xy_cluster))
+                all_cluster_infos.append((label, coeffs, 'white', points_xy_cluster, center_y))
 
-            y_values = [cy for _, cy in white_cluster_centers]
-            leftmost_white_x = min(y_values)
-            rightmost_white_x = max(y_values)
+            if len(white_cluster_centers) > 0:
+                y_values = [cy for _, cy in white_cluster_centers]
+                leftmost_white_x = min(y_values)
+                rightmost_white_x = max(y_values)
+            else:
+                self.get_logger().warn("No white cluster centers found — setting left/right bounds to default")
+                leftmost_white_x = -1.5  # fallback default
+                rightmost_white_x = 1.5
 
             for cy in [c[1] for c in white_cluster_centers]:
                 if cy < 0:
@@ -375,6 +387,21 @@ class LaneFollowerNode(Node):
                     if cy < rightmost_white_x:
                         rightmost_white_x = cy
             self.get_logger().info(f"leftmost_white cluster = {leftmost_white_x} and rightmost white cluster = {rightmost_white_x}")
+            
+            # Apply filtering logic based on cluster centers
+            if len(white_cluster_centers) >= 2 and leftmost_white_x < 0 and rightmost_white_x > 0:
+                self.get_logger().info("Filtering to only closest left/right white clusters")
+                for cluster_info in all_cluster_infos:
+                    label, coeffs, color, pts, cy = cluster_info
+                    if abs(cy - leftmost_white_x) < 1e-3 or abs(cy - rightmost_white_x) < 1e-3:
+                        cluster_curves.append((label, coeffs, color, pts))
+            else:
+                self.get_logger().info("Appending all white clusters (did not meet left/right condition)")
+                for cluster_info in all_cluster_infos:
+                    label, coeffs, color, pts, _ = cluster_info
+                    cluster_curves.append((label, coeffs, color, pts))
+
+
             # === Publish filtered white points only ===
         if len(clustered_white_points) > 0:
             white_msg = pc2.create_cloud_xyz32(msg.header, clustered_white_points)
