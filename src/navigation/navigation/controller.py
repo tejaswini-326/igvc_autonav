@@ -22,8 +22,8 @@ class Controller(Node):
 
         self.path = []
 
-        self.lookahead_distance = .75
-        self.linear_speed = .5
+        self.lookahead_distance = .9
+        self.linear_speed = .75
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
@@ -65,7 +65,7 @@ class Controller(Node):
 
     def odom_callback(self, msg):
         self.pose = msg.pose.pose
-        #self.get_logger().info("odom callback received.")
+        self.get_logger().info("odom callback received.")
 
     def imu_callback(self, msg):
 
