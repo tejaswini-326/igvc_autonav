@@ -10,41 +10,92 @@ from rclpy.duration import Duration
 class GoalPublisher(Node):
     def __init__(self):
         super().__init__('goal_publisher')
-        self.lane = 'right'  # or 'left'
+        self.target_lane = 'right'  # or 'left'
+        self.current_lane = 'right'
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_point', 10)
         self.marker_sub = self.create_subscription(MarkerArray, '/lane_visualization', self.marker_callback, 10)
+        self.debug_marker_pub = self.create_publisher(MarkerArray, '/lane_debug_points', 10)
+
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.get_logger().info("GoalPublisher node initialized")
+        self.last_rp = None
+        self.last_lp = None
+        self.last_mp = None
 
     def marker_callback(self, msg):
+        self.get_logger().info(self.current_lane)
         lane_markers = [m for m in msg.markers if m.ns == "lane_curves" and m.type == Marker.LINE_STRIP]
 
-        if len(lane_markers) < 3:
-            self.get_logger().warn(f"Expected at least 3 lane markers (left, mid, right), got {len(lane_markers)}")
-            return
+        # if len(lane_markers) < 3:
+        #     self.get_logger().warn(f"Expected at least 3 lane markers (left, mid, right), got {len(lane_markers)}")
+        #     return
 
         # Sort by y to guess left < mid < right
-        lane_markers.sort(key=lambda m: m.points[0].y)
-        left_marker, mid_marker, right_marker = lane_markers[-1], lane_markers[1], lane_markers[0]
+        lane_markers.sort(key=lambda m: m.points[-1].y)
 
         try:
-            if self.lane == 'right':
-                p1 = self.average_last_n_points(right_marker.points, 5)
-            else:
-                p1 = self.average_last_n_points(left_marker.points, 5)
+            if len(lane_markers) == 3:
+                left_marker, mid_marker, right_marker = lane_markers[-1], lane_markers[1], lane_markers[0]
 
-            p2 = self.average_last_n_points(mid_marker.points, 5)
+                rp = self.average_last_n_points(right_marker.points, 5)
+                lp = self.average_last_n_points(left_marker.points, 5)
+                mp = self.average_last_n_points(mid_marker.points, 5)
+                self.last_rp = rp
+                self.last_lp = lp
+                self.last_mp = mp
 
-            # Midpoint between p1 and p2
-            goal_x = (p1[0] + p2[0]) / 2.0
-            goal_y = (p1[1] + p2[1]) / 2.0
-            goal_z = 0.0
+                # Midpoint
+                if self.target_lane == 'right':
+                    goal_x = (rp[0] + mp[0]) / 2.0
+                    goal_y = (rp[1] + mp[1]) / 2.0
+                    goal_z = 0.0
+                    self.current_lane = 'right'
+                else:
+                    goal_x = (lp[0] + mp[0]) / 2.0
+                    goal_y = (lp[1] + mp[1]) / 2.0
+                    goal_z = 0.0
+                    self.current_lane = 'left'
 
-            transformed = self.transform_to_baselink(goal_x, goal_y, goal_z)
+
+            elif len(lane_markers) == 2:
+                if self.current_lane == 'right':
+                    mid_marker, right_marker = lane_markers[1], lane_markers[0]
+                    rp = self.average_last_n_points(right_marker.points, 5)
+                    mp = self.average_last_n_points(mid_marker.points, 5)
+                    dx = rp[0] - mp[0]
+                    dy = rp[1] - mp[1]
+                    lp = (mp[0] - dx, mp[1] - dy)
+                else:
+                    mid_marker, left_marker = lane_markers[0], lane_markers[1]
+                    lp = self.average_last_n_points(left_marker.points, 5)
+                    mp = self.average_last_n_points(mid_marker.points, 5)
+                    dx = lp[0] - mp[0]
+                    dy = lp[1] - mp[1]
+                    rp = (mp[0] - dx, mp[1] - dy)
+
+                self.last_rp = rp
+                self.last_lp = lp
+                self.last_mp = mp
+
+                # Midpoint
+                if self.target_lane == 'right':
+                    goal_x = (rp[0] + mp[0]) / 2.0
+                    goal_y = (rp[1] + mp[1]) / 2.0
+                    goal_z = 0.0
+                    self.current_lane = 'right'
+                else:
+                    goal_x = (lp[0] + mp[0]) / 2.0
+                    goal_y = (lp[1] + mp[1]) / 2.0
+                    goal_z = 0.0
+                    self.current_lane = 'left'
+
+            transformed = self.transform_to_odom(goal_x, goal_y, goal_z)
             if transformed:
                 self.publish_goal(transformed)
+                self.publish_debug_markers()
+
             else:
                 self.get_logger().warn("Could not transform goal point to base_link")
 
@@ -57,7 +108,7 @@ class GoalPublisher(Node):
         avg_y = sum(p.y for p in points[-n:]) / n
         return (avg_x, avg_y)
 
-    def transform_to_baselink(self, x, y, z, frame_id = 'camera_link'):
+    def transform_to_odom(self, x, y, z, frame_id = 'camera_link'):
         try:
             stamped_point = PointStamped()
             stamped_point.header.stamp = self.get_clock().now().to_msg()
@@ -90,6 +141,46 @@ class GoalPublisher(Node):
 
         self.goal_pub.publish(goal_pose)
         self.get_logger().info(f"Published goal at ({point.x:.2f}, {point.y:.2f}) in odom")
+        
+    def publish_debug_markers(self):
+        marker_array = MarkerArray()
+        marker_id = 0
+        timestamp = self.get_clock().now().to_msg()
+
+        def make_marker(point, color, label):
+            nonlocal marker_id
+            m = Marker()
+            m.header.stamp = timestamp
+            m.header.frame_id = "camera_link"
+            m.ns = label
+            m.id = marker_id
+            marker_id += 1
+            m.type = Marker.SPHERE
+            m.action = Marker.ADD
+            m.pose.position.x = point[0]
+            m.pose.position.y = point[1]
+            m.pose.position.z = 0.1
+            m.pose.orientation.w = 1.0
+            m.scale.x = 0.3
+            m.scale.y = 0.3
+            m.scale.z = 0.3
+            m.color.r = color[0]
+            m.color.g = color[1]
+            m.color.b = color[2]
+            m.color.a = 1.0
+            return m
+
+        if self.last_rp:
+            marker_array.markers.append(make_marker(self.last_rp, (1.0, 0.0, 0.0), "right_point"))  # Red
+
+        if self.last_lp:
+            marker_array.markers.append(make_marker(self.last_lp, (0.0, 1.0, 0.0), "left_point"))   # Green
+
+        if self.last_mp:
+            marker_array.markers.append(make_marker(self.last_mp, (0.0, 0.0, 1.0), "mid_point"))    # Blue
+
+        self.debug_marker_pub.publish(marker_array)
+
 
 def main(args=None):
     rclpy.init(args=args)

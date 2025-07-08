@@ -23,7 +23,7 @@ class Controller(Node):
         self.path = []
 
         self.lookahead_distance = .9
-        self.linear_speed = .5
+        self.linear_speed = .75
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
@@ -99,7 +99,7 @@ class Controller(Node):
                 self.imu_yaw = float(median)
         else:
             self.imu_yaw = yaw
-        self.get_logger().info("IMU callback received.")
+        #self.get_logger().info("IMU callback received.")
 
     def path_callback(self, msg: Path):
         self.path = [(pose.pose.position.x, pose.pose.position.y)for pose in msg.poses]
@@ -110,7 +110,7 @@ class Controller(Node):
         yaw_variability = np.std(self.yaw_buffer) if len(self.yaw_buffer) > 2 else 0.0
         adaptive_factor = np.clip(1.0 + 2.5 * yaw_variability, 1.0, 1.5)
         return base_distance * adaptive_factor
-        self.get_logger().info("adapted whatever")
+        #self.get_logger().info("adapted whatever")
 
     def find_lookahead_point(self):
         if self.pose is None or not self.path:
