@@ -17,7 +17,7 @@ import time
 import ctypes
 
 
-MIN_CLUSTERING_DISTANCE = 0.4
+MIN_CLUSTERING_DISTANCE = 0.8
 MIN_CLUSTERING_POINTS = 20
 
 class LaneFollowerNode(Node):

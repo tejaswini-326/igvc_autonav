@@ -59,15 +59,15 @@ class GoalPublisher(Node):
             elif len(lane_markers) == 2:
                 if self.current_lane == 'right':
                     mid_marker, right_marker = lane_markers[1], lane_markers[0]
-                    rp = self.average_last_n_points(right_marker.points, 5, 10.0)
-                    mp = self.average_last_n_points(mid_marker.points, 5, 10.0)
+                    rp = self.average_last_n_points(right_marker.points, 5)
+                    mp = self.average_last_n_points(mid_marker.points, 5)
                     dx = rp[0] - mp[0]
                     dy = rp[1] - mp[1]
                     lp = (mp[0] - dx, mp[1] - dy)
                 else:
                     mid_marker, left_marker = lane_markers[0], lane_markers[1]
-                    lp = self.average_last_n_points(left_marker.points, 5, 10.0)
-                    mp = self.average_last_n_points(mid_marker.points, 5, 10.0)
+                    lp = self.average_last_n_points(left_marker.points, 5)
+                    mp = self.average_last_n_points(mid_marker.points, 5)
                     dx = lp[0] - mp[0]
                     dy = lp[1] - mp[1]
                     rp = (mp[0] - dx, mp[1] - dy)
@@ -100,7 +100,7 @@ class GoalPublisher(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to estimate goal: {e}")
 
-    def average_last_n_points(self, points, n, max_distance=7.5): #added a dsitance threshold for goal calc
+    def average_last_n_points(self, points, n, max_distance=6.5): #added a dsitance threshold for goal calc
         # Only include points within max_distance from origin
         filtered = [p for p in points if (p.x**2 + p.y**2)**0.5 <= max_distance]
 
@@ -133,7 +133,7 @@ class GoalPublisher(Node):
     def publish_goal(self, point):
         goal_pose = PoseStamped()
         goal_pose.header.stamp = self.get_clock().now().to_msg()
-        goal_pose.header.frame_id = 'odom'
+        goal_pose.header.frame_id = 'camera_link'
         goal_pose.pose.position = point
         goal_pose.pose.position.z = 0.0
         goal_pose.pose.orientation.w = 1.0
