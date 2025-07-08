@@ -17,7 +17,7 @@ import time
 import ctypes
 
 
-MIN_CLUSTERING_DISTANCE = 0.8
+MIN_CLUSTERING_DISTANCE = 0.6
 MIN_CLUSTERING_POINTS = 20
 
 class LaneFollowerNode(Node):
@@ -301,12 +301,12 @@ class LaneFollowerNode(Node):
         self.get_logger().info(f"[Benchmark] Yellow Dilation took {time.time() - start:.3f} sec")
         self.get_logger().info(f"no of final yellow ground points is : {len(final_yellow_points)}")
 
-
         # === WHITE DBSCAN and clustering ===
         start = time.time()
         points_np_white = np.array(self.white_ground_points)
         clustered_white_points = []
         cluster_curves = []
+        white_cluster_centers = []  # CHANGE 1: Store white cluster centers
 
         if len(points_np_white) >= MIN_CLUSTERING_POINTS:
             points_xy_white = points_np_white[:, :2]
@@ -357,9 +357,24 @@ class LaneFollowerNode(Node):
                 coeffs = np.polyfit(points_xy_cluster[:, 0], points_xy_cluster[:, 1], deg=2)
                 cluster_curves.append((label, coeffs, 'white', points_xy_cluster))
 
-                center_x = np.mean(points_xy_cluster[:, 0])
+                subset = points_xy_cluster[:100]  # First 100 points only (or fewer if cluster has <100)
+                center_x = np.mean(subset[:, 0])
+                center_y = np.mean(subset[:, 1])
+                white_cluster_centers.append((center_x, center_y))  # CHANGE 2: Store center coordinates
                 self.get_logger().info(f"White cluster {label}: center = ({center_x:.2f}, {center_y_white:.2f}), points = {num_white_pts}")
 
+            y_values = [cy for _, cy in white_cluster_centers]
+            leftmost_white_x = min(y_values)
+            rightmost_white_x = max(y_values)
+
+            for cy in [c[1] for c in white_cluster_centers]:
+                if cy < 0:
+                    if cy > leftmost_white_x:
+                        leftmost_white_x = cy
+                elif cy > 0:
+                    if cy < rightmost_white_x:
+                        rightmost_white_x = cy
+            self.get_logger().info(f"leftmost_white cluster = {leftmost_white_x} and rightmost white cluster = {rightmost_white_x}")
             # === Publish filtered white points only ===
         if len(clustered_white_points) > 0:
             white_msg = pc2.create_cloud_xyz32(msg.header, clustered_white_points)
@@ -375,8 +390,35 @@ class LaneFollowerNode(Node):
             clustering_yellow = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy_yellow)
             labels_yellow = clustering_yellow.labels_
 
-            # Combine all non-noise yellow cluster points
-            clustered_yellow_points = points_np_yellow[labels_yellow != -1]
+            # CHANGE 3: Modified logic - filter based on white cluster count
+            if len(white_cluster_centers) >= 2 and rightmost_white_x > 0 and leftmost_white_x < 0:
+                # Sort white clusters by x-coordinate to find leftmost and rightmost
+                # white_cluster_centers.sort(key=lambda x: x[1])
+                # leftmost_white_x = white_cluster_centers[0][1]
+                # rightmost_white_x = white_cluster_centers[-1][1]
+                
+                # Find yellow clusters that are between the white clusters
+                unique_labels_yellow = set(labels_yellow)
+                between_clusters_points = []
+                
+                for label in unique_labels_yellow:
+                    if label == -1:
+                        continue
+                    
+                    cluster_indices = np.where(labels_yellow == label)[0]
+                    cluster_points = points_np_yellow[cluster_indices]
+                    cluster_center_x = np.mean(cluster_points[:, 1])
+                    
+                    # Check if this yellow cluster is between white clusters
+                    if leftmost_white_x <= cluster_center_x <= rightmost_white_x:
+                        between_clusters_points.extend(cluster_points.tolist())
+                        self.get_logger().info(f"Yellow cluster {label} is between white clusters at x={cluster_center_x:.2f}")
+                
+                clustered_yellow_points = np.array(between_clusters_points) if between_clusters_points else np.array([])
+            else:
+                # CHANGE 4: If less than 2 white clusters, combine all yellow clusters (original behavior)
+                clustered_yellow_points = points_np_yellow[labels_yellow != -1]
+                self.get_logger().info(f"Only {len(white_cluster_centers)} white cluster(s) found, using all yellow clusters")
 
             if len(clustered_yellow_points) > 0:
                 yellow_msg = pc2.create_cloud_xyz32(msg.header, clustered_yellow_points.tolist())
@@ -387,12 +429,15 @@ class LaneFollowerNode(Node):
             self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
         self.get_logger().info(f"[Benchmark] Yellow DBSCAN took {time.time() - start:.3f} sec")
 
-        # === Yellow Curve Fitting: Single global fit on all yellow points ===
+        # === Yellow Curve Fitting: Single global fit on filtered yellow points ===
+        # CHANGE 5: Curve fitting for yellow points (filtered or all based on white cluster count)
         if len(clustered_yellow_points) >= 10:
             x_vals_y = clustered_yellow_points[:, 0]
             y_vals_y = clustered_yellow_points[:, 1]
             coeffs_yellow = np.polyfit(x_vals_y, y_vals_y, deg=2)
             cluster_curves.append(('yellow_global', coeffs_yellow, 'yellow', clustered_yellow_points[:, :2]))
+        else:
+            self.get_logger().info(f"Not enough yellow points for curve fitting and no of points are: {len(clustered_yellow_points)}")
 
 
         # === Final Lane Visualization ===
