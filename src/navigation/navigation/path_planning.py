@@ -37,7 +37,7 @@ class PathPlanner(Node):
         self.costmap_sub = self.create_subscription(OccupancyGrid, '/costmap', self.costmap_cb, 10)
         self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
         self.goal_sub = self.create_subscription(PoseStamped, '/goal_point', self.goal_cb, 10)
-        # self.path_pub = self.create_publisher(Path, '/planned_path', 10)
+        self.path_pub = self.create_publisher(Path, '/planned_path', 10)
         self.sm_path_pub = self.create_publisher(Path, '/sm_planned_path', 10)
         self.debug_pub = self.create_publisher(MarkerArray, '/astar_debug', 10)
 

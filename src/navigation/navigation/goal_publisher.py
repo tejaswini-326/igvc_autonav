@@ -41,7 +41,7 @@ class GoalPublisher(Node):
             if len(lane_markers) == 3:
                 left_marker, mid_marker, right_marker = lane_markers[-1], lane_markers[1], lane_markers[0]
 
-                rp = self.average_last_n_points(right_marker.points, 5 )
+                rp = self.average_last_n_points(right_marker.points, 5)
                 lp = self.average_last_n_points(left_marker.points, 5)
                 mp = self.average_last_n_points(mid_marker.points, 5)
                 self.last_rp = rp
@@ -49,15 +49,15 @@ class GoalPublisher(Node):
                 self.last_mp = mp
 
                 if self.target_lane == 'right':
-                    goal_x = (rp[0] + mp[0]) / 2.0
-                    goal_y = (rp[1] + mp[1]) / 2.0
+                    self.goal_x = (rp[0] + mp[0]) / 2.0
+                    self.goal_y = (rp[1] + mp[1]) / 2.0
                     self.current_lane = 'right'
                 else:
-                    goal_x = (lp[0] + mp[0]) / 2.0
-                    goal_y = (lp[1] + mp[1]) / 2.0
+                    self.goal_x = (lp[0] + mp[0]) / 2.0
+                    self.goal_y = (lp[1] + mp[1]) / 2.0
                     self.current_lane = 'left'
 
-                goal_z = 0.0
+                self.goal_z = 0.0
 
             elif len(lane_markers) == 2:
                 if self.current_lane == 'right':
@@ -73,27 +73,26 @@ class GoalPublisher(Node):
                     mp = self.average_last_n_points(mid_marker.points, 5)
                     dx = lp[0] - mp[0]
                     dy = lp[1] - mp[1]
-                    rp = (mp[0] - dx, mp[1] - dy)
-
+                    rp = (mp[0] - dx, mp[1])
                 self.last_rp = rp
                 self.last_lp = lp
                 self.last_mp = mp
 
                 if self.target_lane == 'right':
-                    goal_x = (rp[0] + mp[0]) / 2.0
-                    goal_y = (rp[1] + mp[1]) / 2.0
+                    self.goal_x = (rp[0] + mp[0]) / 2.0
+                    self.goal_y = (rp[1] + mp[1]) / 2.0
                     self.current_lane = 'right'
                 else:
-                    goal_x = (lp[0] + mp[0]) / 2.0
-                    goal_y = (lp[1] + mp[1]) / 2.0
+                    self.goal_x = (lp[0] + mp[0]) / 2.0
+                    self.goal_y = (lp[1] + mp[1]) / 2.0
                     self.current_lane = 'left'
 
-                goal_z = 0.0
+                self.goal_z = 0.0
             else:
                 self.get_logger().warn("Not enough lane markers for goal computation.")
-                return
+                # return
 
-            transformed = self.transform_to_odom(goal_x, goal_y, goal_z)
+            transformed = self.transform_to_odom(self.goal_x, self.goal_y, self.goal_z)
             if transformed:
                 self.publish_goal(transformed)
                 self.publish_debug_markers()

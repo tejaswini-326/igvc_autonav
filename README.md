@@ -1,5 +1,10 @@
 IGVC Sim
 
+add this to your bashrc:
+
+export GZ_SIM_RESOURCE_PATH=/<path to igvc-sim/igvc-sim/src/igvc/models
+
+
 Running the object detection node on your pc:
 
 0 - download the model and change its path in object_data/src/object_data_node.py
