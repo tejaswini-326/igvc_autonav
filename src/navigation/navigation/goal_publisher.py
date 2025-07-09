@@ -11,7 +11,7 @@ class GoalPublisher(Node):
     def __init__(self):
         super().__init__('goal_publisher')
         self.target_lane = 'right'  # or 'left'
-        self.current_lane = 'right'
+        self.current_lane = 'left'
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_point', 10)
         self.marker_sub = self.create_subscription(MarkerArray, '/lane_visualization', self.marker_callback, 10)
         self.debug_marker_pub = self.create_publisher(MarkerArray, '/lane_debug_points', 10)
@@ -99,7 +99,7 @@ class GoalPublisher(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to estimate goal: {e}")
 
-    def average_last_n_points(self, points, n, max_distance=4.0): #added a dsitance threshold for goal calc
+    def average_last_n_points(self, points, n, max_distance=6.5): #added a dsitance threshold for goal calc
         # Only include points within max_distance from origin
         filtered = [p for p in points if (p.x**2 + p.y**2)**0.5 <= max_distance]
 

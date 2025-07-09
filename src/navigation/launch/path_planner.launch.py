@@ -55,6 +55,6 @@ def generate_launch_description():
                 costmap_publisher_node,
                 # path_publisher_node,
                 curve_fit_node,
-                controller_node
+                # controller_node
             ]
         )

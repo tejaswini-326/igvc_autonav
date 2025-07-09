@@ -178,7 +178,7 @@ class CostmapNode(Node):
 
         # 5) gaussian blur -------------------------------------------------
         blurred = cv2.GaussianBlur(layer.astype(np.float32),
-                                   (15, 15), sigmaX=3.0)
+                                   (15, 15), sigmaX=10.0)
         gmax = float(blurred.max())
         self.get_logger().debug(f"[{tag}] gmax before scale: {gmax:.1f}")
         if gmax > 0.0:
