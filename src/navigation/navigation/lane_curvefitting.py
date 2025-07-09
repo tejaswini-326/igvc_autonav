@@ -16,6 +16,9 @@ import cv2
 import time
 import ctypes
 
+# Note that warnings are still logged irrespective of this boolean
+VERBOSE_UNIMPORANT_THINGS = False 
+
 
 MIN_CLUSTERING_DISTANCE = 0.8
 MIN_CLUSTERING_POINTS = 20
@@ -298,8 +301,8 @@ class LaneFollowerNode(Node):
         # Final yellow points used for clustering and publishing
         final_yellow_points = dilated_points
 
-        self.get_logger().info(f"[Benchmark] Yellow Dilation took {time.time() - start:.3f} sec")
-        self.get_logger().info(f"no of final yellow ground points is : {len(final_yellow_points)}")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"[Benchmark] Yellow Dilation took {time.time() - start:.3f} sec")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"no of final yellow ground points is : {len(final_yellow_points)}")
 
 
         # === WHITE DBSCAN, clustering & colourised publish =========================
@@ -360,7 +363,7 @@ class LaneFollowerNode(Node):
                 eig = pca.explained_variance_ratio_
                 elong_ratio = eig[0] / eig[1] if eig[1] != 0 else float('inf')
                 if elong_ratio < 2.0:
-                    self.get_logger().info(
+                    if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(
                         f"Skipping white cluster {label} (pothole-like): "
                         f"elongation_ratio={elong_ratio:.2f}")
                     continue
@@ -371,7 +374,7 @@ class LaneFollowerNode(Node):
                     if (abs(center_y_white - yellow_y_mean) < 0.5 and
                             num_white_pts < yellow_point_count and
                             num_white_pts < 180):
-                        self.get_logger().info(
+                        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(
                             f"Skipping white cluster {label} near yellow "
                             f"(y={yellow_y_mean:.2f}) with only {num_white_pts} pts")
                         continue
@@ -387,7 +390,7 @@ class LaneFollowerNode(Node):
                 cluster_curves.append((label, coeffs, 'white', points_xy_cluster))
 
                 center_x = float(np.mean(points_xy_cluster[:, 0]))
-                self.get_logger().info(
+                if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(
                     f"White cluster {label}: center=({center_x:.2f}, "
                     f"{center_y_white:.2f}), points={num_white_pts}")
 
@@ -403,7 +406,7 @@ class LaneFollowerNode(Node):
             white_msg = pc2.create_cloud(msg.header, fields, coloured_points)
             self.white_pub.publish(white_msg)
 
-        self.get_logger().info(
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(
             f"[Benchmark] White DBSCAN took {time.time() - start:.3f} sec")
         # =========================================================================
 
@@ -425,8 +428,8 @@ class LaneFollowerNode(Node):
 
             unique_labels_yellow = set(labels_yellow)
             n_clusters_y = len(unique_labels_yellow) - (1 if -1 in labels_yellow else 0)
-            self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
-        self.get_logger().info(f"[Benchmark] Yellow DBSCAN took {time.time() - start:.3f} sec")
+            if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"[Benchmark] Yellow DBSCAN took {time.time() - start:.3f} sec")
 
         # === Yellow Curve Fitting: Single global fit on all yellow points ===
         if len(clustered_yellow_points) >= 10:
@@ -439,7 +442,7 @@ class LaneFollowerNode(Node):
         # === Final Lane Visualization ===
         start = time.time()
         self.publish_lane_visualization(msg, None, cluster_curves, self.white_ground_points, final_yellow_points)
-        self.get_logger().info(f"[Benchmark] Marker publishing took {time.time() - start:.3f} sec")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"[Benchmark] Marker publishing took {time.time() - start:.3f} sec")
 
         
 
