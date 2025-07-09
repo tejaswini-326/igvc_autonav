@@ -15,8 +15,8 @@ import os
 import yaml
 
 # Define the size of the grid
-WIDTH = 300
-HEIGHT = 300
+WIDTH = 500
+HEIGHT = 500
 class PathPlanner(Node):
     class Cell:
         def __init__(self):
@@ -78,7 +78,7 @@ class PathPlanner(Node):
         if(self.goal_x != -1 and self.goal_y != -1):
             # self.robot_pose.x, self.robot_pose.y = self.odom_to_costmap(self.robot_pose.x, self.robot_pose.y)
             # self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [self.goal_x, self.goal_y])
-            self.a_star_search(self.grid_2d, [150, 150], [self.goal_x, self.goal_y])
+            self.a_star_search(self.grid_2d, [250, 250], [self.goal_x, self.goal_y])
             # self.a_star_search(self.grid_2d, [self.robot_pose.x, self.robot_pose.y], [350,250])
 
         # uncomment if goal point needs to be visualized
@@ -157,8 +157,8 @@ class PathPlanner(Node):
         return (row >= 0) and (row < WIDTH) and (col >= 0) and (col < HEIGHT)
     
     def is_unblocked(self, grid, row, col):
-        return (grid[row * WIDTH + col] < 40) and (grid[row * WIDTH + col] >= 0)
-        # return 1
+        # return (grid[row * WIDTH + col] < 10) and (grid[row * WIDTH + col] >= 0)
+        return 1
     
     # Check if a cell is the destination
     def is_destination(self, row, col, dest):
@@ -192,6 +192,8 @@ class PathPlanner(Node):
         print("\nPath with Costs (row, col): f, g, h")
         for i in path:
             print("->", i, end=" ")
+            print(f"Cell {i} cost={self.grid_2d[i[0]*WIDTH + i[1]]}")
+
             index = i[0] * WIDTH + i[1]
             if 0 <= index < len(self.grid_2d):
                 cost = self.grid_2d[index]
@@ -200,7 +202,7 @@ class PathPlanner(Node):
             print(f"{i}: cost={cost}")
             
         print()
-        # self.publish_path(path)
+        self.publish_path(path)
         smoothed = self.gradient_smooth(path)
         self.publish_sm_path(smoothed)
 
@@ -245,9 +247,9 @@ class PathPlanner(Node):
             return
 
         # Check if the source and destination are unblocked
-        if not self.is_unblocked(grid, src[0], src[1]) or not self.is_unblocked(grid, dest[0], dest[1]):
-            print("Source or the destination is blocked")
-            return
+        # if not self.is_unblocked(grid, src[0], src[1]) or not self.is_unblocked(grid, dest[0], dest[1]):
+        #     print("Source or the destination is blocked")
+        #     return
 
         # Check if we are already at the destination
         if self.is_destination(src[0], src[1], dest):
@@ -286,7 +288,7 @@ class PathPlanner(Node):
             closed_list[i][j] = True
 
             # For each direction, check the successors
-            directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+            directions = [(1, 0), (0, 1), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
             for dir in directions:
                 new_i = i + dir[0]
                 new_j = j + dir[1]
@@ -307,20 +309,23 @@ class PathPlanner(Node):
                         # Calculate the new f, g, and h values
                         #
                         index = new_i * self.width + new_j
-                        #cell_cost = self.grid_2d[index] if 0 <= index < len(self.grid_2d) else 0
+                        cell_cost = self.grid_2d[index] if 0 <= index < len(self.grid_2d) else 0
+                        # raw = self.grid_2d[index] if 0 <= index < len(self.grid_2d) else 0
+                        # cell_cost = 1 + (raw / 100.0) * 9  # maps 0–100 to 1–10
+
 
                         # Optional: Scale cost (so that 0–100 becomes 1–101, or 1–10)
                         # You can also clamp high values like 100 or 255
-                        cell_cost = 0#max(1, min(cell_cost, 100))  # Make sure at least cost is 1
+                        # Make sure at least cost is 1
 
                         g_new = cell_details[i][j].g + cell_cost
 
                         #
-
                         # g_new = cell_details[i][j].g + 1.0
                         h_new = self.calculate_h_value(new_i, new_j, dest)
-                        weight = 0.8
+                        weight = 100000.0
                         f_new = g_new + h_new * weight
+                        # f_new = h_new * weight
 
                         # If the cell is not in the open list or the new f value is smaller
                         if cell_details[new_i][new_j].f == float('inf') or cell_details[new_i][new_j].f > f_new:
@@ -338,44 +343,44 @@ class PathPlanner(Node):
             print("Failed to find the destination cell")
 
     # uncomment if u want to visualize raw path without smoothening
-    # def publish_path(self, path_cells):
-    #     path_msg = Path()
-    #     path_msg.header.stamp = self.get_clock().now().to_msg()
-    #     path_msg.header.frame_id = 'odom'  # Target frame
+    def publish_path(self, path_cells):
+        path_msg = Path()
+        path_msg.header.stamp = self.get_clock().now().to_msg()
+        path_msg.header.frame_id = 'odom'  # Target frame
 
-    #     for (mx, my) in path_cells:
-    #         wx, wy = self.costmap_to_odom(mx, my)
+        for (mx, my) in path_cells:
+            wx, wy = self.costmap_to_odom(mx, my)
 
-    #         # Convert world (map) point to odom frame
-    #         world_pt = PointStamped()
-    #         world_pt.header.frame_id = self.costmap.header.frame_id  # usually "map"
-    #         world_pt.header.stamp = self.get_clock().now().to_msg()
-    #         world_pt.point.x = wx
-    #         world_pt.point.y = wy
-    #         world_pt.point.z = 0.0
+            # Convert world (map) point to odom frame
+            world_pt = PointStamped()
+            world_pt.header.frame_id = self.costmap.header.frame_id  # usually "map"
+            world_pt.header.stamp = self.get_clock().now().to_msg()
+            world_pt.point.x = wx
+            world_pt.point.y = wy
+            world_pt.point.z = 0.0
 
-    #         try:
-    #             # wait for transform to be available
-    #             if not self.tf_buffer.can_transform('odom', world_pt.header.frame_id, rclpy.time.Time()):
-    #                 self.get_logger().warn("Transform not available, skipping point")
-    #                 continue
+            try:
+                # wait for transform to be available
+                if not self.tf_buffer.can_transform('odom', world_pt.header.frame_id, rclpy.time.Time()):
+                    self.get_logger().warn("Transform not available, skipping point")
+                    continue
 
-    #             odom_pt = tf2_geometry_msgs.do_transform_point(world_pt,
-    #                 self.tf_buffer.lookup_transform('odom', world_pt.header.frame_id, rclpy.time.Time()))
+                odom_pt = tf2_geometry_msgs.do_transform_point(world_pt,
+                    self.tf_buffer.lookup_transform('odom', world_pt.header.frame_id, rclpy.time.Time()))
 
-    #             pose = PoseStamped()
-    #             pose.header = path_msg.header
-    #             pose.pose.position = odom_pt.point
-    #             pose.pose.orientation.w = 1.0  # No orientation needed
+                pose = PoseStamped()
+                pose.header = path_msg.header
+                pose.pose.position = odom_pt.point
+                pose.pose.orientation.w = 1.0  # No orientation needed
 
-    #             path_msg.poses.append(pose)
+                path_msg.poses.append(pose)
 
-    #         except Exception as e:
-    #             self.get_logger().warn(f"Transform error: {e}")
-    #             continue
+            except Exception as e:
+                self.get_logger().warn(f"Transform error: {e}")
+                continue
 
-    #     self.path_pub.publish(path_msg)
-    #     self.get_logger().info(f"Published path with {len(path_msg.poses)} poses.")
+        self.path_pub.publish(path_msg)
+        self.get_logger().info(f"Published path with {len(path_msg.poses)} poses.")
 
 
     def publish_sm_path(self, path_cells):
