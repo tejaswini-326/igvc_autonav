@@ -23,7 +23,7 @@ class Controller(Node):
         self.path = []
 
         self.lookahead_distance = .9
-        self.linear_speed = .75
+        self.linear_speed = .5
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
