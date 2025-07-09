@@ -395,11 +395,37 @@ class LaneFollowerNode(Node):
                     label, coeffs, color, pts, cy = cluster_info
                     if abs(cy - leftmost_white_x) < 1e-3 or abs(cy - rightmost_white_x) < 1e-3:
                         cluster_curves.append((label, coeffs, color, pts))
+
+            elif len(white_cluster_centers) >= 2 and leftmost_white_x > 0:
+                self.get_logger().info("Appending only the closest white cluster on right side (cy > 0)")
+                min_cy = float('inf')
+                closest_cluster = None
+                for cluster_info in all_cluster_infos:
+                    label, coeffs, color, pts, cy = cluster_info
+                    if cy > 0 and cy < min_cy:
+                        min_cy = cy
+                        closest_cluster = (label, coeffs, color, pts)
+                if closest_cluster:
+                    cluster_curves.append(closest_cluster)
+
+            elif len(white_cluster_centers) >= 2 and rightmost_white_x < 0:
+                self.get_logger().info("Appending only the closest white cluster on left side (cy < 0)")
+                max_cy = -float('inf')
+                closest_cluster = None
+                for cluster_info in all_cluster_infos:
+                    label, coeffs, color, pts, cy = cluster_info
+                    if cy < 0 and cy > max_cy:
+                        max_cy = cy
+                        closest_cluster = (label, coeffs, color, pts)
+                if closest_cluster:
+                    cluster_curves.append(closest_cluster)
+
             else:
                 self.get_logger().info("Appending all white clusters (did not meet left/right condition)")
                 for cluster_info in all_cluster_infos:
                     label, coeffs, color, pts, _ = cluster_info
                     cluster_curves.append((label, coeffs, color, pts))
+
 
 
             # === Publish filtered white points only ===
@@ -419,33 +445,56 @@ class LaneFollowerNode(Node):
 
             # CHANGE 3: Modified logic - filter based on white cluster count
             if len(white_cluster_centers) >= 2 and rightmost_white_x > 0 and leftmost_white_x < 0:
-                # Sort white clusters by x-coordinate to find leftmost and rightmost
-                # white_cluster_centers.sort(key=lambda x: x[1])
-                # leftmost_white_x = white_cluster_centers[0][1]
-                # rightmost_white_x = white_cluster_centers[-1][1]
-                
                 # Find yellow clusters that are between the white clusters
                 unique_labels_yellow = set(labels_yellow)
                 between_clusters_points = []
-                
+
                 for label in unique_labels_yellow:
                     if label == -1:
                         continue
-                    
+
                     cluster_indices = np.where(labels_yellow == label)[0]
                     cluster_points = points_np_yellow[cluster_indices]
                     cluster_center_x = np.mean(cluster_points[:, 1])
-                    
+
                     # Check if this yellow cluster is between white clusters
                     if leftmost_white_x <= cluster_center_x <= rightmost_white_x:
                         between_clusters_points.extend(cluster_points.tolist())
                         self.get_logger().info(f"Yellow cluster {label} is between white clusters at x={cluster_center_x:.2f}")
-                
+
                 clustered_yellow_points = np.array(between_clusters_points) if between_clusters_points else np.array([])
+
+            elif len(cluster_curves) == 1:
+                self.get_logger().info("Only one white cluster curve found, using closest yellow cluster to origin")
+                unique_labels_yellow = set(labels_yellow)
+                closest_cluster = None
+                min_dist = float('inf')
+
+                for label in unique_labels_yellow:
+                    if label == -1:
+                        continue
+
+                    cluster_indices = np.where(labels_yellow == label)[0]
+                    cluster_points = points_np_yellow[cluster_indices]
+
+                    if cluster_points.size == 0:
+                        continue
+
+                    mean_x = np.mean(cluster_points[:, 0])
+                    mean_y = np.mean(cluster_points[:, 1])
+                    dist = np.sqrt(mean_x**2 + mean_y**2)
+
+                    if dist < min_dist:
+                        min_dist = dist
+                        closest_cluster = cluster_points
+
+                clustered_yellow_points = closest_cluster if closest_cluster is not None else np.array([])
+
             else:
                 # CHANGE 4: If less than 2 white clusters, combine all yellow clusters (original behavior)
                 clustered_yellow_points = points_np_yellow[labels_yellow != -1]
                 self.get_logger().info(f"Only {len(white_cluster_centers)} white cluster(s) found, using all yellow clusters")
+
 
             if len(clustered_yellow_points) > 0:
                 yellow_msg = pc2.create_cloud_xyz32(msg.header, clustered_yellow_points.tolist())

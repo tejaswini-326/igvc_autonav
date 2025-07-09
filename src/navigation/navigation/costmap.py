@@ -21,10 +21,6 @@ from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Header
 from tf2_ros import Buffer, TransformListener
 
-
-# ---------------------------------------------------------------------------#
-#                               helper utilities                              #
-# ---------------------------------------------------------------------------#
 def transform_to_matrix(tf_msg) -> np.ndarray:
     """geometry_msgs/TransformStamped → 4×4 float32 homogeneous matrix"""
     q = tf_msg.transform.rotation
@@ -55,9 +51,6 @@ def pc2_numpy_xyz(msg: PointCloud2) -> np.ndarray:
     return np.vstack((cloud['x'], cloud['y'], cloud['z'])).T.astype(np.float32)
 
 
-# ---------------------------------------------------------------------------#
-#                                    node                                    #
-# ---------------------------------------------------------------------------#
 class CostmapNode(Node):
     def __init__(self):
         super().__init__('costmap_node_fast_debug')
@@ -214,10 +207,6 @@ class CostmapNode(Node):
         msg.data = scaled.flatten().tolist()
         self.costmap_pub.publish(msg)
 
-
-# ---------------------------------------------------------------------------#
-#                                     main                                   #
-# ---------------------------------------------------------------------------#
 def main(args=None):
     rclpy.init(args=args)
     node = CostmapNode()
