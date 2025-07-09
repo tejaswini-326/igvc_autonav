@@ -132,11 +132,18 @@ class CostmapNode(Node):
             self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
             self._new_object = False
 
-        # ---------- fuse + publish ---------------------------------------
+        # ---------- fuse + distance penalty + publish ----------------------
         combined = np.maximum.reduce([self.white_map,
-                                      self.yellow_map,
-                                      self.object_map])
-        self._publish_costmap(combined, self.get_clock().now().to_msg())
+                                    self.yellow_map,
+                                    self.object_map])
+
+        penalty  = self._distance_penalty(combined, thresh=200,
+                                        radius_m=1.5, steepness=1.0)
+
+        final    = np.maximum(combined, penalty)      # 0-100 uint8
+
+        self._publish_costmap(final, self.get_clock().now().to_msg())
+
 
     # ------------------------ layer construction -------------------------
     def _make_layer(self, pc_msg: PointCloud2, value: int, tag: str) -> np.ndarray:
@@ -170,8 +177,8 @@ class CostmapNode(Node):
         layer[my, mx] = value
 
         # 5) gaussian blur -------------------------------------------------
-        blurred = cv2.GaussianBlur(layer.astype(np.float32),
-                                   (15, 15), sigmaX=3.0)
+        #blurred = layer
+        blurred = cv2.GaussianBlur(layer.astype(np.float32),(5, 5), sigmaX=60.0)
         gmax = float(blurred.max())
         self.get_logger().debug(f"[{tag}] gmax before scale: {gmax:.1f}")
         if gmax > 0.0:
@@ -181,6 +188,33 @@ class CostmapNode(Node):
 
         # copy because scratch will be reused next layer
         return layer.copy()
+    
+
+    def _distance_penalty(self, grid: np.ndarray,
+                        thresh: int = 200,
+                        radius_m: float = 1.5,
+                        steepness: float = 1) -> np.ndarray:
+        """
+        Turn a binary 'obstacle mask' (anything ≥ `thresh`) into a smooth
+        clearance penalty 0‥100 using an Euclidean distance transform.
+
+        • `radius_m`    – how far (metres) the penalty should reach
+        • `steepness`   – >1 ⇒ sharper walls, <1 ⇒ gentler slope
+        """
+        # 1) binary obstacle mask  (lane pixels, objects, walls …)
+        occ = (grid >= thresh).astype(np.uint8)
+
+        # 2) OpenCV distance-transform on the *inverted* mask
+        dist_cells = cv2.distanceTransform(255 - occ * 255,
+                                        cv2.DIST_L2, 5).astype(np.float32)
+
+        # 3) metres → normalised 0-1 “closeness”
+        dist_m     = dist_cells * self.resolution
+        closeness  = np.clip((radius_m - dist_m) / radius_m, 0.0, 1.0)
+
+        # 4) non-linear mapping and scale to 0-100 int8
+        penalty    = (closeness ** steepness) * 200.0
+        return penalty.astype(np.uint8)
 
     # -------------------------- grid publisher ---------------------------
     @staticmethod

@@ -16,6 +16,9 @@ import cv2
 import time
 import ctypes
 
+# Note that warnings are still logged irrespective of this boolean
+VERBOSE_UNIMPORANT_THINGS = False 
+
 
 MIN_CLUSTERING_DISTANCE = 0.6
 MIN_CLUSTERING_POINTS = 20
@@ -298,61 +301,82 @@ class LaneFollowerNode(Node):
         # Final yellow points used for clustering and publishing
         final_yellow_points = dilated_points
 
-        self.get_logger().info(f"[Benchmark] Yellow Dilation took {time.time() - start:.3f} sec")
-        self.get_logger().info(f"no of final yellow ground points is : {len(final_yellow_points)}")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"[Benchmark] Yellow Dilation took {time.time() - start:.3f} sec")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"no of final yellow ground points is : {len(final_yellow_points)}")
 
         # === WHITE DBSCAN and clustering ===
         start = time.time()
         points_np_white = np.array(self.white_ground_points)
-        clustered_white_points = []
         cluster_curves = []
         white_cluster_centers = []  # CHANGE 1: Store white cluster centers
 
-        if len(points_np_white) >= MIN_CLUSTERING_POINTS:
+        # ---------------------------------------------------------------------------
+        # Helper: RGB → packed float32 for PointCloud2’s `rgb` field
+        import struct
+        def rgb_to_float(r: int, g: int, b: int) -> float:
+            return struct.unpack('f', struct.pack('I', (r << 16) | (g << 8) | b))[0]
+
+        # Five easy-to-see colours, none of them yellow
+        _PALETTE = [
+            rgb_to_float(255,   0,   0),   # red
+            rgb_to_float(  0, 255,   0),   # green
+            rgb_to_float(  0,   0, 255),   # blue
+            rgb_to_float(255,   0, 255),   # magenta
+            rgb_to_float(  0, 255, 255),   # cyan
+        ]
+        # ---------------------------------------------------------------------------
+
+        if points_np_white.shape[0] >= MIN_CLUSTERING_POINTS:
+
+            # --- DBSCAN on XY -------------------------------------------------------
             points_xy_white = points_np_white[:, :2]
-            clustering_white = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy_white)
+            clustering_white = DBSCAN(
+                eps=MIN_CLUSTERING_DISTANCE,
+                min_samples=MIN_CLUSTERING_POINTS
+            ).fit(points_xy_white)
             labels_white = clustering_white.labels_
             unique_labels_white = set(labels_white)
 
-            # Compute yellow stats (used for proximity filtering)
-            yellow_y_mean = None
-            yellow_point_count = 0
+            # --- Yellow-lane stats (for proximity filter) --------------------------
+            yellow_y_mean, yellow_point_count = None, 0
             if len(final_yellow_points) >= 10:
-                y_vals_yellow = np.array(final_yellow_points)[:, 1]
-                yellow_y_mean = np.mean(y_vals_yellow)
-                yellow_point_count = len(final_yellow_points)
+                y_vals_yellow = np.asarray(final_yellow_points)[:, 1]
+                yellow_y_mean  = float(np.mean(y_vals_yellow))
+                yellow_point_count = y_vals_yellow.size
 
             all_cluster_infos = []
             for label in unique_labels_white:
                 if label == -1:
-                    continue
+                    continue  # DBSCAN noise
 
-                cluster_indices = np.where(labels_white == label)[0]
-                cluster_points = points_np_white[cluster_indices]
+                cluster_idx       = np.where(labels_white == label)[0]
+                cluster_points    = points_np_white[cluster_idx]      # (N,3)
                 points_xy_cluster = cluster_points[:, :2]
-                num_white_pts = len(points_xy_cluster)
+                num_white_pts     = points_xy_cluster.shape[0]
 
                 if num_white_pts < 100:
                     continue
 
-                # PCA for elongation
-                pca = PCA(n_components=2)
-                pca.fit(points_xy_cluster)
-                eigenvalues = pca.explained_variance_ratio_
-                elongation_ratio = eigenvalues[0] / eigenvalues[1] if eigenvalues[1] != 0 else float('inf')
-
-                if elongation_ratio < 2.0:
-                    self.get_logger().info(f"Skipping white cluster {label} (pothole-like): elongation_ratio = {elongation_ratio:.2f}")
+                # ------ Elongation (PCA) test --------------------------------------
+                pca = PCA(n_components=2).fit(points_xy_cluster)
+                eig = pca.explained_variance_ratio_
+                elong_ratio = eig[0] / eig[1] if eig[1] != 0 else float('inf')
+                if elong_ratio < 2.0:
+                    if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(
+                        f"Skipping white cluster {label} (pothole-like): "
+                        f"elongation_ratio={elong_ratio:.2f}")
                     continue
 
-                center_y_white = np.mean(points_xy_cluster[:, 1])
+                # ------ Proximity to yellow lane -----------------------------------
+                center_y_white = float(np.mean(points_xy_cluster[:, 1]))
                 if yellow_y_mean is not None:
-                    if abs(center_y_white - yellow_y_mean) < 0.5 and num_white_pts < yellow_point_count and num_white_pts < 180:
-                        self.get_logger().info(f"Skipping white cluster {label} near yellow (y={yellow_y_mean:.2f}) with only {num_white_pts} pts")
+                    if (abs(center_y_white - yellow_y_mean) < 0.5 and
+                            num_white_pts < yellow_point_count and
+                            num_white_pts < 180):
+                        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(
+                            f"Skipping white cluster {label} near yellow "
+                            f"(y={yellow_y_mean:.2f}) with only {num_white_pts} pts")
                         continue
-
-                # Passed all checks: add points to publish
-                clustered_white_points.extend(cluster_points.tolist())
 
                 # Curve fit
                 coeffs = np.polyfit(points_xy_cluster[:, 0], points_xy_cluster[:, 1], deg=2)
@@ -366,7 +390,7 @@ class LaneFollowerNode(Node):
                 center_x = np.mean(subset[:, 0])
                 center_y = np.mean(subset[:, 1])
                 white_cluster_centers.append((center_x, center_y))  # CHANGE 2: Store center coordinates
-                self.get_logger().info(f"White cluster {label}: center = ({center_x:.2f}, {center_y_white:.2f}), points = {num_white_pts}")
+                if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"White cluster {label}: center = ({center_x:.2f}, {center_y_white:.2f}), points = {num_white_pts}")
                 # cluster_curves.append((label, coeffs, 'white', points_xy_cluster))
                 all_cluster_infos.append((label, coeffs, 'white', points_xy_cluster, center_y))
 
@@ -375,7 +399,7 @@ class LaneFollowerNode(Node):
                 leftmost_white_x = min(y_values)
                 rightmost_white_x = max(y_values)
             else:
-                self.get_logger().warn("No white cluster centers found — setting left/right bounds to default")
+                if VERBOSE_UNIMPORANT_THINGS: self.get_logger().warn("No white cluster centers found — setting left/right bounds to default")
                 leftmost_white_x = -1.5  # fallback default
                 rightmost_white_x = 1.5
 
@@ -386,18 +410,18 @@ class LaneFollowerNode(Node):
                 elif cy > 0:
                     if cy < rightmost_white_x:
                         rightmost_white_x = cy
-            self.get_logger().info(f"leftmost_white cluster = {leftmost_white_x} and rightmost white cluster = {rightmost_white_x}")
+            if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"leftmost_white cluster = {leftmost_white_x} and rightmost white cluster = {rightmost_white_x}")
             
             # Apply filtering logic based on cluster centers
             if len(white_cluster_centers) >= 2 and leftmost_white_x < 0 and rightmost_white_x > 0:
-                self.get_logger().info("Filtering to only closest left/right white clusters")
+                if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info("Filtering to only closest left/right white clusters")
                 for cluster_info in all_cluster_infos:
                     label, coeffs, color, pts, cy = cluster_info
                     if abs(cy - leftmost_white_x) < 1e-3 or abs(cy - rightmost_white_x) < 1e-3:
                         cluster_curves.append((label, coeffs, color, pts))
 
             elif len(white_cluster_centers) >= 2 and leftmost_white_x > 0:
-                self.get_logger().info("Appending only the closest white cluster on right side (cy > 0)")
+                if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info("Appending only the closest white cluster on right side (cy > 0)")
                 min_cy = float('inf')
                 closest_cluster = None
                 for cluster_info in all_cluster_infos:
@@ -409,7 +433,7 @@ class LaneFollowerNode(Node):
                     cluster_curves.append(closest_cluster)
 
             elif len(white_cluster_centers) >= 2 and rightmost_white_x < 0:
-                self.get_logger().info("Appending only the closest white cluster on left side (cy < 0)")
+                if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info("Appending only the closest white cluster on left side (cy < 0)")
                 max_cy = -float('inf')
                 closest_cluster = None
                 for cluster_info in all_cluster_infos:
@@ -421,18 +445,14 @@ class LaneFollowerNode(Node):
                     cluster_curves.append(closest_cluster)
 
             else:
-                self.get_logger().info("Appending all white clusters (did not meet left/right condition)")
+                if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info("Appending all white clusters (did not meet left/right condition)")
                 for cluster_info in all_cluster_infos:
                     label, coeffs, color, pts, _ = cluster_info
                     cluster_curves.append((label, coeffs, color, pts))
 
-
-
-            # === Publish filtered white points only ===
-        if len(clustered_white_points) > 0:
-            white_msg = pc2.create_cloud_xyz32(msg.header, clustered_white_points)
-            self.white_pub.publish(white_msg)
-        self.get_logger().info(f"[Benchmark] White DBSCAN took {time.time() - start:.3f} sec")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(
+            f"[Benchmark] White DBSCAN took {time.time() - start:.3f} sec")
+        # =========================================================================
 
         # === YELLOW DBSCAN and clustering ===
         start = time.time()
@@ -460,12 +480,12 @@ class LaneFollowerNode(Node):
                     # Check if this yellow cluster is between white clusters
                     if leftmost_white_x <= cluster_center_x <= rightmost_white_x:
                         between_clusters_points.extend(cluster_points.tolist())
-                        self.get_logger().info(f"Yellow cluster {label} is between white clusters at x={cluster_center_x:.2f}")
+                        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"Yellow cluster {label} is between white clusters at x={cluster_center_x:.2f}")
 
                 clustered_yellow_points = np.array(between_clusters_points) if between_clusters_points else np.array([])
 
             elif len(cluster_curves) == 1:
-                self.get_logger().info("Only one white cluster curve found, using closest yellow cluster to origin")
+                if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info("Only one white cluster curve found, using closest yellow cluster to origin")
                 unique_labels_yellow = set(labels_yellow)
                 closest_cluster = None
                 min_dist = float('inf')
@@ -493,7 +513,7 @@ class LaneFollowerNode(Node):
             else:
                 # CHANGE 4: If less than 2 white clusters, combine all yellow clusters (original behavior)
                 clustered_yellow_points = points_np_yellow[labels_yellow != -1]
-                self.get_logger().info(f"Only {len(white_cluster_centers)} white cluster(s) found, using all yellow clusters")
+                if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"Only {len(white_cluster_centers)} white cluster(s) found, using all yellow clusters")
 
 
             if len(clustered_yellow_points) > 0:
@@ -502,8 +522,8 @@ class LaneFollowerNode(Node):
 
             unique_labels_yellow = set(labels_yellow)
             n_clusters_y = len(unique_labels_yellow) - (1 if -1 in labels_yellow else 0)
-            self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
-        self.get_logger().info(f"[Benchmark] Yellow DBSCAN took {time.time() - start:.3f} sec")
+            if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"[Benchmark] Yellow DBSCAN took {time.time() - start:.3f} sec")
 
         # === Yellow Curve Fitting: Single global fit on filtered yellow points ===
         # CHANGE 5: Curve fitting for yellow points (filtered or all based on white cluster count)
@@ -513,13 +533,13 @@ class LaneFollowerNode(Node):
             coeffs_yellow = np.polyfit(x_vals_y, y_vals_y, deg=2)
             cluster_curves.append(('yellow_global', coeffs_yellow, 'yellow', clustered_yellow_points[:, :2]))
         else:
-            self.get_logger().info(f"Not enough yellow points for curve fitting and no of points are: {len(clustered_yellow_points)}")
+            self.get_logger().warn(f"Not enough yellow points for curve fitting and no of points are: {len(clustered_yellow_points)}")
 
 
         # === Final Lane Visualization ===
         start = time.time()
         self.publish_lane_visualization(msg, None, cluster_curves, self.white_ground_points, final_yellow_points)
-        self.get_logger().info(f"[Benchmark] Marker publishing took {time.time() - start:.3f} sec")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"[Benchmark] Marker publishing took {time.time() - start:.3f} sec")
 
         
 

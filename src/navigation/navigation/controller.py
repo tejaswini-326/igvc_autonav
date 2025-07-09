@@ -22,8 +22,8 @@ class Controller(Node):
 
         self.path = []
 
-        self.lookahead_distance = .9
-        self.linear_speed = .5
+        self.lookahead_distance = 1.2
+        self.linear_speed = 1
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
@@ -31,7 +31,7 @@ class Controller(Node):
         self.prev_angular_z = 0.0
         self.angular_damping_factor = .95
         self.current_lookahead = None
-        self.max_angular_speed = 1.0
+        self.max_angular_speed = 1
 
         self.last_log_time = 0.0
         self.log_interval = 0.5
@@ -106,7 +106,7 @@ class Controller(Node):
  
         self.get_logger().info(f"Received path with {len(self.path)} valid points.")
 
-    def adaptive_lookahead(self, base_distance=0.75):
+    def adaptive_lookahead(self, base_distance=1.2):
         yaw_variability = np.std(self.yaw_buffer) if len(self.yaw_buffer) > 2 else 0.0
         adaptive_factor = np.clip(1.0 + 2.5 * yaw_variability, 1.0, 1.5)
         return base_distance * adaptive_factor

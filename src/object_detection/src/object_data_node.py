@@ -15,6 +15,7 @@ from cv_bridge import CvBridge
 from PIL import Image as PILImage, ImageDraw, ImageFont
 import os
 from ament_index_python.packages import get_package_share_directory
+import torch
 
 CONFIDENCE_THRESHOLD = 0.5
 FRAME_INTERVAL_SEC = 0.15  # Process every 150 ms
@@ -35,6 +36,9 @@ class ObjectDataNode(Node):
         pkg_share = get_package_share_directory('object_detection')
         model_path = os.path.join(pkg_share, 'models', 'best.pt')
         self.model = YOLO(model_path)
+        if torch.cuda.is_available():
+            self.model.to('cuda')
+            self.get_logger().info(f"Model moved to {next(self.model.model.parameters()).device}")
         self.get_logger().info('YOLOv8 model loaded.')
 
         self.depth_img = None
@@ -70,11 +74,11 @@ class ObjectDataNode(Node):
             self.get_logger().error(f'Image decoding error: {e}')
             return
 
-        results = self.model(cv_image)[0]
+        results = self.model.predict(image, device=0)[0]
         detections = results.boxes
         if not detections or len(detections) == 0:
             return
-
+            
         stamp = now.to_msg()
         frame_id = self.latest_pc.header.frame_id if self.latest_pc else "camera_link"
         object_pointclouds = []

@@ -7,6 +7,9 @@ from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
 from rclpy.duration import Duration
 
+# Note that warnings are still logged irrespective of this boolean
+VERBOSE_UNIMPORANT_THINGS = False 
+
 class GoalPublisher(Node):
     def __init__(self):
         super().__init__('goal_publisher')
@@ -25,7 +28,7 @@ class GoalPublisher(Node):
         self.last_mp = None
 
     def marker_callback(self, msg):
-        self.get_logger().info(self.current_lane)
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(self.current_lane)
         lane_markers = [m for m in msg.markers if m.ns == "lane_curves" and m.type == Marker.LINE_STRIP]
 
         try:
@@ -99,7 +102,7 @@ class GoalPublisher(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to estimate goal: {e}")
 
-    def average_last_n_points(self, points, n, max_distance=4.0): #added a dsitance threshold for goal calc
+    def average_last_n_points(self, points, n, max_distance=6.5): #added a dsitance threshold for goal calc
         # Only include points within max_distance from origin
         filtered = [p for p in points if (p.x**2 + p.y**2)**0.5 <= max_distance]
 
@@ -138,7 +141,7 @@ class GoalPublisher(Node):
         goal_pose.pose.orientation.w = 1.0
 
         self.goal_pub.publish(goal_pose)
-        self.get_logger().info(f"Published goal at ({point.x:.2f}, {point.y:.2f}) in odom")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"Published goal at ({point.x:.2f}, {point.y:.2f}) in odom")
 
     def publish_debug_markers(self):
         marker_array = MarkerArray()
