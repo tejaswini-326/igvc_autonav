@@ -13,10 +13,25 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+
 
 add_executable(path_planner src/path_planner.cpp)
+add_executable(goal_publisher src/goal_publisher.cpp)
+
 ament_target_dependencies(path_planner rclcpp nav_msgs geometry_msgs)
-install(TARGETS path_planner DESTINATION lib/${PROJECT_NAME})
+ament_target_dependencies(goal_publisher
+  rclcpp
+  geometry_msgs
+  visualization_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+install(TARGETS path_planner goal_publisher DESTINATION lib/${PROJECT_NAME})
 
 
 if(BUILD_TESTING)
