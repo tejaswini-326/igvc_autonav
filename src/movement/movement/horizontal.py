@@ -13,7 +13,7 @@ import std_msgs.msg
 
 
 MAX_STOP_LINE_LENGTH = 100 
-THRESHOLD_ANGLE = 20
+THRESHOLD_ANGLE = 4
 
 
 class LaneDetectorNode(Node):
@@ -30,6 +30,7 @@ class LaneDetectorNode(Node):
         self.get_logger().info("LaneDetectorNode initialized.")
         self.depth_sub = self.create_subscription(Image, '/camera/depth_image', self.depth_callback, 10)
         self.pointcloud_pub = self.create_publisher(PointCloud2, '/horizontal_line', 10)
+        self.depth_image = None
         self.fx = 246.4928
         self.fy = 246.4928
         self.cx = 300.0
@@ -46,7 +47,15 @@ class LaneDetectorNode(Node):
         # Convert ROS Image to OpenCV BGR format
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         original = frame.copy()
+        # Crop to bottom 40%
+        height = frame.shape[0]
+        bottom_start = int(height * 0.6)
+        frame = frame[bottom_start:, :]
 
+        height = original.shape[0]
+        width = original.shape[1]
+        y_40_percent = int(height * 0.6)
+        cv2.line(original, (0, y_40_percent), (width, y_40_percent), (0, 0, 255), 2)  # Red color, thickness 2
         # Convert to HSV
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
@@ -63,49 +72,28 @@ class LaneDetectorNode(Node):
         # Clean white by subtracting yellow
         mask_white = cv2.bitwise_and(mask_white_raw, cv2.bitwise_not(mask_yellow))
 
-
-        # Combined filtered mask
-        combined_mask = cv2.bitwise_or(mask_yellow, mask_white)
-        filtered = cv2.bitwise_and(frame, frame, mask=combined_mask)
-
-        # Canny edge detection
-        gray = cv2.cvtColor(filtered, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        edges = cv2.Canny(blur, 50, 150)
-
-        # Lane lines detection
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=50, minLineLength=40, maxLineGap=40)
-
-        if lines is not None:
-            for line in lines:
-                x1, y1, x2, y2 = line[0]
-                # Identify if line is yellow or white
-                if mask_yellow[y1, x1] > 0:
-                    color = (0, 255, 255)  # Yellow
-                else:
-                    color = (255, 255, 255)  # White
-                cv2.line(original, (x1, y1), (x2, y2), color, 2)
-
         # Stop line detection (from white mask only)
         stop_edges = cv2.Canny(mask_white, 50, 150)
-        stop_lines = cv2.HoughLinesP(stop_edges, 1, np.pi / 180, threshold=30,
-                                     minLineLength=20, maxLineGap=10)
+        stop_lines = cv2.HoughLinesP(stop_edges, 1, np.pi / 180, threshold=30,minLineLength=75, maxLineGap=10)
         stop_points_3d = []
 
-        if stop_lines is not None:
+        if stop_lines is not None and self.depth_image is not None:
             for line in stop_lines:
+
                 x1, y1, x2, y2 = line[0]
                 angle = abs(np.arctan2(y2 - y1, x2 - x1) * 180.0 / np.pi)
                 length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
                 
                 if (angle < THRESHOLD_ANGLE or angle > 180 - THRESHOLD_ANGLE) and length < MAX_STOP_LINE_LENGTH:
-                    cv2.line(original, (x1, y1), (x2, y2), (255, 0, 0), 3)
+
+                    self.get_logger().info(f"Stop line accepted: (x1={x1}, y1={y1}) -> (x2={x2}, y2={y2}), "f"angle={angle:.2f}°, length={length:.2f} px")
+                    cv2.line(original, (x1, y1 + bottom_start), (x2, y2 + bottom_start), (255, 0, 0), 3)
 
                     # Sample N points along the line between (x1, y1) and (x2, y2)
                     N = int(length)  # One pixel per unit length
                     for i in range(N + 1):
                         u = int(x1 + (x2 - x1) * i / N)
-                        v = int(y1 + (y2 - y1) * i / N)
+                        v = int(y1 + (y2 - y1) * i / N) + bottom_start
 
                         # Check pixel bounds
                         if 0 <= v < self.depth_image.shape[0] and 0 <= u < self.depth_image.shape[1]:
@@ -133,10 +121,7 @@ class LaneDetectorNode(Node):
                 # Find xmin, xmax
                 xmin = np.min(stop_points_3d[:, 1])  # x is second in [z, -x, -y]
                 xmax = np.max(stop_points_3d[:, 1])
-                self.get_logger().info(f"Stop line X range: xmin={xmin:.2f}, xmax={xmax:.2f}, Total points: {len(stop_points_3d)}")
-
-    
-                
+                # self.get_logger().info(f"Stop line X range: xmin={xmin:.2f}, xmax={xmax:.2f}, Total points: {len(stop_points_3d)}")
 
         # Show the final result (for debugging only)
         cv2.imshow("Lane Detection", original)

@@ -7,6 +7,9 @@ from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
 from rclpy.duration import Duration
 
+# Note that warnings are still logged irrespective of this boolean
+VERBOSE_UNIMPORANT_THINGS = False 
+
 class GoalPublisher(Node):
     def __init__(self):
         super().__init__('goal_publisher')
@@ -25,7 +28,7 @@ class GoalPublisher(Node):
         self.last_mp = None
 
     def marker_callback(self, msg):
-        # self.get_logger().info(self.current_lane)
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(self.current_lane)
         lane_markers = [m for m in msg.markers if m.ns == "lane_curves" and m.type == Marker.LINE_STRIP]
 
         try:
@@ -172,7 +175,7 @@ class GoalPublisher(Node):
         goal_pose.pose.orientation.w = 1.0
 
         self.goal_pub.publish(goal_pose)
-        # self.get_logger().info(f"Published goal at ({point.x:.2f}, {point.y:.2f}) in odom")
+        if VERBOSE_UNIMPORANT_THINGS: self.get_logger().info(f"Published goal at ({point.x:.2f}, {point.y:.2f}) in odom")
 
     def publish_debug_markers(self):
         marker_array = MarkerArray()

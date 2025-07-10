@@ -22,8 +22,8 @@ class Controller(Node):
 
         self.path = []
 
-        self.lookahead_distance = .9
-        self.linear_speed = .5
+        self.lookahead_distance = 1.2
+        self.linear_speed = 1
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
@@ -31,7 +31,7 @@ class Controller(Node):
         self.prev_angular_z = 0.0
         self.angular_damping_factor = .95
         self.current_lookahead = None
-        self.max_angular_speed = 1.0
+        self.max_angular_speed = 0.25
 
         self.last_log_time = 0.0
         self.log_interval = 0.5
@@ -45,8 +45,8 @@ class Controller(Node):
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/path_markers', 10)
         
-        self.control_timer = self.create_timer(1.0 / self.control_rate, self.control_loop)
-        self.marker_timer = self.create_timer(1.0, self.publish_marker_timer)
+        self.control_timer = self.create_timer(0.05, self.control_loop)
+        self.marker_timer = self.create_timer(0.05, self.publish_marker_timer)
 
         self.create_subscription(Imu, '/imu', self.imu_callback, 10)
 
@@ -106,7 +106,7 @@ class Controller(Node):
  
         self.get_logger().info(f"Received path with {len(self.path)} valid points.")
 
-    def adaptive_lookahead(self, base_distance=0.75):
+    def adaptive_lookahead(self, base_distance=1.2):
         yaw_variability = np.std(self.yaw_buffer) if len(self.yaw_buffer) > 2 else 0.0
         adaptive_factor = np.clip(1.0 + 2.5 * yaw_variability, 1.0, 1.5)
         return base_distance * adaptive_factor
@@ -241,7 +241,7 @@ class Controller(Node):
                 twist.angular.y = 0.0
             else:
                 self.log_info_throttled("Lookahead very close and aligned. Continuing cautiously.")
-                twist.linear.x = float(self.linear_speed * 0.3)
+                twist.linear.x = float(self.linear_speed) #  * 0.3
                 twist.linear.y = 0.0
                 twist.linear.z = 0.0
                 twist.angular.z = 0.0
@@ -251,7 +251,7 @@ class Controller(Node):
             return
 
         if abs(angle) > math.radians(25):
-            twist.linear.x = float(self.linear_speed * 0.1)
+            twist.linear.x = float(self.linear_speed) #  * 0.1
             twist.linear.y = 0.0
             twist.linear.z = 0.0
             twist.angular.z = float(np.clip(2.0 * angle, -self.max_angular_speed, self.max_angular_speed))
@@ -259,7 +259,7 @@ class Controller(Node):
             twist.angular.y = 0.0
 
         elif abs(angle) > math.radians(5):
-            twist.linear.x = float(self.linear_speed * 0.4)
+            twist.linear.x = float(self.linear_speed) #  * 0.4
             twist.linear.y = 0.0
             twist.linear.z = 0.0
             twist.angular.z = float(np.clip(1.5 * angle, -self.max_angular_speed, self.max_angular_speed))

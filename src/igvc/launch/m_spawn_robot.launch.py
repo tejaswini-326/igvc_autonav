@@ -109,6 +109,14 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
+    back_pointcloud_downscaler_node = Node(
+        package='movement',
+        executable='back_pointcloud_downscaler',
+        name='BackPointCloudDownscaler',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
     # ------------------------------------------------------------------------
@@ -272,7 +280,8 @@ def generate_launch_description():
     ld.add_action(ekf_node)
 
     ld.add_action(robot_state_publisher_node)
-    ld.add_action(gz_bimage_bridge_node) 
+    ld.add_action(gz_bimage_bridge_node)
     ld.add_action(pointcloud_downscaler_node)
-    
+    ld.add_action(back_pointcloud_downscaler_node)
+
     return ld
