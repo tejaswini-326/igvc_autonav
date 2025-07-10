@@ -60,101 +60,29 @@ class LaneFollowerNode(Node):
     def publish_lane_visualization(self, msg, target_point, cluster_curves, white_ground_points, yellow_ground_points):
         marker_array = MarkerArray()
         
-        # Clear previous markers
-        clear_marker = Marker()
-        clear_marker.header.frame_id = msg.header.frame_id
-        clear_marker.header.stamp = self.get_clock().now().to_msg()
-        clear_marker.action = Marker.DELETEALL
-        marker_array.markers.append(clear_marker)
-        
-        # Marker for white ground points (detected lane pixels)
-        if white_ground_points:
-            points_marker = Marker()
-            points_marker.header.frame_id = msg.header.frame_id
-            points_marker.header.stamp = self.get_clock().now().to_msg()
-            points_marker.ns = "white_points"
-            points_marker.id = 0
-            points_marker.type = Marker.POINTS
-            points_marker.action = Marker.ADD
-            points_marker.scale.x = 0.02
-            points_marker.scale.y = 0.02
-            points_marker.color.r = 1.0
-            points_marker.color.g = 1.0
-            points_marker.color.b = 1.0
-            points_marker.color.a = 0.6
-            
-            for point in white_ground_points:
-                pt = Point()
-                pt.x = float(point[0])
-                pt.y = float(point[1])
-                pt.z = float(point[2])
-                points_marker.points.append(pt)
-            
-            marker_array.markers.append(points_marker)
-        
-        # Marker for yellow ground points (detected lane pixels)
-        if yellow_ground_points:
-            yellow_points_marker = Marker()
-            yellow_points_marker.header.frame_id = msg.header.frame_id
-            yellow_points_marker.header.stamp = self.get_clock().now().to_msg()
-            yellow_points_marker.ns = "yellow_points"
-            yellow_points_marker.id = 1
-            yellow_points_marker.type = Marker.POINTS
-            yellow_points_marker.action = Marker.ADD
-            yellow_points_marker.scale.x = 0.02
-            yellow_points_marker.scale.y = 0.02
-            yellow_points_marker.color.r = 1.0
-            yellow_points_marker.color.g = 1.0
-            yellow_points_marker.color.b = 0.0
-            yellow_points_marker.color.a = 0.8
-            
-            for point in yellow_ground_points:
-                pt = Point()
-                pt.x = float(point[0])
-                pt.y = float(point[1])
-                pt.z = float(point[2])
-                yellow_points_marker.points.append(pt)
-            
-            marker_array.markers.append(yellow_points_marker)
-        
         # Markers for fitted curves
         for i, (label, coeffs, color_type, cluster_xy) in enumerate(cluster_curves):
             curve_marker = Marker()
             curve_marker.header.frame_id = msg.header.frame_id
             curve_marker.header.stamp = self.get_clock().now().to_msg()
             curve_marker.ns = "lane_curves"
-            curve_marker.id = i + 2
             curve_marker.type = Marker.LINE_STRIP
             curve_marker.action = Marker.ADD
             curve_marker.scale.x = 0.05
             
             # Different colors for different curves and types
             if color_type == 'white':
-                if i == 0:
-                    curve_marker.color.r = 1.0
-                    curve_marker.color.g = 0.0
-                    curve_marker.color.b = 0.0
-                elif i == 1:
-                    curve_marker.color.r = 0.0
-                    curve_marker.color.g = 1.0
-                    curve_marker.color.b = 0.0
-                else:
-                    curve_marker.color.r = 0.0
-                    curve_marker.color.g = 0.0
-                    curve_marker.color.b = 1.0
+                curve_marker.id = 0
+                curve_marker.color.r = 1.0
+                curve_marker.color.g = 0.0
+                curve_marker.color.b = 0.0
+                
             else:  # yellow
-                if i == 0:
-                    curve_marker.color.r = 1.0
-                    curve_marker.color.g = 1.0
-                    curve_marker.color.b = 0.0
-                elif i == 1:
-                    curve_marker.color.r = 1.0
-                    curve_marker.color.g = 0.5
-                    curve_marker.color.b = 0.0
-                else:
-                    curve_marker.color.r = 0.8
-                    curve_marker.color.g = 0.8
-                    curve_marker.color.b = 0.0
+                curve_marker.id = 1
+                curve_marker.color.r = 0.0
+                curve_marker.color.g = 1.0
+                curve_marker.color.b = 0.0
+                
             
             curve_marker.color.a = 1.0
             
@@ -176,82 +104,10 @@ class LaneFollowerNode(Node):
                 curve_marker.points.append(pt)
             
             marker_array.markers.append(curve_marker)
-        
-        # Marker for target point
-        if target_point is not None:
-            target_marker = Marker()
-            target_marker.header.frame_id = msg.header.frame_id
-            target_marker.header.stamp = self.get_clock().now().to_msg()
-            target_marker.ns = "target_point"
-            target_marker.id = 100
-            target_marker.type = Marker.SPHERE
-            target_marker.action = Marker.ADD
-            target_marker.scale.x = 0.2
-            target_marker.scale.y = 0.2
-            target_marker.scale.z = 0.2
-            target_marker.color.r = 1.0
-            target_marker.color.g = 1.0
-            target_marker.color.b = 0.0
-            target_marker.color.a = 1.0
-            
-            target_marker.pose.position.x = float(target_point[0])
-            target_marker.pose.position.y = float(target_point[1])
-            target_marker.pose.position.z = -1.3
-            target_marker.pose.orientation.w = 1.0
-            
-            marker_array.markers.append(target_marker)
-        white_array = MarkerArray()
-        yellow_array = MarkerArray()
-
-        for i, (label, coeffs, color_type, cluster) in enumerate(cluster_curves):
-            curve_marker = Marker()
-            curve_marker.header.frame_id = msg.header.frame_id
-            curve_marker.header.stamp = self.get_clock().now().to_msg()
-            curve_marker.ns = "lane_curves"
-            curve_marker.id = i + 2
-            curve_marker.type = Marker.LINE_STRIP
-            curve_marker.action = Marker.ADD
-            curve_marker.scale.x = 0.05
-            curve_marker.color.a = 1.0
-
-            # Color and curve assignment
-            if color_type == 'white':
-                curve_marker.color.r = 1.0 if i == 0 else 0.0
-                curve_marker.color.g = 0.0 if i == 0 else (1.0 if i == 1 else 0.0)
-                curve_marker.color.b = 0.0 if i == 0 else (0.0 if i == 1 else 1.0)
-                white_array.markers.append(curve_marker)
-            else:
-                curve_marker.color.r = 1.0
-                curve_marker.color.g = 1.0 if i == 0 else (0.5 if i == 1 else 0.8)
-                curve_marker.color.b = 0.0
-                yellow_array.markers.append(curve_marker)
-
-            # Points along the curve
-            # Assuming you store cluster points along with the curve
-            # e.g., cluster_curves: List of tuples (label, coeffs, color_type, cluster_points)
-            if len(cluster) > 0:
-                x_vals = np.array(cluster[:, 0])
-                x_min, x_max = np.min(x_vals), np.max(x_vals)
-                x_line = np.linspace(x_min, x_max, 50)
-            else:
-                x_line = np.linspace(0.0, 4.0, 50)  # Fallback
-
-            a, b, c = coeffs
-            for x_val in x_line:
-                y_val = a * x_val**2 + b * x_val + c
-                pt = Point()
-                pt.x = float(x_val)
-                pt.y = float(y_val)
-                pt.z = -1.35
-                curve_marker.points.append(pt)
-
-
-        self.white_curve_pub.publish(white_array)
-        self.yellow_curve_pub.publish(yellow_array)
 
         # Publish marker array
-
         self.markers_pub.publish(marker_array)
+        
     def white_pointcloud_callback(self, msg):
         self.white_msg=msg
     
@@ -298,7 +154,7 @@ class LaneFollowerNode(Node):
         # Final yellow points used for clustering and publishing
         final_yellow_points = dilated_points
 
-        self.get_logger().info(f"[Benchmark] Yellow Dilation took {time.time() - start:.3f} sec")
+        # self.get_logger().info(f"[Benchmark] Yellow Dilation took {time.time() - start:.3f} sec")
         self.get_logger().info(f"no of final yellow ground points is : {len(final_yellow_points)}")
 
         # === WHITE DBSCAN and clustering ===
@@ -342,13 +198,13 @@ class LaneFollowerNode(Node):
                 elongation_ratio = eigenvalues[0] / eigenvalues[1] if eigenvalues[1] != 0 else float('inf')
 
                 if elongation_ratio < 2.0:
-                    self.get_logger().info(f"Skipping white cluster {label} (pothole-like): elongation_ratio = {elongation_ratio:.2f}")
+                    # self.get_logger().info(f"Skipping white cluster {label} (pothole-like): elongation_ratio = {elongation_ratio:.2f}")
                     continue
 
                 center_y_white = np.mean(points_xy_cluster[:, 1])
                 if yellow_y_mean is not None:
                     if abs(center_y_white - yellow_y_mean) < 0.5 and num_white_pts < yellow_point_count and num_white_pts < 180:
-                        self.get_logger().info(f"Skipping white cluster {label} near yellow (y={yellow_y_mean:.2f}) with only {num_white_pts} pts")
+                        # self.get_logger().info(f"Skipping white cluster {label} near yellow (y={yellow_y_mean:.2f}) with only {num_white_pts} pts")
                         continue
 
                 # Passed all checks: add points to publish
@@ -366,7 +222,7 @@ class LaneFollowerNode(Node):
                 center_x = np.mean(subset[:, 0])
                 center_y = np.mean(subset[:, 1])
                 white_cluster_centers.append((center_x, center_y))  # CHANGE 2: Store center coordinates
-                self.get_logger().info(f"White cluster {label}: center = ({center_x:.2f}, {center_y_white:.2f}), points = {num_white_pts}")
+                # self.get_logger().info(f"White cluster {label}: center = ({center_x:.2f}, {center_y_white:.2f}), points = {num_white_pts}")
                 # cluster_curves.append((label, coeffs, 'white', points_xy_cluster))
                 all_cluster_infos.append((label, coeffs, 'white', points_xy_cluster, center_y))
 
@@ -432,7 +288,7 @@ class LaneFollowerNode(Node):
         if len(clustered_white_points) > 0:
             white_msg = pc2.create_cloud_xyz32(msg.header, clustered_white_points)
             self.white_pub.publish(white_msg)
-        self.get_logger().info(f"[Benchmark] White DBSCAN took {time.time() - start:.3f} sec")
+        # self.get_logger().info(f"[Benchmark] White DBSCAN took {time.time() - start:.3f} sec")
 
         # === YELLOW DBSCAN and clustering ===
         start = time.time()
@@ -503,7 +359,7 @@ class LaneFollowerNode(Node):
             unique_labels_yellow = set(labels_yellow)
             n_clusters_y = len(unique_labels_yellow) - (1 if -1 in labels_yellow else 0)
             self.get_logger().info(f"The number of yellow clusters : {n_clusters_y}")
-        self.get_logger().info(f"[Benchmark] Yellow DBSCAN took {time.time() - start:.3f} sec")
+        # self.get_logger().info(f"[Benchmark] Yellow DBSCAN took {time.time() - start:.3f} sec")
 
         # === Yellow Curve Fitting: Single global fit on filtered yellow points ===
         # CHANGE 5: Curve fitting for yellow points (filtered or all based on white cluster count)
@@ -519,7 +375,7 @@ class LaneFollowerNode(Node):
         # === Final Lane Visualization ===
         start = time.time()
         self.publish_lane_visualization(msg, None, cluster_curves, self.white_ground_points, final_yellow_points)
-        self.get_logger().info(f"[Benchmark] Marker publishing took {time.time() - start:.3f} sec")
+        # self.get_logger().info(f"[Benchmark] Marker publishing took {time.time() - start:.3f} sec")
 
         
 
