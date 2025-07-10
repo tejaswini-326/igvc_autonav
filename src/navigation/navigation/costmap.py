@@ -93,11 +93,11 @@ class CostmapNode(Node):
 
         # --------------------- logger level tweak -------------------------
         # Set ROS_CONSOLE_STDOUT_LINE_BUFFERED=1 for live prints in docker
-        level = os.getenv('COSTMAP_DEBUG_LEVEL', 'info').lower()
-        self.get_logger().info(f'Cost-map node up (log level = {level})')
-        self.get_logger().set_level(
-            rclpy.logging.LoggingSeverity.DEBUG
-            if level == 'debug' else rclpy.logging.LoggingSeverity.INFO)
+        # level = os.getenv('COSTMAP_DEBUG_LEVEL', 'info').lower()
+        # self.get_logger().info(f'Cost-map node up (log level = {level})')
+        # self.get_logger().set_level(
+        #     rclpy.logging.LoggingSeverity.DEBUG
+        #     if level == 'debug' else rclpy.logging.LoggingSeverity.INFO)
 
     # ---------------------- subscriber callbacks --------------------------
     def _object_cb(self, msg):  self._object_pc, self._new_object = msg, True
@@ -118,8 +118,8 @@ class CostmapNode(Node):
             self.get_logger().warn(f'TF lookup failed: {e}')
             return
 
-        self.get_logger().debug(
-            f"TF OK  | origin=({self.origin_x:.2f},{self.origin_y:.2f})")
+        # self.get_logger().debug(
+        #     f"TF OK  | origin=({self.origin_x:.2f},{self.origin_y:.2f})")
 
         # ---------- regenerate each layer --------------------------------
         if self._new_white and self._white_pc is not None:
@@ -142,7 +142,7 @@ class CostmapNode(Node):
     def _make_layer(self, pc_msg: PointCloud2, value: int, tag: str) -> np.ndarray:
         # 1) cloud → NumPy -------------------------------------------------
         pts = pc2_numpy_xyz(pc_msg)
-        self.get_logger().debug(f"[{tag}] cloud points: {pts.shape[0]}")
+        # self.get_logger().debug(f"[{tag}] cloud points: {pts.shape[0]}")
         if pts.size == 0:
             return self._empty
 
@@ -157,7 +157,7 @@ class CostmapNode(Node):
                   (my_raw >= 0) & (my_raw < self.height))
                 #   (mx_raw > 100))             # ignore rear half
         vcount = int(np.count_nonzero(valid))
-        self.get_logger().debug(f"[{tag}] valid pts: {vcount}")
+        # self.get_logger().debug(f"[{tag}] valid pts: {vcount}")
         if vcount == 0:
             return self._empty
 
@@ -173,7 +173,7 @@ class CostmapNode(Node):
         blurred = cv2.GaussianBlur(layer.astype(np.float32),
                                    (15, 15), sigmaX=10.0)
         gmax = float(blurred.max())
-        self.get_logger().debug(f"[{tag}] gmax before scale: {gmax:.1f}")
+        # self.get_logger().debug(f"[{tag}] gmax before scale: {gmax:.1f}")
         if gmax > 0.0:
             power = 2.0 if value == 245 else 0.8
             blurred = ((blurred / (gmax ** power)) * 100).astype(np.uint8)
@@ -203,7 +203,7 @@ class CostmapNode(Node):
 
         scaled = self._scale_to_ogrid(grid)
         nz = int(np.count_nonzero(scaled))
-        self.get_logger().debug(f"publish grid: non-zero cells = {nz}")
+        # self.get_logger().debug(f"publish grid: non-zero cells = {nz}")
         msg.data = scaled.flatten().tolist()
         self.costmap_pub.publish(msg)
 
