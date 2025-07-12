@@ -118,6 +118,7 @@ class LaneFollowerNode(Node):
         print("length of marker array: ")
         print(len(marker_array.markers))
         self.markers_pub.publish(marker_array)
+        
     def white_pointcloud_callback(self, msg):
         self.white_msg=msg
     
