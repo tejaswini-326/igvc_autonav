@@ -53,8 +53,8 @@ def generate_launch_description():
                     description='simulation or real time'),
                 # goal_publisher_node,
                 costmap_publisher_node,
-                path_publisher_node,
+                # path_publisher_node,
                 curve_fit_node,
-                controller_node
+                # controller_node
             ]
         )

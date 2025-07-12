@@ -10,10 +10,22 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <deque>
+// horizontal_line_stop_point -> pointstamped object, listens to it
 
+// intersection -> "none" 
 using std::placeholders::_1;
 using namespace std;
 typedef geometry_msgs::msg::Point pt;
+
+inline std::pair<double, double> operator*(const std::pair<double, double> &p, double scalar){
+    return {p.first * scalar, p.second * scalar};
+}
+
+inline std::pair<double, double> operator+(const std::pair<double, double> &a, const std::pair<double, double> &b){
+    return {a.first + b.first, a.second + b.second};
+}
+
 class GoalPublisher : public rclcpp::Node
 {
 public:
@@ -28,6 +40,8 @@ public:
 
         target_lane_ = "right";
         current_lane_ = "right";
+
+        buffer_size_ = 2;
         RCLCPP_INFO(this->get_logger(), "GoalPublisher node initialized");
     }
 
@@ -41,6 +55,14 @@ private:
     std::string target_lane_;
     std::string current_lane_;
     std::pair<double, double> last_rp_, last_lp_, last_mp_;
+    size_t buffer_size_;
+
+    struct tracked_points {
+        std::pair<double, double> left;
+        std::pair<double, double> mid;
+        std::pair<double, double> right;
+    };
+    std::deque<tracked_points> history_;
 
     std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 6.5)
     {
@@ -127,82 +149,61 @@ private:
             m.color.a = 1.0;
             return m;
         };
-        MarkerArray.markers.push_back(make_marker(this->last_rp_, {1.0f,  0.0f, 0.0f}, "right_point"));
-        MarkerArray.markers.push_back(make_marker(this->last_mp_, {0.0f,  1.0f, 0.0f}, "mid_point"));
-        MarkerArray.markers.push_back(make_marker(this->last_lp_, {0.0f,  0.0f, 1.0f}, "left_point"));
+        MarkerArray.markers.push_back(make_marker(history_[0].right, {1.0f,  0.0f, 0.0f}, "right_point"));
+        MarkerArray.markers.push_back(make_marker(history_[0].mid, {0.0f,  1.0f, 0.0f}, "mid_point"));
+        MarkerArray.markers.push_back(make_marker(history_[0].left, {0.0f,  0.0f, 1.0f}, "left_point"));
 
         debug_pub_->publish(MarkerArray);
     }
 
+    void apply_ema(std::pair<double, double>& rp, std::pair<double, double>& mp, std::pair<double, double>& lp){
+
+        double alpha = 0.1;
+
+        cout<< " rp****: "<<rp.first<<", "<<rp.second;
+        cout<< " mp****: "<<mp.first<<", "<<mp.second;
+        cout<< " lp****: "<<lp.first<<", "<<lp.second;
+        if(history_.size() < 2) return;
+
+        rp = history_[0].right * alpha + history_[1].right * (1 - alpha);
+        mp = history_[0].mid   * alpha + history_[1].mid   * (1 - alpha);
+        lp = history_[0].left  * alpha + history_[1].left  * (1 - alpha);
+    }
+
     void marker_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
     {
-        std::vector<visualization_msgs::msg::Marker> lane_markers;
+        std::vector<std::pair<double, double>> end_points; // vector of markers with marker and its end point
+        std::pair<double, double> mp;
         for (const auto &marker : msg->markers)
-        {
-            lane_markers.push_back(marker);
-        }
-
-        if (lane_markers.empty())
-        {
-            RCLCPP_WARN(this->get_logger(), "No lane markers found");
-        }
-
-        std::vector<std::pair<visualization_msgs::msg::Marker, std::pair<double, double>>> end_points; // vector of markers with marker and its end point
-        for (const auto &marker : lane_markers)
         {
             std::pair<double, double> pair = get_last_point(marker.points);
             if(pair.first == 0.0 && pair.second == 0.0){continue;}
-            end_points.emplace_back(marker, get_last_point(marker.points));
+            if(marker.id == 10){
+                mp = pair;
+            }
+            else{
+                end_points.emplace_back(pair);
+            }
         }
 
         std::sort(end_points.begin(), end_points.end(), [](const auto &a, const auto &b)
-                  { return a.second.second < b.second.second; }); // second second is for sorting by y. Also it sorts in increasing order of y
+                  { return a.second < b.second; }); // second second is for sorting by y. Also it sorts in increasing order of y
 
-        std::pair<double, double> rp, lp, mp;
+        std::pair<double, double> rp, lp;
         double goal_x, goal_y;
 
         cout << "size of points array: "<<end_points.size() << '\n';
 
-        if (end_points.size() >= 3)
-        {
-            rp = (end_points[0].second.first == 0.0 && end_points[0].second.second == 0.0) ? last_rp_ : end_points[0].second;
-            mp = (end_points[1].second.first == 0.0 && end_points[1].second.second == 0.0) ? last_mp_ : end_points[1].second;
-            lp = (end_points[2].second.first == 0.0 && end_points[2].second.second == 0.0) ? last_lp_ : end_points[2].second;
-
-            if (target_lane_ == "right")
-            {
-                goal_x = (rp.first + mp.first) / 2.0;
-                goal_y = (rp.second + mp.second) / 2.0;
-                current_lane_ = "right";
-            }
-            else
-            {
-                goal_x = (lp.first + mp.first) / 2.0;
-                goal_y = (lp.second + mp.second) / 2.0;
-                current_lane_ = "left";
-            }
-            cout<< " rp: "<<rp.first<<", "<<rp.second;
-            cout<< " mp: "<<mp.first<<", "<<mp.second;
-            cout<< " lp: "<<lp.first<<", "<<lp.second;
-            last_rp_ = rp;
-            last_lp_ = lp;
-            last_mp_ = mp;
+        cout<<'\n';
+        for(auto i : end_points){
+            cout<<"( "<<i.first<<", "<<i.second<<" )";
         }
-        else if(end_points.size() == 2){
-            if(current_lane_ == "right"){
-                rp = (end_points[0].second.first == 0.0 && end_points[0].second.second == 0.0) ? last_rp_ : end_points[0].second;
-                mp = (end_points[1].second.first == 0.0 && end_points[1].second.second == 0.0) ? last_mp_ : end_points[1].second;
-                double dx = rp.first - mp. first;
-                double dy = rp.second - mp.second;
-                lp = {mp.first - dx, mp.second - dy};
-            }
-            else{
-                mp = (end_points[0].second.first == 0.0 && end_points[0].second.second == 0.0) ? last_mp_ : end_points[0].second;
-                lp = (end_points[1].second.first == 0.0 && end_points[1].second.second == 0.0) ? last_lp_ : end_points[1].second;
-                double dx = lp.first - mp.first;
-                double dy = lp.second - mp.second;
-                rp = {mp.first - dx, mp.second - dy};
-            }
+        cout<<'\n';
+
+        if (end_points.size() == 2)
+        {
+            rp = end_points[0];
+            lp = end_points[1];
 
             if (target_lane_ == "right")
             {
@@ -216,20 +217,46 @@ private:
                 goal_y = (lp.second + mp.second) / 2.0;
                 current_lane_ = "left";
             }
-
             cout<< " rp: "<<rp.first<<", "<<rp.second;
             cout<< " mp: "<<mp.first<<", "<<mp.second;
             cout<< " lp: "<<lp.first<<", "<<lp.second;
-            last_rp_ = rp;
-            last_lp_ = lp;
-            last_mp_ = mp;
+
+            history_.push_front(tracked_points{.left = lp, .mid = mp, .right = rp});
+
+            while(history_.size() > buffer_size_){
+                history_.pop_back();
+            }
+        }
+        else if(end_points.size() < 2){
+            apply_ema(rp, mp, lp);
+
+            if (target_lane_ == "right")
+            {
+                goal_x = (rp.first + mp.first) / 2.0;
+                goal_y = (rp.second + mp.second) / 2.0;
+                current_lane_ = "right";
+            }
+            else
+            {
+                goal_x = (lp.first + mp.first) / 2.0;
+                goal_y = (lp.second + mp.second) / 2.0;
+                current_lane_ = "left";
+            }
+            cout<< " rp: "<<rp.first<<", "<<rp.second;
+            cout<< " mp: "<<mp.first<<", "<<mp.second;
+            cout<< " lp: "<<lp.first<<", "<<lp.second;
+            
+            history_.push_front(tracked_points{.left = lp, .mid = mp, .right = rp});
+
+            while(history_.size() > buffer_size_){
+                history_.pop_back();
+            }
         }
         else{
             return;
         }
 
-        cout << "\n***************\n";
-        cout << goal_x << goal_y << '\n';
+        cout << "\nGoal: " << goal_x << ", " << goal_y << '\n';
 
         if (auto transformed = transform_to_odom(goal_x, goal_y)) {
             debug_markers();

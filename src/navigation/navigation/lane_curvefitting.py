@@ -72,15 +72,26 @@ class LaneFollowerNode(Node):
             
             # Different colors for different curves and types
             if color_type == 'white':
-                curve_marker.color.r = 1.0
-                curve_marker.color.g = 0.0
-                curve_marker.color.b = 0.0
-                curve_marker.id = 0
+                if i == 0 :
+                    curve_marker.color.r = 1.0
+                    curve_marker.color.g = 0.0
+                    curve_marker.color.b = 0.0
+                    curve_marker.id = 0
+                elif i == 1:
+                    curve_marker.color.r = 1.0
+                    curve_marker.color.g = 0.0
+                    curve_marker.color.b = 0.0
+                    curve_marker.id = 1
+                else:
+                    curve_marker.color.r = 1.0
+                    curve_marker.color.g = 0.0
+                    curve_marker.color.b = 0.0
+                    curve_marker.id = 2
             else:  # yellow
                 curve_marker.color.r = 0.0
                 curve_marker.color.g = 1.0
                 curve_marker.color.b = 0.0
-                curve_marker.id = 1
+                curve_marker.id = 10
             
             curve_marker.color.a = 1.0
             
