@@ -5,6 +5,7 @@
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "std_msgs/msg/string.hpp"
 
 #include <vector>
 #include <algorithm>
@@ -37,7 +38,10 @@ public:
         debug_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/debug_points", 10);
         marker_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(
             "/lane_visualization", 10, std::bind(&GoalPublisher::marker_callback, this, _1));
+        override_sub_ = this->create_subscription<std_msgs::msg::String>(
+            "/intersection", 10, std::bind(&GoalPublisher::override_callback_, this, _1));
 
+        override_ = "none";
         target_lane_ = "right";
         current_lane_ = "right";
 
@@ -49,13 +53,14 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_pub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr override_sub_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     std::string target_lane_;
     std::string current_lane_;
-    std::pair<double, double> last_rp_, last_lp_, last_mp_;
     size_t buffer_size_;
+    std::string override_;
 
     struct tracked_points {
         std::pair<double, double> left;
@@ -63,6 +68,12 @@ private:
         std::pair<double, double> right;
     };
     std::deque<tracked_points> history_;
+
+    void override_callback_(const std_msgs::msg::String::SharedPtr msg)
+    {
+        override_ = msg->data;
+        RCLCPP_INFO(this->get_logger(), "Overriding goal publisher\n");
+    }
 
     std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 6.5)
     {
@@ -118,8 +129,9 @@ private:
         goal_pose.pose.orientation.y = 0.0;
         goal_pose.pose.orientation.z = 0.0;
         goal_pose.pose.orientation.w = 1.0;
-
-        goal_pub_->publish(goal_pose);
+        if(override_ == "none"){
+            goal_pub_->publish(goal_pose);
+        }
     }
 
     void debug_markers(){
@@ -130,7 +142,7 @@ private:
         auto make_marker = [&marker_id, &timestamp](std::pair<double, double> point, const std::array<float, 3>& color, const std::string& label){
             visualization_msgs::msg::Marker m;
             m.header.stamp = timestamp;
-            m.header.frame_id = "camera_link";
+            m.header.frame_id = "odom";
             m.ns = label;
             m.id = marker_id;
             marker_id += 1;
@@ -221,10 +233,20 @@ private:
             cout<< " mp: "<<mp.first<<", "<<mp.second;
             cout<< " lp: "<<lp.first<<", "<<lp.second;
 
-            history_.push_front(tracked_points{.left = lp, .mid = mp, .right = rp});
+            geometry_msgs::msg::PointStamped olp = *transform_to_odom(lp.first, lp.second);
+            geometry_msgs::msg::PointStamped omp = *transform_to_odom(mp.first, mp.second);
+            geometry_msgs::msg::PointStamped orp = *transform_to_odom(rp.first, rp.second);
+
+            history_.push_front(tracked_points{.left = {olp.point.x, olp.point.y}, .mid = {omp.point.x, omp.point.y}, .right = {orp.point.x, orp.point.y}});
 
             while(history_.size() > buffer_size_){
                 history_.pop_back();
+            }
+            cout << "\nGoal: " << goal_x << ", " << goal_y << '\n';
+
+            if (auto transformed = transform_to_odom(goal_x, goal_y)) {
+                debug_markers();
+                publish_goal(*transformed);
             }
         }
         else if(end_points.size() < 2){
@@ -245,23 +267,31 @@ private:
             cout<< " rp: "<<rp.first<<", "<<rp.second;
             cout<< " mp: "<<mp.first<<", "<<mp.second;
             cout<< " lp: "<<lp.first<<", "<<lp.second;
-            
-            history_.push_front(tracked_points{.left = lp, .mid = mp, .right = rp});
+
+            history_.push_front(tracked_points{.left = {lp.first, lp.second}, .mid = {mp.first, mp.second}, .right = {rp.first, rp.second}});
 
             while(history_.size() > buffer_size_){
                 history_.pop_back();
+            }
+            geometry_msgs::msg::PoseStamped goal_pose;
+            goal_pose.header.stamp = this->get_clock()->now();
+            goal_pose.header.frame_id = "odom";
+            goal_pose.pose.position.x = goal_x;
+            goal_pose.pose.position.y = goal_y;
+            goal_pose.pose.position.z = 0.0;
+            goal_pose.pose.orientation.x = 0.0;
+            goal_pose.pose.orientation.y = 0.0;
+            goal_pose.pose.orientation.z = 0.0;
+            goal_pose.pose.orientation.w = 1.0;
+
+            if(override_ == "none"){
+                goal_pub_->publish(goal_pose);
             }
         }
         else{
             return;
         }
 
-        cout << "\nGoal: " << goal_x << ", " << goal_y << '\n';
-
-        if (auto transformed = transform_to_odom(goal_x, goal_y)) {
-            debug_markers();
-            publish_goal(*transformed);
-        }
     }
 };
 
