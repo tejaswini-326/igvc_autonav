@@ -14,7 +14,7 @@ class GoalPublisher(Node):
     def __init__(self):
         super().__init__('goal_publisher')
         self.target_lane = 'right'  # or 'left'
-        self.current_lane = 'right'
+        self.current_lane = 'left'
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_point', 10)
         self.marker_sub = self.create_subscription(MarkerArray, '/lane_visualization', self.marker_callback, 10)
         self.debug_marker_pub = self.create_publisher(MarkerArray, '/lane_debug_points', 10)
@@ -34,7 +34,7 @@ class GoalPublisher(Node):
         try:
             averaged_points = [(marker, self.average_last_n_points(marker.points, 5)) for marker in lane_markers]
             averaged_points = [tup for tup in averaged_points if tup[1] != (0.0, 0.0)]  # Remove invalid ones
-
+            
             averaged_points.sort(key=lambda tup: tup[1][1])  # sort by avg_y
             lane_markers = [tup[0] for tup in averaged_points]
 
@@ -64,9 +64,9 @@ class GoalPublisher(Node):
                     mid_marker, right_marker = lane_markers[1], lane_markers[0]
                     rp = self.average_last_n_points(right_marker.points, 5)
                     mp = self.average_last_n_points(mid_marker.points, 5)
-                    dx = rp[0] - mp[0]
-                    dy = rp[1] - mp[1]
-                    lp = (mp[0] - dx, mp[1] - dy)
+                    dx = rp[0] - mp[0]  # +ve
+                    dy = rp[1] - mp[1]  # -ve
+                    lp = (mp[0] - dx, mp[1] - dy)  # try changing mp[0] + dx to mp[0] - dx
                 else:
                     mid_marker, left_marker = lane_markers[0], lane_markers[1]
                     lp = self.average_last_n_points(left_marker.points, 5)
@@ -88,9 +88,43 @@ class GoalPublisher(Node):
                     self.current_lane = 'left'
 
                 self.goal_z = 0.0
+
+            elif len(lane_markers) == 1:
+                if self.current_lane == 'right':
+                    right_marker = lane_markers[0]
+                    rp = self.average_last_n_points(right_marker.points, 5)
+                    rdx = rp[0] - self.last_mp[0]
+                    rdy = rp[1] - self.last_mp[1]
+                    mp = (rp[0] - rdx, rp[1] - rdy)
+
+                    ldx = self.last_mp[0] - self.last_lp[0]
+                    ldy = self.last_lp[1] - self.last_mp[1]
+                    mp = (rp[0] - rdx, rp[1] - rdy)
+                else:
+                    mid_marker, left_marker = lane_markers[0], lane_markers[1]
+                    lp = self.average_last_n_points(left_marker.points, 5)
+                    mp = self.average_last_n_points(mid_marker.points, 5)
+                    dx = lp[0] - mp[0]
+                    dy = lp[1] - mp[1]
+                    rp = (mp[0] - dx, mp[1])
+                self.last_rp = rp
+                self.last_lp = lp
+                self.last_mp = mp
+
+                if self.target_lane == 'right':
+                    self.goal_x = (rp[0] + mp[0]) / 2.0
+                    self.goal_y = (rp[1] + mp[1]) / 2.0
+                    self.current_lane = 'right'
+                else:
+                    self.goal_x = (lp[0] + mp[0]) / 2.0
+                    self.goal_y = (lp[1] + mp[1]) / 2.0
+                    self.current_lane = 'left'
+
+                self.goal_z = 0.0         
+
             else:
                 self.get_logger().warn("Not enough lane markers for goal computation.")
-                # return
+                return
 
             transformed = self.transform_to_odom(self.goal_x, self.goal_y, self.goal_z)
             if transformed:
@@ -108,7 +142,7 @@ class GoalPublisher(Node):
 
         if not filtered:
             self.get_logger().warn("No points within distance threshold.")
-            return (0.0, 0.0)
+            # return (0.0, 0.0)
 
         n = min(n, len(filtered))
         avg_x = sum(p.x for p in filtered[-n:]) / n
@@ -135,7 +169,7 @@ class GoalPublisher(Node):
     def publish_goal(self, point):
         goal_pose = PoseStamped()
         goal_pose.header.stamp = self.get_clock().now().to_msg()
-        goal_pose.header.frame_id = 'camera_link'
+        goal_pose.header.frame_id = 'odom'
         goal_pose.pose.position = point
         goal_pose.pose.position.z = 0.0
         goal_pose.pose.orientation.w = 1.0

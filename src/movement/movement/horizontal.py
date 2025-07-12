@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
@@ -13,7 +12,7 @@ import std_msgs.msg
 
 
 MAX_STOP_LINE_LENGTH = 100 
-THRESHOLD_ANGLE = 4
+THRESHOLD_ANGLE = 10
 
 
 class LaneDetectorNode(Node):
@@ -35,6 +34,13 @@ class LaneDetectorNode(Node):
         self.fy = 246.4928
         self.cx = 300.0
         self.cy = 300.0
+    
+    def downsample_image(self,frame, scale=0.5):
+        # Downsample
+        small = cv2.resize(frame, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        # Upsample back to original size
+        result = cv2.resize(small, (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_LINEAR)
+        return result
 
     def depth_callback(self, msg):
             try:
@@ -46,6 +52,7 @@ class LaneDetectorNode(Node):
         
         # Convert ROS Image to OpenCV BGR format
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        frame = self.downsample_image(frame,0.4)
         original = frame.copy()
         # Crop to bottom 40%
         height = frame.shape[0]
@@ -125,7 +132,7 @@ class LaneDetectorNode(Node):
 
         # Show the final result (for debugging only)
         cv2.imshow("Lane Detection", original)
-        cv2.waitKey(1)
+        cv2.waitKey(30)
 
 def main(args=None):
     rclpy.init(args=args)
