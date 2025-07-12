@@ -45,7 +45,7 @@ public:
         target_lane_ = "right";
         current_lane_ = "right";
 
-        buffer_size_ = 2;
+        buffer_size_ = 10;
         RCLCPP_INFO(this->get_logger(), "GoalPublisher node initialized");
     }
 
@@ -175,11 +175,12 @@ private:
         cout<< " rp****: "<<rp.first<<", "<<rp.second;
         cout<< " mp****: "<<mp.first<<", "<<mp.second;
         cout<< " lp****: "<<lp.first<<", "<<lp.second;
+        
         if(history_.size() < 2) return;
 
-        rp = history_[0].right * alpha + history_[1].right * (1 - alpha);
-        mp = history_[0].mid   * alpha + history_[1].mid   * (1 - alpha);
-        lp = history_[0].left  * alpha + history_[1].left  * (1 - alpha);
+        rp = history_[0].right * alpha + history_[5].right * (1 - alpha);
+        mp = history_[0].mid   * alpha + history_[5].mid   * (1 - alpha);
+        lp = history_[0].left  * alpha + history_[5].left  * (1 - alpha);
     }
 
     void marker_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
