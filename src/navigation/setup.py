@@ -21,9 +21,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-        'goal_pub= navigation.goal_publisher:main', 
+        # 'goal_pub= navigation.goal_publisher:main', 
         'costmap= navigation.costmap:main', 
-        'path_planner= navigation.path_planning:main', 
+        # 'path_planner= navigation.path_planning:main', 
         'curve_fit= navigation.lane_curvefitting:main', 
         'controller = navigation.controller:main',
         'downsampling = navigation.downsampling:main',
