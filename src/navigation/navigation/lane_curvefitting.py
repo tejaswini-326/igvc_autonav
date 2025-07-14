@@ -49,6 +49,7 @@ class LaneFollowerNode(Node):
         
         self.white_msg = None
         self.yellow_msg = None
+        self.closest_y = 0.0
 
     def extract_xyz(self, msg):
         return [
@@ -60,6 +61,8 @@ class LaneFollowerNode(Node):
     def publish_lane_visualization(self, msg, target_point, cluster_curves, white_ground_points, yellow_ground_points):
         marker_array = MarkerArray()
         white_markers = []
+        yellow_closest = 0
+
 
         for i, (label, coeffs, color_type, cluster_xy) in enumerate(cluster_curves):
             curve_marker = Marker()
@@ -75,8 +78,14 @@ class LaneFollowerNode(Node):
                 x_vals = cluster_xy[:, 0]
                 x_min, x_max = np.min(x_vals), np.max(x_vals)
                 x_line = np.linspace(x_min, x_max, 50)
+
+                distances = np.linalg.norm(cluster_xy, axis=1)
+                closest_index = np.argmin(distances)
+                closest_y = cluster_xy[closest_index][1]
+
             else:
                 x_line = np.linspace(0.0, 4.0, 50)  # fallback
+                closest_y = 0.0
 
             a, b, c = coeffs
             y_values = []
@@ -90,29 +99,28 @@ class LaneFollowerNode(Node):
                 curve_marker.points.append(pt)
 
             if color_type == 'white':
-                avg_y = np.mean(y_values)
-                white_markers.append((avg_y, curve_marker))
+                avg_y = closest_y
+                white_markers.append((closest_y, curve_marker))
             else:  # yellow
                 curve_marker.color.r = 0.0
                 curve_marker.color.g = 1.0
                 curve_marker.color.b = 0.0
                 curve_marker.id = 1
                 marker_array.markers.append(curve_marker)
+                yellow_closest= closest_y
+                
 
-        # Sort white markers by avg y (higher y → id 0, lower y → id 2)
-        white_markers.sort(key=lambda tup: tup[0], reverse=True)  # sort by avg_y descending
-        for idx, (_, marker) in enumerate(white_markers):
-            if idx == 0:
-                marker.id = 0
+        for point_y, marker in white_markers:
+            if yellow_closest > point_y:
+                marker.id = 2
                 marker.color.r = 1.0
                 marker.color.g = 0.0
                 marker.color.b = 0.0
             else:
-                marker.id = 2
+                marker.id = 0
                 marker.color.r = 0.0
                 marker.color.g = 0.0
                 marker.color.b = 1.0
-
             marker_array.markers.append(marker)
 
         print("length of marker array: ")
