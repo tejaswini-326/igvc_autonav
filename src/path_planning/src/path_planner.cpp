@@ -118,7 +118,7 @@ private:
     }
 
     nav_msgs::msg::Path a_star(int start_x, int start_y, int goal_x, int goal_y)
-    {
+    {   
         nav_msgs::msg::Path path_msg;
 
         auto cmp = [](AStarNode *a, AStarNode *b)
@@ -173,7 +173,6 @@ private:
                 open.push(neighbor);
             }
         }
-
         return path_msg;
     }
     std::vector<geometry_msgs::msg::PoseStamped> smooth_path(const std::vector<geometry_msgs::msg::PoseStamped> &path, float alpha = 0.009, float beta = 0.4, float tolerance = 0.00001)

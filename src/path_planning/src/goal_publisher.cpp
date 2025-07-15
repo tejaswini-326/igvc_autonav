@@ -29,6 +29,10 @@ inline std::pair<double, double> operator+(const std::pair<double, double> &a, c
     return {a.first + b.first, a.second + b.second};
 }
 
+inline std::pair<double, double> operator-(const std::pair<double, double> &a, const std::pair<double, double> &b){
+    return {a.first - b.first, a.second - b.second};
+}
+
 class GoalPublisher : public rclcpp::Node
 {
 public:
@@ -42,6 +46,11 @@ public:
             "/lane_visualization", 10, std::bind(&GoalPublisher::marker_callback, this, _1));
         override_sub_ = this->create_subscription<std_msgs::msg::String>(
             "/intersection", 10, std::bind(&GoalPublisher::override_callback_, this, _1));
+        timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(200),
+            std::bind(&GoalPublisher::timer_callback, this)
+        );
+
 
         override_ = "none";
         target_lane_ = "right";
@@ -58,6 +67,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr override_sub_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    rclcpp::TimerBase::SharedPtr timer_;
+
 
     std::string target_lane_;
     std::string current_lane_;
@@ -77,7 +88,7 @@ private:
         RCLCPP_INFO(this->get_logger(), "Overriding goal publisher\n");
     }
 
-    std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 6.5)
+    std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 6.5, double min_distance = 4.0)
     {
         double distance_squared = 0.0;
         pt ans;
@@ -85,7 +96,7 @@ private:
         ans.y = 0.0;
         for (const pt &p : points)
         {
-            if (p.x * p.x + p.y * p.y <= max_distance * max_distance && p.x * p.x + p.y * p.y > distance_squared)
+            if (p.x * p.x + p.y * p.y >= min_distance * min_distance && p.x * p.x + p.y * p.y <= max_distance * max_distance && p.x * p.x + p.y * p.y > distance_squared)
             {
                 ans = p;
                 distance_squared = p.x * p.x + p.y * p.y;
@@ -110,7 +121,7 @@ private:
             geometry_msgs::msg::PointStamped transformed_point;
             tf2::doTransform(stamped_point, transformed_point, transform);
 
-            if (VERBOSE_UNNECESSARY_THINGS) std::cout << transformed_point.point.x << " , " << transformed_point.point.y << " is the goal\n";
+            // std::cout << transformed_point.point.x << " , " << transformed_point.point.y << " is the goal\n";
             return transformed_point;
         }
         catch (const tf2::TransformException &ex)
@@ -163,145 +174,143 @@ private:
             m.color.a = 1.0;
             return m;
         };
-        MarkerArray.markers.push_back(make_marker(history_[0].right, {1.0f,  0.0f, 0.0f}, "right_point"));
-        MarkerArray.markers.push_back(make_marker(history_[0].mid, {0.0f,  1.0f, 0.0f}, "mid_point"));
-        MarkerArray.markers.push_back(make_marker(history_[0].left, {0.0f,  0.0f, 1.0f}, "left_point"));
+        MarkerArray.markers.push_back(make_marker(history_[0].right, {1.0f,  0.0f, 0.0f}, "right_point")); //red
+        MarkerArray.markers.push_back(make_marker(history_[0].mid, {0.0f,  1.0f, 0.0f}, "mid_point")); //green
+        MarkerArray.markers.push_back(make_marker(history_[0].left, {0.0f,  0.0f, 1.0f}, "left_point")); //blue
 
         debug_pub_->publish(MarkerArray);
     }
 
-    void apply_ema(std::pair<double, double>& rp, std::pair<double, double>& mp, std::pair<double, double>& lp){
-
-        double alpha = 0.1;
-
-        if (VERBOSE_UNNECESSARY_THINGS) cout<< " rp****: "<<rp.first<<", "<<rp.second;
-        if (VERBOSE_UNNECESSARY_THINGS) cout<< " mp****: "<<mp.first<<", "<<mp.second;
-        if (VERBOSE_UNNECESSARY_THINGS) cout<< " lp****: "<<lp.first<<", "<<lp.second;
-        
-        if(history_.size() < 2) return;
-
-        rp = history_[0].right * alpha + history_[5].right * (1 - alpha);
-        mp = history_[0].mid   * alpha + history_[5].mid   * (1 - alpha);
-        lp = history_[0].left  * alpha + history_[5].left  * (1 - alpha);
-    }
-
     void marker_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
     {
-        std::vector<std::pair<double, double>> end_points; // vector of markers with marker and its end point
-        std::pair<double, double> mp;
+        std::pair<double, double> rp = {0, 0}, lp = {0, 0}, mp = {0, 0};
+
         for (const auto &marker : msg->markers)
         {
             std::pair<double, double> pair = get_last_point(marker.points);
-            if(pair.first == 0.0 && pair.second == 0.0){continue;}
-            if(marker.id == 10){
+            if (pair.first == 0.0 && pair.second == 0.0) continue;
+
+            if (marker.id == 0)
+            {
+                lp = pair;
+            }
+            else if (marker.id == 1)
+            {
                 mp = pair;
             }
+            else if (marker.id == 2)
+            {
+                rp = pair;
+            }
             else{
-                end_points.emplace_back(pair);
+                cout<<"LANE NOT FOUND\n";
+                return;
             }
         }
 
-        std::sort(end_points.begin(), end_points.end(), [](const auto &a, const auto &b)
-                  { return a.second < b.second; }); // second second is for sorting by y. Also it sorts in increasing order of y
+        // Swap if left/right are incorrectly assigned
+        // if (rp.second > lp.second)
+        //     std::swap(rp, lp);
+        
+        cout<<"left in camera frame: "<<lp.first<<", "<<lp.second<<'\n';
+        cout<<"mid in camera frame: "<<mp.first<<", "<<mp.second<<'\n';
+        cout<<"right in camera frame: "<<rp.first<<", "<<rp.second<<'\n';
 
-        std::pair<double, double> rp, lp;
-        double goal_x, goal_y;
+        std::pair<double, double> olp, omp, orp;
 
-        if (VERBOSE_UNNECESSARY_THINGS) cout << "size of points array: "<<end_points.size() << '\n';
-
-        if (VERBOSE_UNNECESSARY_THINGS) {
-            cout<<'\n';
-            for(auto i : end_points){
-                cout<<"( "<<i.first<<", "<<i.second<<" )";
-            }
-            cout<<'\n';
-        }
-
-
-        if (end_points.size() == 2)
+        // Transform or fall back to history
+        if (lp.first == 0.0 && lp.second == 0.0)
         {
-            rp = end_points[0];
-            lp = end_points[1];
-
-            if (target_lane_ == "right")
-            {
-                goal_x = (rp.first + mp.first) / 2.0;
-                goal_y = (rp.second + mp.second) / 2.0;
-                current_lane_ = "right";
-            }
-            else
-            {
-                goal_x = (lp.first + mp.first) / 2.0;
-                goal_y = (lp.second + mp.second) / 2.0;
-                current_lane_ = "left";
-            }
-            if (VERBOSE_UNNECESSARY_THINGS) {
-                cout<< " rp: "<<rp.first<<", "<<rp.second;
-                cout<< " mp: "<<mp.first<<", "<<mp.second;
-                cout<< " lp: "<<lp.first<<", "<<lp.second;
-            }
-
-
-            geometry_msgs::msg::PointStamped olp = *transform_to_odom(lp.first, lp.second);
-            geometry_msgs::msg::PointStamped omp = *transform_to_odom(mp.first, mp.second);
-            geometry_msgs::msg::PointStamped orp = *transform_to_odom(rp.first, rp.second);
-
-            history_.push_front(tracked_points{.left = {olp.point.x, olp.point.y}, .mid = {omp.point.x, omp.point.y}, .right = {orp.point.x, orp.point.y}});
-
-            while(history_.size() > buffer_size_){
-                history_.pop_back();
-            }
-            if (VERBOSE_UNNECESSARY_THINGS) cout << "\nGoal: " << goal_x << ", " << goal_y << '\n';
-
-            if (auto transformed = transform_to_odom(goal_x, goal_y)) {
-                debug_markers();
-                publish_goal(*transformed);
-            }
+            olp = history_.at(0).left;
+            cout<<"LEFT TOOK FROM HISTORY";
         }
-        else if(end_points.size() < 2){
-            apply_ema(rp, mp, lp);
-
-            if (target_lane_ == "right")
+        else
+        {
+            auto result = transform_to_odom(lp.first, lp.second);
+            if (!result)
             {
-                goal_x = (rp.first + mp.first) / 2.0;
-                goal_y = (rp.second + mp.second) / 2.0;
-                current_lane_ = "right";
+                std::cout << "TRANSFORM FAILED (left)\n";
+                return;
             }
-            else
-            {
-                goal_x = (lp.first + mp.first) / 2.0;
-                goal_y = (lp.second + mp.second) / 2.0;
-                current_lane_ = "left";
-            }
-            if (VERBOSE_UNNECESSARY_THINGS) cout<< " rp: "<<rp.first<<", "<<rp.second;
-            if (VERBOSE_UNNECESSARY_THINGS) cout<< " mp: "<<mp.first<<", "<<mp.second;
-            if (VERBOSE_UNNECESSARY_THINGS) cout<< " lp: "<<lp.first<<", "<<lp.second;
-
-            history_.push_front(tracked_points{.left = {lp.first, lp.second}, .mid = {mp.first, mp.second}, .right = {rp.first, rp.second}});
-
-            while(history_.size() > buffer_size_){
-                history_.pop_back();
-            }
-            geometry_msgs::msg::PoseStamped goal_pose;
-            goal_pose.header.stamp = this->get_clock()->now();
-            goal_pose.header.frame_id = "odom";
-            goal_pose.pose.position.x = goal_x;
-            goal_pose.pose.position.y = goal_y;
-            goal_pose.pose.position.z = 0.0;
-            goal_pose.pose.orientation.x = 0.0;
-            goal_pose.pose.orientation.y = 0.0;
-            goal_pose.pose.orientation.z = 0.0;
-            goal_pose.pose.orientation.w = 1.0;
-
-            if(override_ == "none"){
-                goal_pub_->publish(goal_pose);
-            }
-        }
-        else{
-            return;
+            olp = {result->point.x, result->point.y};
         }
 
+        if (mp.first == 0.0 && mp.second == 0.0)
+        {
+            omp = history_.at(0).mid;
+            cout<<"MID TOOK FROM HISTORY";
+        }
+        else
+        {
+            auto result = transform_to_odom(mp.first, mp.second);
+            if (!result)
+            {
+                std::cout << "TRANSFORM FAILED (mid)\n";
+                return;
+            }
+            omp = {result->point.x, result->point.y};
+        }
+
+        if (rp.first == 0.0 && rp.second == 0.0)
+        {
+            orp = history_.at(0).right;
+            cout<<"RIGHT TOOK FROM HISTORY";
+        }
+        else
+        {
+            auto result = transform_to_odom(rp.first, rp.second);
+            if (!result)
+            {
+                std::cout << "TRANSFORM FAILED (right)\n";
+                return;
+            }
+            orp = {result->point.x, result->point.y};
+        }
+
+        cout<<"left in odom frame: "<<olp.first<<", "<<olp.second<<'\n';
+        cout<<"mid in odom frame: "<<omp.first<<", "<<omp.second<<'\n';
+        cout<<"right in odom frame: "<<orp.first<<", "<<orp.second<<'\n';
+
+        // Store in history
+        history_.push_front(tracked_points{
+            .left = olp,
+            .mid = omp,
+            .right = orp
+        });
+
+        while (history_.size() > buffer_size_)
+            history_.pop_back();
     }
+    
+    void timer_callback()
+    {
+        //history has points in odom frame
+        if (history_.size() < 3 || override_ != "none") {
+            return;  // Not enough data or overridden externally
+        }
+
+        std::pair<double, double> goal;
+        if(target_lane_ == "right"){
+            goal.first = (history_[0].right.first + history_[0].mid.first) / 2;
+            goal.second = (history_[0].right.second + history_[0].mid.second) / 2;
+        }
+        if(target_lane_ == "left"){
+            goal.first = (history_[0].left.first + history_[0].mid.first) / 2;
+            goal.second = (history_[0].left.second + history_[0].mid.second) / 2;
+        }
+
+        // Create PointStamped to use your existing `publish_goal()` function
+        geometry_msgs::msg::PointStamped goal_point;
+        goal_point.header.stamp = this->get_clock()->now();
+        goal_point.header.frame_id = "odom";
+        goal_point.point.x = goal.first;
+        goal_point.point.y = goal.second;
+        goal_point.point.z = 0.0;
+
+        publish_goal(goal_point);
+        debug_markers();  // Optional visualization
+    }
+
 };
 
 int main(int argc, char **argv)

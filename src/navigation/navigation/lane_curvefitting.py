@@ -52,6 +52,7 @@ class LaneFollowerNode(Node):
         
         self.white_msg = None
         self.yellow_msg = None
+        self.closest_y = 0.0
 
     def extract_xyz(self, msg):
         return [
@@ -62,8 +63,10 @@ class LaneFollowerNode(Node):
         # FUNCTION TO PUBLISH STUFF FOR LANE VISUALISATION IN RVIZ
     def publish_lane_visualization(self, msg, target_point, cluster_curves, white_ground_points, yellow_ground_points):
         marker_array = MarkerArray()
-        
-        # Markers for fitted curves
+        white_markers = []
+        yellow_closest = 0
+
+
         for i, (label, coeffs, color_type, cluster_xy) in enumerate(cluster_curves):
             curve_marker = Marker()
             curve_marker.header.frame_id = msg.header.frame_id
@@ -72,55 +75,61 @@ class LaneFollowerNode(Node):
             curve_marker.type = Marker.LINE_STRIP
             curve_marker.action = Marker.ADD
             curve_marker.scale.x = 0.05
-            
-            # Different colors for different curves and types
-            if color_type == 'white':
-                if i == 0 :
-                    curve_marker.color.r = 1.0
-                    curve_marker.color.g = 0.0
-                    curve_marker.color.b = 0.0
-                    curve_marker.id = 0
-                elif i == 1:
-                    curve_marker.color.r = 1.0
-                    curve_marker.color.g = 0.0
-                    curve_marker.color.b = 0.0
-                    curve_marker.id = 1
-                else:
-                    curve_marker.color.r = 1.0
-                    curve_marker.color.g = 0.0
-                    curve_marker.color.b = 0.0
-                    curve_marker.id = 2
-            else:  # yellow
-                curve_marker.color.r = 0.0
-                curve_marker.color.g = 1.0
-                curve_marker.color.b = 0.0
-                curve_marker.id = 10
-            
             curve_marker.color.a = 1.0
-            
-            # Generate curve points
+
             if cluster_xy is not None and len(cluster_xy) > 0:
                 x_vals = cluster_xy[:, 0]
                 x_min, x_max = np.min(x_vals), np.max(x_vals)
                 x_line = np.linspace(x_min, x_max, 50)
+
+                distances = np.linalg.norm(cluster_xy, axis=1)
+                closest_index = np.argmin(distances)
+                closest_y = cluster_xy[closest_index][1]
+
             else:
                 x_line = np.linspace(0.0, 4.0, 50)  # fallback
+                closest_y = 0.0
+
             a, b, c = coeffs
-            
+            y_values = []
             for x_val in x_line:
-                y_val = a * x_val**2 + b * x_val + c  
+                y_val = a * x_val**2 + b * x_val + c
+                y_values.append(y_val)
                 pt = Point()
                 pt.x = float(x_val)
                 pt.y = float(y_val)
                 pt.z = -1.35  # Ground level
                 curve_marker.points.append(pt)
-            
-            marker_array.markers.append(curve_marker)
 
-        # Publish marker array
-        #self.get_logger().info("length of marker array: ")
-        #self.get_logger().info(str(len(marker_array.markers)))
+            if color_type == 'white':
+                avg_y = closest_y
+                white_markers.append((closest_y, curve_marker))
+            else:  # yellow
+                curve_marker.color.r = 0.0
+                curve_marker.color.g = 1.0
+                curve_marker.color.b = 0.0
+                curve_marker.id = 1
+                marker_array.markers.append(curve_marker)
+                yellow_closest= closest_y
+                
+
+        for point_y, marker in white_markers:
+            if yellow_closest > point_y:
+                marker.id = 2
+                marker.color.r = 1.0
+                marker.color.g = 0.0
+                marker.color.b = 0.0
+            else:
+                marker.id = 0
+                marker.color.r = 0.0
+                marker.color.g = 0.0
+                marker.color.b = 1.0
+            marker_array.markers.append(marker)
+
+        print("length of marker array: ")
+        print(len(marker_array.markers))
         self.markers_pub.publish(marker_array)
+
         
     def white_pointcloud_callback(self, msg):
         self.white_msg=msg
