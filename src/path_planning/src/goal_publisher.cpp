@@ -86,7 +86,7 @@ private:
         RCLCPP_INFO(this->get_logger(), "Overriding goal publisher\n");
     }
 
-    std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 6.5)
+    std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 6.5, double min_distance = 4.0)
     {
         double distance_squared = 0.0;
         pt ans;
@@ -94,7 +94,7 @@ private:
         ans.y = 0.0;
         for (const pt &p : points)
         {
-            if (p.x * p.x + p.y * p.y <= max_distance * max_distance && p.x * p.x + p.y * p.y > distance_squared)
+            if (p.x * p.x + p.y * p.y >= min_distance * min_distance && p.x * p.x + p.y * p.y <= max_distance * max_distance && p.x * p.x + p.y * p.y > distance_squared)
             {
                 ans = p;
                 distance_squared = p.x * p.x + p.y * p.y;
