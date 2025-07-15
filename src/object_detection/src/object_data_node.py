@@ -74,7 +74,7 @@ class ObjectDataNode(Node):
             self.get_logger().error(f'Image decoding error: {e}')
             return
 
-        results = self.model.predict(image, device=0)[0]
+        results = self.model.predict(cv_image, device=0)[0]
         detections = results.boxes
         if not detections or len(detections) == 0:
             return

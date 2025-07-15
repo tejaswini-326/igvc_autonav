@@ -14,6 +14,8 @@
 #include <deque>
 // horizontal_line_stop_point -> pointstamped object, listens to it
 
+bool VERBOSE_UNNECESSARY_THINGS = false;
+
 // intersection -> "none" 
 using std::placeholders::_1;
 using namespace std;
@@ -108,7 +110,7 @@ private:
             geometry_msgs::msg::PointStamped transformed_point;
             tf2::doTransform(stamped_point, transformed_point, transform);
 
-            std::cout << transformed_point.point.x << " , " << transformed_point.point.y << " is the goal\n";
+            if (VERBOSE_UNNECESSARY_THINGS) std::cout << transformed_point.point.x << " , " << transformed_point.point.y << " is the goal\n";
             return transformed_point;
         }
         catch (const tf2::TransformException &ex)
@@ -172,9 +174,9 @@ private:
 
         double alpha = 0.1;
 
-        cout<< " rp****: "<<rp.first<<", "<<rp.second;
-        cout<< " mp****: "<<mp.first<<", "<<mp.second;
-        cout<< " lp****: "<<lp.first<<", "<<lp.second;
+        if (VERBOSE_UNNECESSARY_THINGS) cout<< " rp****: "<<rp.first<<", "<<rp.second;
+        if (VERBOSE_UNNECESSARY_THINGS) cout<< " mp****: "<<mp.first<<", "<<mp.second;
+        if (VERBOSE_UNNECESSARY_THINGS) cout<< " lp****: "<<lp.first<<", "<<lp.second;
         
         if(history_.size() < 2) return;
 
@@ -205,13 +207,16 @@ private:
         std::pair<double, double> rp, lp;
         double goal_x, goal_y;
 
-        cout << "size of points array: "<<end_points.size() << '\n';
+        if (VERBOSE_UNNECESSARY_THINGS) cout << "size of points array: "<<end_points.size() << '\n';
 
-        cout<<'\n';
-        for(auto i : end_points){
-            cout<<"( "<<i.first<<", "<<i.second<<" )";
+        if (VERBOSE_UNNECESSARY_THINGS) {
+            cout<<'\n';
+            for(auto i : end_points){
+                cout<<"( "<<i.first<<", "<<i.second<<" )";
+            }
+            cout<<'\n';
         }
-        cout<<'\n';
+
 
         if (end_points.size() == 2)
         {
@@ -230,9 +235,12 @@ private:
                 goal_y = (lp.second + mp.second) / 2.0;
                 current_lane_ = "left";
             }
-            cout<< " rp: "<<rp.first<<", "<<rp.second;
-            cout<< " mp: "<<mp.first<<", "<<mp.second;
-            cout<< " lp: "<<lp.first<<", "<<lp.second;
+            if (VERBOSE_UNNECESSARY_THINGS) {
+                cout<< " rp: "<<rp.first<<", "<<rp.second;
+                cout<< " mp: "<<mp.first<<", "<<mp.second;
+                cout<< " lp: "<<lp.first<<", "<<lp.second;
+            }
+
 
             geometry_msgs::msg::PointStamped olp = *transform_to_odom(lp.first, lp.second);
             geometry_msgs::msg::PointStamped omp = *transform_to_odom(mp.first, mp.second);
@@ -243,7 +251,7 @@ private:
             while(history_.size() > buffer_size_){
                 history_.pop_back();
             }
-            cout << "\nGoal: " << goal_x << ", " << goal_y << '\n';
+            if (VERBOSE_UNNECESSARY_THINGS) cout << "\nGoal: " << goal_x << ", " << goal_y << '\n';
 
             if (auto transformed = transform_to_odom(goal_x, goal_y)) {
                 debug_markers();
@@ -265,9 +273,9 @@ private:
                 goal_y = (lp.second + mp.second) / 2.0;
                 current_lane_ = "left";
             }
-            cout<< " rp: "<<rp.first<<", "<<rp.second;
-            cout<< " mp: "<<mp.first<<", "<<mp.second;
-            cout<< " lp: "<<lp.first<<", "<<lp.second;
+            if (VERBOSE_UNNECESSARY_THINGS) cout<< " rp: "<<rp.first<<", "<<rp.second;
+            if (VERBOSE_UNNECESSARY_THINGS) cout<< " mp: "<<mp.first<<", "<<mp.second;
+            if (VERBOSE_UNNECESSARY_THINGS) cout<< " lp: "<<lp.first<<", "<<lp.second;
 
             history_.push_front(tracked_points{.left = {lp.first, lp.second}, .mid = {mp.first, mp.second}, .right = {rp.first, rp.second}});
 

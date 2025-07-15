@@ -17,6 +17,9 @@ import time
 import ctypes
 
 
+VERBOSE_UNNESSARY_THINGS = True
+
+
 MIN_CLUSTERING_DISTANCE = 0.6
 MIN_CLUSTERING_POINTS = 20
 
@@ -115,8 +118,8 @@ class LaneFollowerNode(Node):
             marker_array.markers.append(curve_marker)
 
         # Publish marker array
-        print("length of marker array: ")
-        print(len(marker_array.markers))
+        #self.get_logger().info("length of marker array: ")
+        #self.get_logger().info(str(len(marker_array.markers)))
         self.markers_pub.publish(marker_array)
         
     def white_pointcloud_callback(self, msg):

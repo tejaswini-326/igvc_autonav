@@ -5,36 +5,42 @@ import numpy as np
 import cv2
 from cv_bridge import CvBridge
 
-from geometry_msgs.msg import Twist 
+from geometry_msgs.msg import PoseStamped, Pose, Point, Quaternion, Twist, PointStamped
 from sensor_msgs.msg import PointCloud2, PointField, Image
 from nav_msgs.msg import Odometry
-from std_msgs.msg import String
+from std_msgs.msg import String, Float64MultiArray
 import sensor_msgs_py.point_cloud2 as pc2
 from visualization_msgs.msg import Marker
 from movement.intersection_funcs import zero_copy_xy_pointcloud_reader_view
 
 import tf2_ros
-from geometry_msgs.msg import Point, PointStamped
+from geometry_msgs.msg import Point, PoseStamped
 from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
+import time
+
+# self.last_long_seg logic needs have a better fallback. like right now we are just checking if this is not None, but this could be some very old data and
+# it will just silently go to that.
 
 
-CLOSE_ENOUGH_TO_DESIRED_POINT_TRESHOLD = 0.2
-DISTANCE_TO_PAUSE_IN_FRONT_OF_HORIZONTAL_LINE = -1.5  # m  ⬅ adjust if needed
+SLEEP_TIME_AT_HORIZONTAL_LINE = 5
+CLOSE_ENOUGH_TO_DESIRED_POINT_TRESHOLD = 0.75
+DISTANCE_TO_PAUSE_IN_FRONT_OF_HORIZONTAL_LINE = -0.75  # m  ⬅ adjust if needed
+MIN_DISTANCE_TO_POINT_B4_OVERRIDING_CONTROLLER = 4.0
 
 
 
 # ---------- ROI & image parameters ------------------------------------------
 RESOLUTION      = 0.05        # metres per pixel
-LOOK_AHEAD_MAX  = 5.0         # forward range (0 … +5 m)
+LOOK_AHEAD_MAX  = 6.0         # forward range (0 … +5 m)
 LOOK_SIDE_MAX   = 5.0         # lateral half-width (–5 … +5 m)
 
 IMG_WIDTH_PX  = int(LOOK_AHEAD_MAX   / RESOLUTION)
 IMG_HEIGHT_PX = int(2 * LOOK_SIDE_MAX / RESOLUTION)
 # -----------------------------------------------------------------------------
 
-
-K_ANG            = 1.2                 # proportional gain
+LINEAR_SPEED_AFTER_STOP_LINE_DETECTED = 1.0
+LEFT_TURN_ANGULAR_SPEED            = 0.1                 # proportional gain
 ALIGN_ANGLE_TOL  = np.deg2rad(2.0)     # stop when |err| < 2°
 
 
@@ -54,16 +60,24 @@ class StopLineHoughFixedROI(Node):
         self.img_pub_4 = self.create_publisher(Image, '/hori/h4', 5)
         self.line_pub = self.create_publisher(Marker, '/hori/stop_line', 10)
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.stop_spot = self.create_publisher(PointStamped, '/hori/stop_spot', 10)
 
+        self.create_subscription(Float64MultiArray, '/igvc/next_waypoint', self.next_waypoint_cb, 10)
+        
         self.intersection_pub = self.create_publisher(String, '/intersection', 10)
+
+        self.last_stop_point = None
+        self.last_long_seg = None
 
         self.bridge = CvBridge()
         self.cloud  = None
         self.has_stopped = False
-        self.is_aligning_to_horizontal_line = False
+        self.stage = 'searching_for_lines_in_the_background'
+        # searching_for_lines_in_the_background
+        # moving_to_stop_spot
+        # aligning_to_stop_line
+        # deactive
         self.timer  = self.create_timer(1 / 100, self.timer_process)
-
-        self.stop_point_pub = self.create_publisher(PointStamped, '/horizontal_line_stop_point', 10)  # for logic/consumption
 
         # TF buffer → odom ⇐ base_link
         self.tf_buffer   = Buffer()
@@ -72,6 +86,9 @@ class StopLineHoughFixedROI(Node):
 
     # --------------------------------------------------------------------- #
     def cloud_cb(self, msg: PointCloud2):
+        if self.stage == 'deactive':
+            return
+        
         self.cloud = msg
 
     # --------------------------------------------------------------------- #
@@ -154,6 +171,9 @@ class StopLineHoughFixedROI(Node):
 
     # --------------------------------------------------------------------- #
     def timer_process(self):
+        if self.stage == 'deactive':
+            return
+        
         msg = self.cloud
         if msg is None:
             return
@@ -163,17 +183,25 @@ class StopLineHoughFixedROI(Node):
             return
 
         x, y = pts_xy[:, 0], pts_xy[:, 1]
-        in_roi = (x >= 0.0) & (x <= LOOK_AHEAD_MAX) & \
-                 (y >= -LOOK_SIDE_MAX) & (y <= LOOK_SIDE_MAX)
-        if not np.any(in_roi):
-            return
+
+        # only consider points 0 ≤ x < LOOK_AHEAD_MAX, -LOOK_SIDE_MAX ≤ y < LOOK_SIDE_MAX
+        in_roi = (
+            (x >= 0.0) & (x < LOOK_AHEAD_MAX) &
+            (y >= -LOOK_SIDE_MAX) & (y < LOOK_SIDE_MAX)
+        )
         x, y = x[in_roi], y[in_roi]
 
-        col = (x / RESOLUTION).astype(np.int32)
-        row = ((y + LOOK_SIDE_MAX) / RESOLUTION).astype(np.int32)
+        # compute pixel indices
+        col = np.floor(x / RESOLUTION).astype(np.int32)
+        row = np.floor((y + LOOK_SIDE_MAX) / RESOLUTION).astype(np.int32)
+
+        # sanity‐clip (just in case)
+        col = np.clip(col, 0, IMG_WIDTH_PX  - 1)
+        row = np.clip(row, 0, IMG_HEIGHT_PX - 1)
 
         img = np.zeros((IMG_HEIGHT_PX, IMG_WIDTH_PX), dtype=np.uint8)
         img[row, col] = 255
+
 
         corner, horiz, vert, hough, _ = self.detect_right_angle(img)
 
@@ -199,8 +227,7 @@ class StopLineHoughFixedROI(Node):
                 d   = abs(ang - ref_ang)
                 d   = min(d, 180 - d)
                 if d <= ANG_TOL:
-                    cv2.line(slope_vis, (x1, y1), (x2, y2),
-                             (255, 255, 0), 2)        # cyan
+                    cv2.line(slope_vis, (x1, y1), (x2, y2),(255, 255, 0), 2)
                     slope_segs.append((x1, y1, x2, y2))
 
          # ========== NEW SECTION – translate longest line to closest ==========
@@ -218,7 +245,7 @@ class StopLineHoughFixedROI(Node):
             
             # unit normal of the line (points towards positive robot-X)
             nx, ny = -dy / norm, dx / norm
-            if nx * (-x1l) + ny * (-y1l) > 0:     # pointing away → flip
+            if nx < 0:
                 nx, ny = -nx, -ny
 
             # signed distance of every segment along the normal
@@ -254,7 +281,26 @@ class StopLineHoughFixedROI(Node):
             mk.points = [p1, p2]
             mk.lifetime = rclpy.duration.Duration(seconds=0.25).to_msg()
             self.line_pub.publish(mk)
-        # =====================================================================
+
+            mid_x = 0.5 * (p1.x + p2.x)
+            mid_y = 0.5 * (p1.y + p2.y)
+
+            nx_m, ny_m = nx, ny   # unit normal in metres
+
+            horizontal_stop_point_x = mid_x + nx_m * DISTANCE_TO_PAUSE_IN_FRONT_OF_HORIZONTAL_LINE
+            horizontal_stop_point_y = mid_y + ny_m * DISTANCE_TO_PAUSE_IN_FRONT_OF_HORIZONTAL_LINE
+
+            pt_msg = PointStamped()
+            pt_msg.header.frame_id = 'base_link'          # ← stays in base_link
+            pt_msg.header.stamp    = msg.header.stamp
+            pt_msg.point           = Point(
+                x=horizontal_stop_point_x,
+                y=horizontal_stop_point_y,
+                z=0.0
+            )
+
+            self.stop_spot.publish(pt_msg)
+            self.last_stop_point = (horizontal_stop_point_x,horizontal_stop_point_y)
 
 
         # ---------- basic visualisation -------------------------------------
@@ -267,101 +313,89 @@ class StopLineHoughFixedROI(Node):
         vis_rot = cv2.flip(cv2.rotate(vis, cv2.ROTATE_90_CLOCKWISE), 0)
 
         self.img_pub_1.publish(self.bridge.cv2_to_imgmsg(vis_rot, encoding='bgr8'))
-        self.img_pub_4.publish(self.bridge.cv2_to_imgmsg(
-            cv2.flip(cv2.rotate(slope_vis, cv2.ROTATE_90_CLOCKWISE), 0), 'bgr8'))
+        self.img_pub_4.publish(self.bridge.cv2_to_imgmsg(cv2.flip(cv2.rotate(slope_vis, cv2.ROTATE_90_CLOCKWISE), 0), 'bgr8'))
         
 
         # ──────────────────────────────────────────────────────────────────────
         # ALIGNMENT PHASE : rotate until the stop-line is perfectly horizontal
         # ──────────────────────────────────────────────────────────────────────
-        if self.is_aligning_to_horizontal_line:
-            if self.last_long_seg is None:
-                self.get_logger().error("There is no horizontal line detected and we are stuck in the alignment code")
+        if self.stage == 'searching_for_lines_in_the_background' and slope_segs and abs(horizontal_stop_point_x) + abs(horizontal_stop_point_y) < MIN_DISTANCE_TO_POINT_B4_OVERRIDING_CONTROLLER:
+            self.stage = 'moving_to_stop_spot'
+            intersection_msg = String()
+            intersection_msg.data = 'horizontal_line_detected_and_taking_over'
+            self.get_logger().info(f"📢 Publishing On Intersection Topic: Msg Data: {intersection_msg.data}")
+            self.intersection_pub.publish(intersection_msg)
+
+        if self.stage == 'moving_to_stop_spot':
+            if not self.last_stop_point:
+                self.get_logger().error("There is nothing detected and we are stuck in the moving_to_stop_spot stage")
                 return
+            horizontal_stop_point_x, horizontal_stop_point_y = self.last_stop_point
+            if abs(horizontal_stop_point_y) > 0.3:
+                twist = Twist()
+                twist.linear.x = 0.0
+                twist.angular.z = LEFT_TURN_ANGULAR_SPEED * np.sign(horizontal_stop_point_y)
 
-            # slope of the reference segment (pixel space is OK for the sign test)
-            dx_a = self.last_long_seg[2] - self.last_long_seg[0]
-            dy_a = self.last_long_seg[3] - self.last_long_seg[1]
-
-            # angle (rad) of the line w.r.t +x axis in image coords
-            ang = np.arctan2(dy_a, dx_a)            # +ve ⇒ “/”   , –ve ⇒ “\”
-
-            # desired is perfectly horizontal ⇒ target angle = 0
-            err = ang
-
-            twist = Twist()
-            twist.angular.z =  K_ANG * err     # +err → +z (CCW ≈ left turn)
-
-            # publish cmd_vel
-            self.cmd_pub.publish(twist)
-
-            # if almost horizontal, stop rotating and exit alignment mode
-            if abs(err) < ALIGN_ANGLE_TOL:
-                self.cmd_pub.publish(Twist())       # zero velocities
-                self.is_aligning_to_horizontal_line = False
-
-                msg = String()
-                msg.data = 'left'
-                self.intersection_pub.publish(msg)
-            return
-        
-
-        if slope_segs:
-            # ---------- pause-point (base_link) ---------------------------------
-            mid_x = 0.5 * (p1.x + p2.x)
-            mid_y = 0.5 * (p1.y + p2.y)
-
-            # n̂ already points toward the robot in pixel space -> same sign in metres
-            nx_m = nx                                          # px normal *already* unit
-            ny_m = ny
-
-            horizontal_stop_point_x = mid_x + nx_m * DISTANCE_TO_PAUSE_IN_FRONT_OF_HORIZONTAL_LINE
-            horizontal_stop_point_y = mid_y + ny_m * DISTANCE_TO_PAUSE_IN_FRONT_OF_HORIZONTAL_LINE
-
-
-            if self.has_stopped and abs(horizontal_stop_point_x) < CLOSE_ENOUGH_TO_DESIRED_POINT_TRESHOLD and abs(horizontal_stop_point_y) < CLOSE_ENOUGH_TO_DESIRED_POINT_TRESHOLD:
+            else:
+                twist = Twist()
+                twist.linear.x = LINEAR_SPEED_AFTER_STOP_LINE_DETECTED
+                twist.angular.z =  0.0         
+            
+            if slope_segs and abs(horizontal_stop_point_x) < CLOSE_ENOUGH_TO_DESIRED_POINT_TRESHOLD and abs(horizontal_stop_point_y) < CLOSE_ENOUGH_TO_DESIRED_POINT_TRESHOLD:
+                self.get_logger().info(f"THRESHOLD DETECTED - switching to aligning_to_stop_line")
                 intersection_msg = String()
                 intersection_msg.data = 'aligning_to_stop_line'
                 self.get_logger().info(f"📢 Publishing On Intersection Topic: Msg Data: {intersection_msg.data}")
                 self.intersection_pub.publish(intersection_msg)
-                self.is_aligning_to_horizontal_line = True
+                self.stage = 'aligning_to_stop_line'
 
+            self.cmd_pub.publish(twist)
 
+        if self.stage == 'aligning_to_stop_line':
+            if self.last_long_seg is None:
+                self.get_logger().error("There is no history of horizontal line detected and we are stuck in the aligning_to_stop_line stage")
+                return
 
-            pause_bl = Point()
-            pause_bl.x = horizontal_stop_point_x
-            pause_bl.y = horizontal_stop_point_y
-            pause_bl.z = 0.0
+            # slope of the reference segment (pixel space is OK for the sign test)
+            dx_a = self.last_long_seg[3] - self.last_long_seg[1]
+            dy_a = self.last_long_seg[2] - self.last_long_seg[0]
+            slope_a = dy_a/(dx_a+1e-6)
 
-            # ---------- transform to odom ---------------------------------------
-            try:
-                tf = self.tf_buffer.lookup_transform(
-                    'odom',                # target frame
-                    'base_link',           # source frame
-                    rclpy.time.Time())     # latest available
+            twist = Twist()
+            twist.linear.x = 0.0
+            twist.angular.z =  LEFT_TURN_ANGULAR_SPEED * np.sign(-slope_a)
+            self.cmd_pub.publish(twist)
 
-                pause_stamped = PointStamped()
-                pause_stamped.header.frame_id = 'base_link'
-                pause_stamped.header.stamp    = msg.header.stamp
-                pause_stamped.point = pause_bl
+            # if almost horizontal, stop rotating and exit alignment mode
+            
+            if abs(slope_a) < ALIGN_ANGLE_TOL:
+                twist = Twist()
+                twist.linear.x = 0.0
+                twist.angular.z = 0.0
+                self.cmd_pub.publish(Twist())       # zero velocities
+                self.stage = 'deactive'
 
-                tf = self.tf_buffer.lookup_transform(
-                    'odom', 'base_link', rclpy.time.Time())
+                time.sleep(SLEEP_TIME_AT_HORIZONTAL_LINE)
 
-                pause_odom_stamped = tf2_geometry_msgs.do_transform_point(pause_stamped, tf)
-                self.stop_point_pub.publish(pause_odom_stamped)
-
-
-            except (tf2_ros.LookupException,
-                    tf2_ros.ConnectivityException,
-                    tf2_ros.ExtrapolationException):
-                # transform not yet available – skip this frame
-                pass
-
+                intersection_msg = String()
+                degees_to_next_waypoint_at_intersection = np.rad2deg(self.next_waypoint['direction'])
+                if degees_to_next_waypoint_at_intersection < -30:
+                    intersection_msg.data = 'left'
+                elif degees_to_next_waypoint_at_intersection > 30:
+                    intersection_msg.data = 'right'
+                else:
+                    intersection_msg.data = 'straight'
+                self.get_logger().info(f"📢 Publishing On Intersection Topic: Msg Data: {intersection_msg.data}")
+                self.intersection_pub.publish(intersection_msg)
+            return
     
     def odom_cb(self, msg: Odometry):
         self.has_stopped = (msg.twist.twist.linear.x == 0 and msg.twist.twist.linear.y == 0 and msg.twist.twist.angular.z == 0)
 
+
+    def next_waypoint_cb(self, msg:Float64MultiArray):
+        distance, heading_error, idx = msg.data
+        self.next_waypoint = {'distance':distance, 'direction':heading_error, 'waypoint_idx':idx}
 
 # --------------------------------------------------------------------------- #
 def main(args=None):
