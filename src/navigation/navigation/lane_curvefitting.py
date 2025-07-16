@@ -17,7 +17,7 @@ import time
 import ctypes
 
 
-VERBOSE_UNNESSARY_THINGS = True
+VERBOSE_UNNESSARY_THINGS = False
 
 
 MIN_CLUSTERING_DISTANCE = 0.6
@@ -126,8 +126,8 @@ class LaneFollowerNode(Node):
                 marker.color.b = 1.0
             marker_array.markers.append(marker)
 
-        print("length of marker array: ")
-        print(len(marker_array.markers))
+        if VERBOSE_UNNESSARY_THINGS: print("length of marker array: ")
+        if VERBOSE_UNNESSARY_THINGS: print(len(marker_array.markers))
         self.markers_pub.publish(marker_array)
 
         
@@ -392,7 +392,7 @@ class LaneFollowerNode(Node):
             coeffs_yellow = np.polyfit(x_vals_y, y_vals_y, deg=2)
             cluster_curves.append(('yellow_global', coeffs_yellow, 'yellow', clustered_yellow_points[:, :2]))
         else:
-            self.get_logger().info(f"Not enough yellow points for curve fitting and no of points are: {len(clustered_yellow_points)}")
+            if VERBOSE_UNNESSARY_THINGS: self.get_logger().info(f"Not enough yellow points for curve fitting and no of points are: {len(clustered_yellow_points)}")
 
 
         # === Final Lane Visualization ===

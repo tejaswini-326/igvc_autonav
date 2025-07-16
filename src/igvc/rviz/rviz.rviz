@@ -380,6 +380,76 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: false
+
+    # ── Cost‑map ──────────────────────────────────────────────────────────────
+    - Alpha: 0.7               # layer translucency
+      Class: rviz_default_plugins/Map      # use nav2_rviz_plugins/Costmap if you publish nav2_msgs/Costmap
+      Enabled: true
+      Name: Costmap
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /costmap
+      Use Fixed Frame: true
+      Value: true
+
+    # ── Planned path ─────────────────────────────────────────────────────────
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 0; 255; 255       # cyan
+      Enabled: true
+      Name: Planned Path
+      Line Style: Lines
+      Line Width: 0.03
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /sm_planned_path
+      Value: true
+
+    # ── Stop‑line marker (visualization_msgs/Marker) ─────────────────────────
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Stop Line
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /hori/stop_line
+      Value: true
+
+    # ── Stop‑spot point (geometry_msgs/PointStamped) ─────────────────────────
+    - Class: rviz_default_plugins/Point
+      Enabled: true
+      Name: Stop Spot
+      Color: 255; 0; 0         # red dot
+      Size (Pixels): 8
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /hori/stop_spot
+      Value: true
+
+    # ── Next‑waypoint visual ────────────────────────────────────────────────
+    - Class: rviz_default_plugins/Marker      # Marker or MarkerArray
+      Name: Next Waypoint
+      Enabled: true
+      Topic:
+        Value: /igvc/next_waypoint_rviz_marker
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+      Value: true
+      
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

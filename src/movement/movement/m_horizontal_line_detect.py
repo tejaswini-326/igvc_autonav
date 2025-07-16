@@ -23,10 +23,10 @@ import time
 # it will just silently go to that.
 
 
-SLEEP_TIME_AT_HORIZONTAL_LINE = 5
+SLEEP_TIME_AT_HORIZONTAL_LINE = 4
 CLOSE_ENOUGH_TO_DESIRED_POINT_TRESHOLD = 0.75
 DISTANCE_TO_PAUSE_IN_FRONT_OF_HORIZONTAL_LINE = -0.75  # m  ⬅ adjust if needed
-MIN_DISTANCE_TO_POINT_B4_OVERRIDING_CONTROLLER = 4.0
+MIN_DISTANCE_TO_POINT_B4_OVERRIDING_CONTROLLER = 5.0
 
 
 
@@ -44,9 +44,9 @@ LEFT_TURN_ANGULAR_SPEED            = 0.1                 # proportional gain
 ALIGN_ANGLE_TOL  = np.deg2rad(2.0)     # stop when |err| < 2°
 
 
-class StopLineHoughFixedROI(Node):
+class M_HorizontalLineDetect(Node):
     def __init__(self):
-        super().__init__('stop_line_hough_roi')
+        super().__init__('m_horizontal_line_detect')
 
         # --------------------------- I/O -------------------------------------
         self.cloud_sub = self.create_subscription(PointCloud2, '/igvc/white_points', self.cloud_cb, 10)
@@ -63,6 +63,7 @@ class StopLineHoughFixedROI(Node):
         self.stop_spot = self.create_publisher(PointStamped, '/hori/stop_spot', 10)
 
         self.create_subscription(Float64MultiArray, '/igvc/next_waypoint', self.next_waypoint_cb, 10)
+        self.create_subscription(String, '/intersection', self.intersection_cb, 10) 
         
         self.intersection_pub = self.create_publisher(String, '/intersection', 10)
 
@@ -82,6 +83,10 @@ class StopLineHoughFixedROI(Node):
         # TF buffer → odom ⇐ base_link
         self.tf_buffer   = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
+
+    def intersection_cb(self, msg: String):
+        if msg.data.lower() == "none":
+            self.stage = 'searching_for_lines_in_the_background'
 
 
     # --------------------------------------------------------------------- #
@@ -374,14 +379,16 @@ class StopLineHoughFixedROI(Node):
                 twist.angular.z = 0.0
                 self.cmd_pub.publish(Twist())       # zero velocities
                 self.stage = 'deactive'
+                self.cloud  = None
+                self.has_stopped = False
 
                 time.sleep(SLEEP_TIME_AT_HORIZONTAL_LINE)
 
                 intersection_msg = String()
                 degees_to_next_waypoint_at_intersection = np.rad2deg(self.next_waypoint['direction'])
-                if degees_to_next_waypoint_at_intersection < -30:
+                if degees_to_next_waypoint_at_intersection > 30:
                     intersection_msg.data = 'left'
-                elif degees_to_next_waypoint_at_intersection > 30:
+                elif degees_to_next_waypoint_at_intersection < -30:
                     intersection_msg.data = 'right'
                 else:
                     intersection_msg.data = 'straight'
@@ -400,7 +407,7 @@ class StopLineHoughFixedROI(Node):
 # --------------------------------------------------------------------------- #
 def main(args=None):
     rclpy.init(args=args)
-    node = StopLineHoughFixedROI()
+    node = M_HorizontalLineDetect()
     try:
         rclpy.spin(node)
     finally:

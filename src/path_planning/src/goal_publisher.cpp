@@ -212,17 +212,20 @@ private:
         // if (rp.second > lp.second)
         //     std::swap(rp, lp);
         
-        cout<<"left in camera frame: "<<lp.first<<", "<<lp.second<<'\n';
-        cout<<"mid in camera frame: "<<mp.first<<", "<<mp.second<<'\n';
-        cout<<"right in camera frame: "<<rp.first<<", "<<rp.second<<'\n';
+        if (VERBOSE_UNNECESSARY_THINGS) cout<<"left in camera frame: "<<lp.first<<", "<<lp.second<<'\n';
+        if (VERBOSE_UNNECESSARY_THINGS) cout<<"mid in camera frame: "<<mp.first<<", "<<mp.second<<'\n';
+        if (VERBOSE_UNNECESSARY_THINGS) cout<<"right in camera frame: "<<rp.first<<", "<<rp.second<<'\n';
 
         std::pair<double, double> olp, omp, orp;
 
-        // Transform or fall back to history
-        if (lp.first == 0.0 && lp.second == 0.0)
-        {
-            olp = history_.at(0).left;
-            cout<<"LEFT TOOK FROM HISTORY";
+        // ❶ LEFT
+        if (lp.first == 0.0 && lp.second == 0.0) {
+            if (!history_.empty()) {
+                olp = history_.front().left;
+            } else {
+                RCLCPP_WARN(get_logger(), "No history yet – skipping frame");
+                return;            // nothing to work with this cycle
+            }
         }
         else
         {
@@ -235,10 +238,14 @@ private:
             olp = {result->point.x, result->point.y};
         }
 
-        if (mp.first == 0.0 && mp.second == 0.0)
-        {
-            omp = history_.at(0).mid;
-            cout<<"MID TOOK FROM HISTORY";
+        // ❷ MID
+        if (mp.first == 0.0 && mp.second == 0.0) {
+            if (!history_.empty()) {
+                omp = history_.front().mid;
+            } else {
+                RCLCPP_WARN(get_logger(), "No history yet – skipping frame");
+                return;
+            }
         }
         else
         {
@@ -251,10 +258,14 @@ private:
             omp = {result->point.x, result->point.y};
         }
 
-        if (rp.first == 0.0 && rp.second == 0.0)
-        {
-            orp = history_.at(0).right;
-            cout<<"RIGHT TOOK FROM HISTORY";
+        // ❸ RIGHT
+        if (rp.first == 0.0 && rp.second == 0.0) {
+            if (!history_.empty()) {
+                orp = history_.front().right;
+            } else {
+                RCLCPP_WARN(get_logger(), "No history yet – skipping frame");
+                return;
+            }
         }
         else
         {
@@ -267,9 +278,9 @@ private:
             orp = {result->point.x, result->point.y};
         }
 
-        cout<<"left in odom frame: "<<olp.first<<", "<<olp.second<<'\n';
-        cout<<"mid in odom frame: "<<omp.first<<", "<<omp.second<<'\n';
-        cout<<"right in odom frame: "<<orp.first<<", "<<orp.second<<'\n';
+        if (VERBOSE_UNNECESSARY_THINGS) cout<<"left in odom frame: "<<olp.first<<", "<<olp.second<<'\n';
+        if (VERBOSE_UNNECESSARY_THINGS) cout<<"mid in odom frame: "<<omp.first<<", "<<omp.second<<'\n';
+        if (VERBOSE_UNNECESSARY_THINGS) cout<<"right in odom frame: "<<orp.first<<", "<<orp.second<<'\n';
 
         // Store in history
         history_.push_front(tracked_points{

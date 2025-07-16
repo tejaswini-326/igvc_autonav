@@ -16,7 +16,7 @@ import tf2_ros
 import tf2_geometry_msgs
 from nav_msgs.msg import Path
 
-VERBOSE_UNECESSARY_THINGS = True
+VERBOSE_UNECESSARY_THINGS = False
 
 
 class Controller(Node):

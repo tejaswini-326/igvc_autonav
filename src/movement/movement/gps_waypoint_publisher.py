@@ -7,6 +7,7 @@ from std_msgs.msg import Int32, Float64MultiArray
 from tf_transformations import euler_from_quaternion
 import math
 from math import pi
+from visualization_msgs.msg import Marker       
 
 THRESHOLD_DISTANCE_FOR_DECLARING_THAT_WE_REACHED_A_WAYPOINT = 3
 
@@ -39,15 +40,19 @@ class GPSNextWaypointPublisherNode(Node):
         self.yaw = 0.0
         self.waypoint_index = 0
 
+        self.x = None
+        self.y = None
+
         self.create_subscription(NavSatFix, '/navsat', self.navsat_callback, 10)
         self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
+        self.waypoint_marker_pub = self.create_publisher(Marker, '/igvc/next_waypoint_rviz_marker', 1)
         self.next_waypoint_publisher = self.create_publisher(Float64MultiArray, '/igvc/next_waypoint', 10) # msg.data = [distance, heading_error, waypoint_index]
 
         # Static list of waypoints: [latitude, longitude]
         self.waypoints = [
             [47.47878384569001, 19.057413221283262], # Before first left turn
             [47.47867547320186, 19.057500743159018], # Just before first intersection
-            [47.47868320154593, 19.057779520264365], # Straight ahead of first intersection
+            [47.47866538581544, 19.05778581548513], # Straight ahead of first intersection
             [47.47881633796393, 19.057923110187613], # To the left of second intersection
             [47.47918321226283, 19.057765083543092]  # Just before third intersection
         ]
@@ -59,6 +64,8 @@ class GPSNextWaypointPublisherNode(Node):
         self.longitude = msg.longitude
 
     def odom_cb(self, msg: Odometry):
+        self.x = msg.pose.pose.position.x
+        self.y = msg.pose.pose.position.y
         q = msg.pose.pose.orientation
         _, _, yaw = euler_from_quaternion((q.x, q.y, q.z, q.w))
         self.yaw = yaw
@@ -86,10 +93,38 @@ class GPSNextWaypointPublisherNode(Node):
         msg.data = [float(distance), float(heading_error), float(idx)]
         self.next_waypoint_publisher.publish(msg)
 
+
+        # ── ③  publish a visual marker in odom/map ────────────────────────
+        # convert polar → cartesian in robot frame, then to odom
+        if self.x is not None:
+            # ------------------------------------------------------------------
+            # Convert polar (distance, heading_error) → Cartesian in *robot frame*
+            # ------------------------------------------------------------------
+            global_x = self.x + distance * math.cos(self.yaw + heading_error)
+            global_y = self.y + distance * math.sin(self.yaw + heading_error)
+            m = Marker()
+            m.header.stamp = self.get_clock().now().to_msg()
+            m.header.frame_id = 'odom'
+
+            m.ns   = 'next_wp'
+            m.id   = idx
+            m.type = Marker.SPHERE                    # or ARROW, CUBE …
+            m.action = Marker.ADD
+
+            m.pose.position.x = global_x
+            m.pose.position.y = global_y
+            m.pose.position.z = 0.0
+            m.pose.orientation.w = 1.0               # no rotation needed
+
+            m.scale.x = m.scale.y = m.scale.z = 0.3   # 30 cm sphere
+            m.color.r = 1.0;  m.color.g = 0.3;  m.color.b = 0.0;  m.color.a = 1.0
+
+            self.waypoint_marker_pub.publish(m)                # ➋ NEW
+        ## ---------------------------------------------------------------------
+
         if distance < THRESHOLD_DISTANCE_FOR_DECLARING_THAT_WE_REACHED_A_WAYPOINT:
             self.get_logger().info(f'Reached Waypoint {idx}. Beginning to publish next waypoint.')
             self.waypoint_index += 1
-
 
 
 
