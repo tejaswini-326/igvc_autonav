@@ -30,6 +30,7 @@ ament_target_dependencies(goal_publisher
   tf2
   tf2_ros
   tf2_geometry_msgs
+  nav_msgs
 )
 install(TARGETS path_planner goal_publisher DESTINATION lib/${PROJECT_NAME})
 
