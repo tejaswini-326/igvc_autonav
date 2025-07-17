@@ -7,7 +7,7 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "nav_msgs/msg/odometry.hpp"
-
+#include "object_detection/msg/object_array.hpp"
 
 #include <vector>
 #include <algorithm>
@@ -50,7 +50,9 @@ public:
         override_sub_ = this->create_subscription<std_msgs::msg::String>(
             "/intersection", 10, std::bind(&GoalPublisher::override_callback_, this, _1));
         odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-                "/odom", 10, std::bind(&GoalPublisher::odom_callback, this, _1));
+            "/odom", 10, std::bind(&GoalPublisher::odom_callback, this, _1));
+        object_data_sub_ = this->create_subscription<object_detection::msg::ObjectArray>(
+            "/object_data", 10, std::bind(&GoalPublisher::object_data_callback, this, _1));
 
         override_ = "none";
         target_lane_ = "right";
@@ -65,9 +67,12 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_pub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr override_sub_;
+    rclcpp::Subscription<object_detection::msg::ObjectArray>::SharedPtr object_data_sub_;
+
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    std::map<std::string, geometry_msgs::msg::Point> detected_objects_;
 
     std::string target_lane_;
     std::string current_lane_;
@@ -92,7 +97,8 @@ private:
         override_ = msg->data;
         RCLCPP_INFO(this->get_logger(), "Overriding goal publisher\n");
     }
-    void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg){
+    void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
+    {
         robot_pose_.first = msg->pose.pose.position.x;
         robot_pose_.second = msg->pose.pose.position.y;
     }
@@ -105,11 +111,11 @@ private:
         ans.y = 0.0;
         for (const pt &p : points)
         {
-            cout<<"POINT : ("<<p.x<<", "<<p.y<<")\n";
+            // cout << "POINT : (" << p.x << ", " << p.y << ")\n";
             double dx = p.x - robot_pose_.first;
             double dy = p.y - robot_pose_.second;
             double current_distance_squared = dx * dx + dy * dy;
-            cout<<"CURRENT DISTANCE SQUARED: "<<current_distance_squared<<"\n";
+            // cout << "CURRENT DISTANCE SQUARED: " << current_distance_squared << "\n";
 
             if (current_distance_squared >= min_distance * min_distance &&
                 current_distance_squared <= max_distance * max_distance &&
@@ -119,8 +125,8 @@ private:
                 max_distance_squared = current_distance_squared;
             }
         }
-        cout<<"DISTANCE SQUARED: "<<max_distance_squared<<" CALCULATED: ("<<ans.x<<", "<<ans.y<<")\n";
-        cout<<"ROBOT POSITION CALCULATED: ("<<robot_pose_.first<<", "<<robot_pose_.second<<")\n";
+        // cout << "DISTANCE SQUARED: " << max_distance_squared << " CALCULATED: (" << ans.x << ", " << ans.y << ")\n";
+        // cout << "ROBOT POSITION CALCULATED: (" << robot_pose_.first << ", " << robot_pose_.second << ")\n";
 
         return {ans.x, ans.y};
     }
@@ -152,6 +158,37 @@ private:
 
         debug_pub_->publish(MarkerArray);
     }
+    void object_data_callback(const object_detection::msg::ObjectArray::SharedPtr msg)
+    {
+        for (const auto &obj : msg->objects)
+        {
+            geometry_msgs::msg::PointStamped in_pt, out_pt;
+            in_pt.point = obj.position;
+
+            // 🔧 Hardcode the frame ID
+            in_pt.header.frame_id = "camera_link";
+            in_pt.header.stamp = this->get_clock()->now(); // Optional: keep timestamp current
+
+            try
+            {
+                geometry_msgs::msg::TransformStamped transformStamped = tf_buffer_->lookupTransform(
+                    "odom", in_pt.header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.5));
+
+                tf2::doTransform(in_pt, out_pt, transformStamped);
+
+                detected_objects_[obj.label] = out_pt.point;
+
+                RCLCPP_INFO(this->get_logger(), "Detected %s at (%.2f, %.2f, %.2f) in odom",
+                            obj.label.c_str(),
+                            out_pt.point.x, out_pt.point.y, out_pt.point.z);
+            }
+            catch (tf2::TransformException &ex)
+            {
+                RCLCPP_WARN(this->get_logger(), "Transform failed for %s: %s",
+                            obj.label.c_str(), ex.what());
+            }
+        }
+    }
 
     void marker_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
     {
@@ -181,12 +218,13 @@ private:
                 if (marker.id == 0)
                 {
                     toggle[0] = 1;
-                    cout<<"RIGHT MARKER SIZE: "<<transformed_marker.points.size()<<"\n";
+                    // cout << "RIGHT MARKER SIZE: " << transformed_marker.points.size() << "\n";
                     std::pair<double, double> pair = get_last_point(transformed_marker.points);
-                    cout<<"RIGHT POINT CALCULATED: ("<<pair.first<<", "<<pair.second<<")\n";
+                    // cout << "RIGHT POINT CALCULATED: (" << pair.first << ", " << pair.second << ")\n";
                     if (pair.first == 0.0 && pair.second == 0.0)
                     {
-                        if (!left_lane_history_.empty()) {
+                        if (!left_lane_history_.empty())
+                        {
                             olp_ = get_last_point(left_lane_history_[0].points, 9.0, 0.0);
                         }
                         // cout<<"LEFT POINT TAKEN FROM HISTORY\n";
@@ -205,17 +243,18 @@ private:
                     std::pair<double, double> pair = get_last_point(transformed_marker.points);
                     if (pair.first == 0.0 && pair.second == 0.0)
                     {
-                        if (!middle_lane_history_.empty()) {
+                        if (!middle_lane_history_.empty())
+                        {
                             omp_ = get_last_point(middle_lane_history_[0].points, 9.0, 0.0);
                         }
-                        cout<<"MID POINT TAKEN HISTORY: ("<<omp_.first<<", "<<omp_.second<<")\n";
-                        // cout<<"MID POINT TAKEN FROM HISTORY\n";
+                        // cout << "MID POINT TAKEN HISTORY: (" << omp_.first << ", " << omp_.second << ")\n";
+                        //  cout<<"MID POINT TAKEN FROM HISTORY\n";
                     }
                     else
                     {
                         omp_ = pair;
                         middle_lane_history_.push_front(transformed_marker);
-                        cout<<"MID POINT ADDED: ("<<omp_.first<<", "<<omp_.second<<")\n";
+                        // cout << "MID POINT ADDED: (" << omp_.first << ", " << omp_.second << ")\n";
                         while (middle_lane_history_.size() > buffer_size_)
                             middle_lane_history_.pop_back();
                     }
@@ -226,7 +265,8 @@ private:
                     std::pair<double, double> pair = get_last_point(transformed_marker.points);
                     if (pair.first == 0.0 && pair.second == 0.0)
                     {
-                        if (!right_lane_history_.empty()) {
+                        if (!right_lane_history_.empty())
+                        {
                             orp_ = get_last_point(right_lane_history_[0].points, 9.0, 0.0);
                         }
                         // cout<<"RIGHT POINT TAKEN FROM HISTORY\n";
@@ -239,19 +279,26 @@ private:
                             right_lane_history_.pop_back();
                     }
                 }
-                else{
-                    if(toggle[0] == 0){
-                        if (!left_lane_history_.empty()) {
+                else
+                {
+                    if (toggle[0] == 0)
+                    {
+                        if (!left_lane_history_.empty())
+                        {
                             olp_ = get_last_point(left_lane_history_[0].points, 9.0, 0.0);
                         }
                     }
-                    if(toggle[1] == 0){
-                        if (!middle_lane_history_.empty()) {
+                    if (toggle[1] == 0)
+                    {
+                        if (!middle_lane_history_.empty())
+                        {
                             omp_ = get_last_point(middle_lane_history_[0].points, 9.0, 0.0);
                         }
                     }
-                    if(toggle[2] == 0){
-                        if (!right_lane_history_.empty()) {
+                    if (toggle[2] == 0)
+                    {
+                        if (!right_lane_history_.empty())
+                        {
                             orp_ = get_last_point(right_lane_history_[0].points, 9.0, 0.0);
                         }
                     }
@@ -260,7 +307,8 @@ private:
             catch (tf2::TransformException &ex)
             {
                 RCLCPP_WARN(this->get_logger(), "Transform failed: %s", ex.what());
-                continue;;
+                continue;
+                ;
             }
         }
 
@@ -293,7 +341,6 @@ private:
 
         debug_markers();
     }
-
 };
 
 int main(int argc, char **argv)
