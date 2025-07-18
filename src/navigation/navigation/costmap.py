@@ -19,6 +19,7 @@ import cv2
 from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Header
+from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import Buffer, TransformListener
 
 def transform_to_matrix(tf_msg) -> np.ndarray:
@@ -74,7 +75,7 @@ class CostmapNode(Node):
                                  self._object_cb, qos)
         self.create_subscription(PointCloud2, '/white_lane_points',
                                  self._white_cb,  qos)
-        self.create_subscription(PointCloud2, '/yellow_lane_points',
+        self.create_subscription(MarkerArray, '/lane_fitted_yellow',
                                  self._yellow_cb, qos)
         self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', qos)
 
@@ -102,7 +103,19 @@ class CostmapNode(Node):
     # ---------------------- subscriber callbacks --------------------------
     def _object_cb(self, msg):  self._object_pc, self._new_object = msg, True
     def _white_cb(self,  msg):  self._white_pc,  self._new_white  = msg, True
-    def _yellow_cb(self, msg):  self._yellow_pc, self._new_yellow = msg, True
+    def _yellow_cb(self, msg: MarkerArray):
+        points = []
+        for marker in msg.markers:
+            for p in marker.points:
+                points.append([p.x, p.y, p.z])
+        if points:
+            self._yellow_pc = np.array(points, dtype=np.float32)
+            self._new_yellow = True
+        else:
+            self._yellow_pc = None
+            self._new_yellow = False
+
+
 
     # ---------------------------- timer loop -----------------------------
     def _timer_cb(self):
@@ -126,8 +139,9 @@ class CostmapNode(Node):
             self.white_map[:] = self._make_layer(self._white_pc, 250, 'white')
             self._new_white = False
         if self._new_yellow and self._yellow_pc is not None:
-            self.yellow_map[:] = self._make_layer(self._yellow_pc, 250, 'yellow')
+            self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 250, 'yellow')
             self._new_yellow = False
+
         if self._new_object and self._object_pc is not None:
             self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
             self._new_object = False
@@ -189,6 +203,36 @@ class CostmapNode(Node):
         # copy because scratch will be reused next layer
         return layer.copy()
     
+    def _make_layer_numpy(self, pts: np.ndarray, value: int, tag: str) -> np.ndarray:
+        if pts is None or pts.size == 0:
+            return self._empty
+
+        xyz1 = np.hstack((pts, np.ones((pts.shape[0], 1), np.float32)))
+        xyz  = (self._T_odom_cam @ xyz1.T).T[:, :3]
+
+        mx_raw = (xyz[:, 0] - self.origin_x) / self.resolution
+        my_raw = (xyz[:, 1] - self.origin_y) / self.resolution
+        valid  = ((mx_raw >= 0) & (mx_raw < self.width) &
+                (my_raw >= 0) & (my_raw < self.height))
+        vcount = int(np.count_nonzero(valid))
+        if vcount == 0:
+            return self._empty
+
+        mx = mx_raw[valid].astype(np.int32)
+        my = my_raw[valid].astype(np.int32)
+
+        layer = self._scratch
+        layer.fill(0)
+        layer[my, mx] = value
+
+        blurred = cv2.GaussianBlur(layer.astype(np.float32), (5, 5), sigmaX=60.0)
+        gmax = float(blurred.max())
+        if gmax > 0.0:
+            power = 2.0 if value == 245 else 0.8
+            blurred = ((blurred / (gmax ** power)) * 100).astype(np.uint8)
+            np.maximum(layer, blurred, out=layer)
+
+        return layer.copy()
 
     def _distance_penalty(self, grid: np.ndarray,
                         thresh: int = 200,
