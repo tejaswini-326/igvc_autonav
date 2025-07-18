@@ -65,6 +65,7 @@ class LaneFollowerNode(Node):
         marker_array = MarkerArray()
         white_markers = []
         yellow_closest = 0
+        yellow_marker_array = MarkerArray()
 
 
         for i, (label, coeffs, color_type, cluster_xy) in enumerate(cluster_curves):
@@ -111,8 +112,8 @@ class LaneFollowerNode(Node):
                 curve_marker.id = 1
                 marker_array.markers.append(curve_marker)
                 yellow_closest= closest_y
+                yellow_marker_array.markers.append(curve_marker)
                 
-
         for point_y, marker in white_markers:
             if yellow_closest > point_y:
                 marker.id = 2
@@ -129,6 +130,7 @@ class LaneFollowerNode(Node):
         if VERBOSE_UNNESSARY_THINGS: print("length of marker array: ")
         if VERBOSE_UNNESSARY_THINGS: print(len(marker_array.markers))
         self.markers_pub.publish(marker_array)
+        self.yellow_curve_pub.publish(yellow_marker_array)
 
         
     def white_pointcloud_callback(self, msg):
