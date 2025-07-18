@@ -37,7 +37,7 @@ INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (3) ** 2           # metres
 TURN_ANGLE                                      = radians(80.0)      # 90 will overturn if the bot started out a bit turning to the left
 
 # Completion Threshold - After this distance this node will handover control to main lane follower
-TARGET_LEFT_DISPLACEMENT = 9
+TARGET_LEFT_DISPLACEMENT = 11
 # ──────────────────────────────────────────────────────────────────────────────
 
 
