@@ -1,3 +1,25 @@
+The Opulent Orange
+opulentorange
+Invisible
+
+TA — 11:17
+e
+#include "rclcpp/rclcpp.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "visualization_msgs/msg/marker_array.hpp"
+#include "geometry_msgs/msg/point_stamped.hpp"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
+Expand
+goal_publisher.cpp
+15 KB
+﻿
+TA
+waxcookie
+job/less
+ 
+ 
+hehe
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
@@ -6,6 +28,8 @@
 #include "tf2_ros/transform_listener.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "nav_msgs/msg/odometry.hpp"
+#include "object_detection/msg/object_array.hpp"
 
 #include <vector>
 #include <algorithm>
@@ -14,22 +38,23 @@
 #include <deque>
 // horizontal_line_stop_point -> pointstamped object, listens to it
 
-bool VERBOSE_UNNECESSARY_THINGS = false;
-
-// intersection -> "none" 
+// intersection -> "none"
 using std::placeholders::_1;
 using namespace std;
 typedef geometry_msgs::msg::Point pt;
 
-inline std::pair<double, double> operator*(const std::pair<double, double> &p, double scalar){
+inline std::pair<double, double> operator*(const std::pair<double, double> &p, double scalar)
+{
     return {p.first * scalar, p.second * scalar};
 }
 
-inline std::pair<double, double> operator+(const std::pair<double, double> &a, const std::pair<double, double> &b){
+inline std::pair<double, double> operator+(const std::pair<double, double> &a, const std::pair<double, double> &b)
+{
     return {a.first + b.first, a.second + b.second};
 }
 
-inline std::pair<double, double> operator-(const std::pair<double, double> &a, const std::pair<double, double> &b){
+inline std::pair<double, double> operator-(const std::pair<double, double> &a, const std::pair<double, double> &b)
+{
     return {a.first - b.first, a.second - b.second};
 }
 
@@ -37,7 +62,7 @@ class GoalPublisher : public rclcpp::Node
 {
 public:
     GoalPublisher() : Node("goal_publisher")
-    {    
+    {
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
         goal_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/goal_point", 10);
@@ -46,11 +71,10 @@ public:
             "/lane_visualization", 10, std::bind(&GoalPublisher::marker_callback, this, _1));
         override_sub_ = this->create_subscription<std_msgs::msg::String>(
             "/intersection", 10, std::bind(&GoalPublisher::override_callback_, this, _1));
-        timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(200),
-            std::bind(&GoalPublisher::timer_callback, this)
-        );
-
+        odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+            "/odom", 10, std::bind(&GoalPublisher::odom_callback, this, _1));
+        object_data_sub_ = this->create_subscription<object_detection::msg::ObjectArray>(
+            "/object_data", 10, std::bind(&GoalPublisher::object_data_callback, this, _1));
 
         override_ = "none";
         target_lane_ = "right";
@@ -65,73 +89,72 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_pub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr override_sub_;
+    rclcpp::Subscription<object_detection::msg::ObjectArray>::SharedPtr object_data_sub_;
+
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
-    rclcpp::TimerBase::SharedPtr timer_;
-
+    std::map<std::string, geometry_msgs::msg::Point> detected_objects_;
 
     std::string target_lane_;
     std::string current_lane_;
     size_t buffer_size_;
     std::string override_;
+    std::pair<double, double> olp_, omp_, orp_;
+    std::pair<double, double> robot_pose_;
 
-    struct tracked_points {
+    struct tracked_points
+    {
         std::pair<double, double> left;
         std::pair<double, double> mid;
         std::pair<double, double> right;
     };
-    std::deque<tracked_points> history_;
+
+    std::deque<visualization_msgs::msg::Marker> left_lane_history_;
+    std::deque<visualization_msgs::msg::Marker> right_lane_history_;
+    std::deque<visualization_msgs::msg::Marker> middle_lane_history_;
 
     void override_callback_(const std_msgs::msg::String::SharedPtr msg)
     {
         override_ = msg->data;
         RCLCPP_INFO(this->get_logger(), "Overriding goal publisher\n");
     }
-
-    std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 6.5, double min_distance = 4.0)
+    void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
     {
-        double distance_squared = 0.0;
+        robot_pose_.first = msg->pose.pose.position.x;
+        robot_pose_.second = msg->pose.pose.position.y;
+    }
+
+    std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 10.0, double min_distance = 4.0)
+    {
+        double max_distance_squared = 0.0;
         pt ans;
         ans.x = 0.0;
         ans.y = 0.0;
         for (const pt &p : points)
         {
-            if (p.x * p.x + p.y * p.y >= min_distance * min_distance && p.x * p.x + p.y * p.y <= max_distance * max_distance && p.x * p.x + p.y * p.y > distance_squared)
+            // cout << "POINT : (" << p.x << ", " << p.y << ")\n";
+            double dx = p.x - robot_pose_.first;
+            double dy = p.y - robot_pose_.second;
+            double current_distance_squared = dx * dx + dy * dy;
+            // cout << "CURRENT DISTANCE SQUARED: " << current_distance_squared << "\n";
+
+            if (current_distance_squared >= min_distance * min_distance &&
+                current_distance_squared <= max_distance * max_distance &&
+                current_distance_squared > max_distance_squared)
             {
                 ans = p;
-                distance_squared = p.x * p.x + p.y * p.y;
+                max_distance_squared = current_distance_squared;
             }
         }
+        // cout << "DISTANCE SQUARED: " << max_distance_squared << " CALCULATED: (" << ans.x << ", " << ans.y << ")\n";
+        // cout << "ROBOT POSITION CALCULATED: (" << robot_pose_.first << ", " << robot_pose_.second << ")\n";
+
         return {ans.x, ans.y};
     }
 
-    std::optional<geometry_msgs::msg::PointStamped> transform_to_odom(double goal_x, double goal_y)
+    void publish_goal(const geometry_msgs::msg::PointStamped &goal_point)
     {
-        try
-        {
-            geometry_msgs::msg::PointStamped stamped_point;
-            stamped_point.header.stamp = this->get_clock()->now();
-            stamped_point.header.frame_id = "camera_link";
-            stamped_point.point.x = goal_x;
-            stamped_point.point.y = goal_y;
-            stamped_point.point.z = 0.0;
-
-            geometry_msgs::msg::TransformStamped transform =
-                tf_buffer_->lookupTransform("odom", "camera_link", tf2::TimePointZero, tf2::durationFromSec(0.5));
-            geometry_msgs::msg::PointStamped transformed_point;
-            tf2::doTransform(stamped_point, transformed_point, transform);
-
-            // std::cout << transformed_point.point.x << " , " << transformed_point.point.y << " is the goal\n";
-            return transformed_point;
-        }
-        catch (const tf2::TransformException &ex)
-        {
-            RCLCPP_WARN(this->get_logger(), "Transform failed from camera_link to odom: %s", ex.what());
-            return std::nullopt;
-        }
-    }
-
-    void publish_goal(const geometry_msgs::msg::PointStamped& goal_point){
         geometry_msgs::msg::PoseStamped goal_pose;
         goal_pose.header.stamp = this->get_clock()->now();
         goal_pose.header.frame_id = "odom";
@@ -142,172 +165,190 @@ private:
         goal_pose.pose.orientation.y = 0.0;
         goal_pose.pose.orientation.z = 0.0;
         goal_pose.pose.orientation.w = 1.0;
-        if(override_ == "none"){
+        if (override_ == "none")
+        {
             goal_pub_->publish(goal_pose);
         }
     }
 
-    void debug_markers(){
+    void debug_markers()
+    {
         visualization_msgs::msg::MarkerArray MarkerArray;
-        int marker_id = 0;
-        rclcpp::Time timestamp = this->get_clock()->now();
-
-        auto make_marker = [&marker_id, &timestamp](std::pair<double, double> point, const std::array<float, 3>& color, const std::string& label){
-            visualization_msgs::msg::Marker m;
-            m.header.stamp = timestamp;
-            m.header.frame_id = "odom";
-            m.ns = label;
-            m.id = marker_id;
-            marker_id += 1;
-            m.type = visualization_msgs::msg::Marker::SPHERE;
-            m.action = visualization_msgs::msg::Marker::ADD;
-            m.pose.position.x = point.first;
-            m.pose.position.y = point.second;
-            m.pose.position.z = 0.1;
-            m.pose.orientation.w = 1.0;
-            m.scale.x = 0.3;
-            m.scale.y = 0.3;
-            m.scale.z = 0.3;
-            m.color.r = color[0];
-            m.color.g = color[1];
-            m.color.b = color[2];
-            m.color.a = 1.0;
-            return m;
-        };
-        MarkerArray.markers.push_back(make_marker(history_[0].right, {1.0f,  0.0f, 0.0f}, "right_point")); //red
-        MarkerArray.markers.push_back(make_marker(history_[0].mid, {0.0f,  1.0f, 0.0f}, "mid_point")); //green
-        MarkerArray.markers.push_back(make_marker(history_[0].left, {0.0f,  0.0f, 1.0f}, "left_point")); //blue
+        MarkerArray.markers.push_back(right_lane_history_[0]);  // red
+        MarkerArray.markers.push_back(middle_lane_history_[0]); // green
+        MarkerArray.markers.push_back(left_lane_history_[0]);   // blue
 
         debug_pub_->publish(MarkerArray);
+    }
+    void object_data_callback(const object_detection::msg::ObjectArray::SharedPtr msg)
+    {
+        for (const auto &obj : msg->objects)
+        {
+            geometry_msgs::msg::PointStamped in_pt, out_pt;
+            in_pt.point = obj.position;
+
+            // 🔧 Hardcode the frame ID
+            in_pt.header.frame_id = "camera_link";
+            in_pt.header.stamp = this->get_clock()->now(); // Optional: keep timestamp current
+
+            try
+            {
+                geometry_msgs::msg::TransformStamped transformStamped = tf_buffer_->lookupTransform(
+                    "odom", in_pt.header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.5));
+
+                tf2::doTransform(in_pt, out_pt, transformStamped);
+
+                detected_objects_[obj.label] = out_pt.point;
+
+                RCLCPP_INFO(this->get_logger(), "Detected %s at (%.2f, %.2f, %.2f) in odom",
+                            obj.label.c_str(),
+                            out_pt.point.x, out_pt.point.y, out_pt.point.z);
+            }
+            catch (tf2::TransformException &ex)
+            {
+                RCLCPP_WARN(this->get_logger(), "Transform failed for %s: %s",
+                            obj.label.c_str(), ex.what());
+            }
+        }
     }
 
     void marker_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
     {
-        std::pair<double, double> rp = {0, 0}, lp = {0, 0}, mp = {0, 0};
-
+        int toggle[] = {0, 0, 0};
         for (const auto &marker : msg->markers)
         {
-            std::pair<double, double> pair = get_last_point(marker.points);
-            if (pair.first == 0.0 && pair.second == 0.0) continue;
+            geometry_msgs::msg::TransformStamped transformStamped;
+            try
+            {
+                transformStamped = tf_buffer_->lookupTransform(
+                    "odom", "camera_link", tf2::TimePointZero, tf2::durationFromSec(0.5));
 
-            if (marker.id == 0)
-            {
-                lp = pair;
+                visualization_msgs::msg::Marker transformed_marker = marker;
+                transformed_marker.header.frame_id = "odom";
+
+                for (auto &pt : transformed_marker.points)
+                {
+                    geometry_msgs::msg::PointStamped in_pt, out_pt;
+                    in_pt.header = marker.header;
+                    in_pt.point = pt;
+
+                    tf2::doTransform(in_pt, out_pt, transformStamped);
+                    pt = out_pt.point;
+                }
+
+                // Now store `transformed_marker` instead of `marker`
+                if (marker.id == 0)
+                {
+                    toggle[0] = 1;
+                    // cout << "RIGHT MARKER SIZE: " << transformed_marker.points.size() << "\n";
+                    std::pair<double, double> pair = get_last_point(transformed_marker.points);
+                    // cout << "RIGHT POINT CALCULATED: (" << pair.first << ", " << pair.second << ")\n";
+                    if (pair.first == 0.0 && pair.second == 0.0)
+                    {
+                        if (!left_lane_history_.empty())
+                        {
+                            olp_ = get_last_point(left_lane_history_[0].points, 9.0, 0.0);
+                        }
+                        // cout<<"LEFT POINT TAKEN FROM HISTORY\n";
+                    }
+                    else
+                    {
+                        olp_ = pair;
+                        left_lane_history_.push_front(transformed_marker);
+                        while (left_lane_history_.size() > buffer_size_)
+                            left_lane_history_.pop_back();
+                    }
+                }
+                else if (marker.id == 1)
+                {
+                    toggle[1] = 1;
+                    std::pair<double, double> pair = get_last_point(transformed_marker.points);
+                    if (pair.first == 0.0 && pair.second == 0.0)
+                    {
+                        if (!middle_lane_history_.empty())
+                        {
+                            omp_ = get_last_point(middle_lane_history_[0].points, 9.0, 0.0);
+                        }
+                        // cout << "MID POINT TAKEN HISTORY: (" << omp_.first << ", " << omp_.second << ")\n";
+                        //  cout<<"MID POINT TAKEN FROM HISTORY\n";
+                    }
+                    else
+                    {
+                        omp_ = pair;
+                        middle_lane_history_.push_front(transformed_marker);
+                        // cout << "MID POINT ADDED: (" << omp_.first << ", " << omp_.second << ")\n";
+                        while (middle_lane_history_.size() > buffer_size_)
+                            middle_lane_history_.pop_back();
+                    }
+                }
+                else if (marker.id == 2)
+                {
+                    toggle[2] = 1;
+                    std::pair<double, double> pair = get_last_point(transformed_marker.points);
+                    if (pair.first == 0.0 && pair.second == 0.0)
+                    {
+                        if (!right_lane_history_.empty())
+                        {
+                            orp_ = get_last_point(right_lane_history_[0].points, 9.0, 0.0);
+                        }
+                        // cout<<"RIGHT POINT TAKEN FROM HISTORY\n";
+                    }
+                    else
+                    {
+                        orp_ = pair;
+                        right_lane_history_.push_front(transformed_marker);
+                        while (right_lane_history_.size() > buffer_size_)
+                            right_lane_history_.pop_back();
+                    }
+                }
+                else
+                {
+                    if (toggle[0] == 0)
+                    {
+                        if (!left_lane_history_.empty())
+                        {
+                            olp_ = get_last_point(left_lane_history_[0].points, 9.0, 0.0);
+                        }
+                    }
+                    if (toggle[1] == 0)
+                    {
+                        if (!middle_lane_history_.empty())
+                        {
+                            omp_ = get_last_point(middle_lane_history_[0].points, 9.0, 0.0);
+                        }
+                    }
+                    if (toggle[2] == 0)
+                    {
+                        if (!right_lane_history_.empty())
+                        {
+                            orp_ = get_last_point(right_lane_history_[0].points, 9.0, 0.0);
+                        }
+                    }
+                }
             }
-            else if (marker.id == 1)
+            catch (tf2::TransformException &ex)
             {
-                mp = pair;
-            }
-            else if (marker.id == 2)
-            {
-                rp = pair;
-            }
-            else{
-                cout<<"LANE NOT FOUND\n";
-                return;
+                RCLCPP_WARN(this->get_logger(), "Transform failed: %s", ex.what());
+                continue;
+                ;
             }
         }
 
-        // Swap if left/right are incorrectly assigned
-        // if (rp.second > lp.second)
-        //     std::swap(rp, lp);
-        
-        if (VERBOSE_UNNECESSARY_THINGS) cout<<"left in camera frame: "<<lp.first<<", "<<lp.second<<'\n';
-        if (VERBOSE_UNNECESSARY_THINGS) cout<<"mid in camera frame: "<<mp.first<<", "<<mp.second<<'\n';
-        if (VERBOSE_UNNECESSARY_THINGS) cout<<"right in camera frame: "<<rp.first<<", "<<rp.second<<'\n';
-
-        std::pair<double, double> olp, omp, orp;
-
-        // ❶ LEFT
-        if (lp.first == 0.0 && lp.second == 0.0) {
-            if (!history_.empty()) {
-                olp = history_.front().left;
-            } else {
-                RCLCPP_WARN(get_logger(), "No history yet – skipping frame");
-                return;            // nothing to work with this cycle
-            }
-        }
-        else
+        if (right_lane_history_.size() < 3 || middle_lane_history_.size() < 3 || left_lane_history_.size() < 3 || override_ != "none")
         {
-            auto result = transform_to_odom(lp.first, lp.second);
-            if (!result)
-            {
-                std::cout << "TRANSFORM FAILED (left)\n";
-                return;
-            }
-            olp = {result->point.x, result->point.y};
-        }
-
-        // ❷ MID
-        if (mp.first == 0.0 && mp.second == 0.0) {
-            if (!history_.empty()) {
-                omp = history_.front().mid;
-            } else {
-                RCLCPP_WARN(get_logger(), "No history yet – skipping frame");
-                return;
-            }
-        }
-        else
-        {
-            auto result = transform_to_odom(mp.first, mp.second);
-            if (!result)
-            {
-                std::cout << "TRANSFORM FAILED (mid)\n";
-                return;
-            }
-            omp = {result->point.x, result->point.y};
-        }
-
-        // ❸ RIGHT
-        if (rp.first == 0.0 && rp.second == 0.0) {
-            if (!history_.empty()) {
-                orp = history_.front().right;
-            } else {
-                RCLCPP_WARN(get_logger(), "No history yet – skipping frame");
-                return;
-            }
-        }
-        else
-        {
-            auto result = transform_to_odom(rp.first, rp.second);
-            if (!result)
-            {
-                std::cout << "TRANSFORM FAILED (right)\n";
-                return;
-            }
-            orp = {result->point.x, result->point.y};
-        }
-
-        if (VERBOSE_UNNECESSARY_THINGS) cout<<"left in odom frame: "<<olp.first<<", "<<olp.second<<'\n';
-        if (VERBOSE_UNNECESSARY_THINGS) cout<<"mid in odom frame: "<<omp.first<<", "<<omp.second<<'\n';
-        if (VERBOSE_UNNECESSARY_THINGS) cout<<"right in odom frame: "<<orp.first<<", "<<orp.second<<'\n';
-
-        // Store in history
-        history_.push_front(tracked_points{
-            .left = olp,
-            .mid = omp,
-            .right = orp
-        });
-
-        while (history_.size() > buffer_size_)
-            history_.pop_back();
-    }
-    
-    void timer_callback()
-    {
-        //history has points in odom frame
-        if (history_.size() < 3 || override_ != "none") {
-            return;  // Not enough data or overridden externally
+            return; // Not enough data or overridden externally
         }
 
         std::pair<double, double> goal;
-        if(target_lane_ == "right"){
-            goal.first = (history_[0].right.first + history_[0].mid.first) / 2;
-            goal.second = (history_[0].right.second + history_[0].mid.second) / 2;
+        if (target_lane_ == "right")
+        {
+            goal.first = (orp_.first + omp_.first) / 2;
+            goal.second = (orp_.second + omp_.second) / 2;
         }
-        if(target_lane_ == "left"){
-            goal.first = (history_[0].left.first + history_[0].mid.first) / 2;
-            goal.second = (history_[0].left.second + history_[0].mid.second) / 2;
+        if (target_lane_ == "left")
+        {
+            goal.first = (olp_.first + omp_.first) / 2;
+            goal.second = (olp_.second + omp_.second) / 2;
         }
 
         // Create PointStamped to use your existing `publish_goal()` function
@@ -319,9 +360,9 @@ private:
         goal_point.point.z = 0.0;
 
         publish_goal(goal_point);
-        debug_markers();  // Optional visualization
-    }
 
+        debug_markers();
+    }
 };
 
 int main(int argc, char **argv)
@@ -331,3 +372,5 @@ int main(int argc, char **argv)
     rclcpp::shutdown();
     return 0;
 }
+goal_publisher.cpp
+15 KB
