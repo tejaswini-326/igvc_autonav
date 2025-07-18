@@ -142,7 +142,7 @@ class CostmapNode(Node):
             self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 250, 'yellow')
             self._new_yellow = False
 
-        if self._new_object and self._object_pc is not None:
+        if self._object_pc is not None:
             self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
             self._new_object = False
 
