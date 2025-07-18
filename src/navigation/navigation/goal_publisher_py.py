@@ -5,6 +5,8 @@ from visualization_msgs.msg import MarkerArray, Marker
 from geometry_msgs.msg import PointStamped
 from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
+from object_detection.msg import ObjectArray  # Make sure this matches your package
+from geometry_msgs.msg import Point
 from rclpy.duration import Duration
 
 # Note that warnings are still logged irrespective of this boolean

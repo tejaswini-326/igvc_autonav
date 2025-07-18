@@ -17,6 +17,7 @@ find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(object_detection REQUIRED)
 
 
 add_executable(path_planner src/path_planner.cpp)
@@ -31,6 +32,7 @@ ament_target_dependencies(goal_publisher
   tf2_ros
   tf2_geometry_msgs
   nav_msgs
+  object_detection 
 )
 install(TARGETS path_planner goal_publisher DESTINATION lib/${PROJECT_NAME})
 

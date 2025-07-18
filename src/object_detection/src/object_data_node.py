@@ -36,6 +36,7 @@ class ObjectDataNode(Node):
         pkg_share = get_package_share_directory('object_detection')
         model_path = os.path.join(pkg_share, 'models', 'best.pt')
         self.model = YOLO(model_path)
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         if torch.cuda.is_available():
             self.model.to('cuda')
             self.get_logger().info(f"Model moved to {next(self.model.model.parameters()).device}")
@@ -74,7 +75,8 @@ class ObjectDataNode(Node):
             self.get_logger().error(f'Image decoding error: {e}')
             return
 
-        results = self.model.predict(image, device=0)[0]
+        results = self.model.predict(cv_image, device=self.device)[0]
+
         detections = results.boxes
         if not detections or len(detections) == 0:
             return
