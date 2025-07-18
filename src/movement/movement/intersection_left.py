@@ -29,7 +29,7 @@ MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60
 
 # Movement Related
 LINEAR_SPEED                                    = 1.5                # m/s   (forward)
-LEFT_TURN_ANGULAR_SPEED                         = 0.22               # rad/s (+ve = CCW = left)
+LEFT_TURN_ANGULAR_SPEED                         = 0.2               # rad/s (+ve = CCW = left)
 
 # Intersection Turning Related
 ANGLE_TOLERANCE                                 = radians(30)        # ± deg window around 90° – θ

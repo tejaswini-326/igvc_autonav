@@ -11,6 +11,8 @@
 
 using std::placeholders::_1;
 
+bool VERBOSE_UNNECESSARY_THINGS = false;
+
 struct AStarNode
 {
     int x, y;
@@ -97,7 +99,7 @@ private:
         // Change to actual robot pose
         auto [goal_x, goal_y] = world_to_map(goal_.pose.position.x, goal_.pose.position.y);
 
-        RCLCPP_INFO(this->get_logger(), "Planning from (%d, %d) to (%d, %d)", start_x, start_y, goal_x, goal_y);
+        if (VERBOSE_UNNECESSARY_THINGS) RCLCPP_INFO(this->get_logger(), "Planning from (%d, %d) to (%d, %d)", start_x, start_y, goal_x, goal_y);
 
         auto raw_path = a_star(start_x, start_y, goal_x, goal_y);
         raw_path.header.stamp = this->now();

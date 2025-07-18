@@ -6,6 +6,7 @@ from nav_msgs.msg import Odometry
 import math
 from geometry_msgs.msg import Twist, Point, PointStamped
 import tf_transformations
+from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 from builtin_interfaces.msg import Duration
 from sensor_msgs.msg import Imu
@@ -15,6 +16,8 @@ import tf2_ros
 import tf2_geometry_msgs
 from nav_msgs.msg import Path
 
+VERBOSE_UNECESSARY_THINGS = False
+
 
 class Controller(Node):
     def __init__(self):
@@ -22,7 +25,7 @@ class Controller(Node):
 
         self.path = []
 
-        self.lookahead_distance = 1.2
+        self.lookahead_distance = 0.5
         self.linear_speed = 0.5
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
@@ -36,11 +39,13 @@ class Controller(Node):
         self.last_log_time = 0.0
         self.log_interval = 0.5
 
+        self.active = True
         self.pose = None
         self.imu_yaw = None
 
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
         self.create_subscription(Path, '/sm_planned_path', self.path_callback, 10)
+        self.create_subscription(String, '/intersection', self.intersection_cb, 10) 
 
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/path_markers', 10)
@@ -57,17 +62,30 @@ class Controller(Node):
 
         self.get_logger().info("Controller initialized.")
 
+    def intersection_cb(self, msg: String):
+        if msg.data.lower()  == "none":
+            self.active = True
+            self.get_logger().info(f"🟢 Received '{msg.data}' from /intersection.")
+        else:
+            self.active = False
+            self.get_logger().info(f"🛑 Ignoring '{msg.data}' from /intersection.")
+
     def log_info_throttled(self, msg):
+        if not self.active:
+            return
         now = time()
         if now - self.last_log_time > self.log_interval:
-            self.get_logger().info(msg)
+            if VERBOSE_UNECESSARY_THINGS: self.get_logger().info(msg)
             self.last_log_time = now
 
     def odom_callback(self, msg):
+        if not self.active:
+            return
         self.pose = msg.pose.pose
-        self.get_logger().info("odom callback received.")
 
     def imu_callback(self, msg):
+        if not self.active:
+            return
 
         try:
             q = msg.orientation
@@ -75,9 +93,9 @@ class Controller(Node):
             _, _, yaw = tf_transformations.euler_from_quaternion(quat)
 
             self.imu_yaw = yaw
-            self.get_logger().info("IMU yaw = {:.2f}".format(yaw))
+            if VERBOSE_UNECESSARY_THINGS: self.get_logger().info("IMU yaw = {:.2f}".format(yaw))
         except Exception as e:
-            self.get_logger().warn(f"[IMU callback error] {e}")
+            if VERBOSE_UNECESSARY_THINGS: self.get_logger().warn(f"[IMU callback error] {e}")
 
         self.yaw_buffer.append(yaw)
 
@@ -102,17 +120,23 @@ class Controller(Node):
         #self.get_logger().info("IMU callback received.")
 
     def path_callback(self, msg: Path):
+        if not self.active:
+            return
         self.path = [(pose.pose.position.x, pose.pose.position.y)for pose in msg.poses]
  
-        self.get_logger().info(f"Received path with {len(self.path)} valid points.")
+        if VERBOSE_UNECESSARY_THINGS: self.get_logger().info(f"Received path with {len(self.path)} valid points.")
 
     def adaptive_lookahead(self, base_distance=1.2):
+        if not self.active:
+            return
         yaw_variability = np.std(self.yaw_buffer) if len(self.yaw_buffer) > 2 else 0.0
         adaptive_factor = np.clip(1.0 + 2.5 * yaw_variability, 1.0, 1.5)
         return base_distance * adaptive_factor
         #self.get_logger().info("adapted whatever")
 
     def find_lookahead_point(self):
+        if not self.active:
+            return
         if self.pose is None or not self.path:
             return None
 
@@ -185,6 +209,8 @@ class Controller(Node):
             return 0.0, 0.0
 
     def control_loop(self):
+        if not self.active:
+            return
         if self.pose is None or not self.path:
             return
 
@@ -277,14 +303,19 @@ class Controller(Node):
         self.prev_angular_z = twist.angular.z
         twist.angular.z = float(np.clip(twist.angular.z, -1.0, 1.0))
         self.cmd_pub.publish(twist)
-        self.get_logger().info(f"Publishing Twist: linear={twist.linear.x:.2f}, angular={twist.angular.z:.2f}")
+        if VERBOSE_UNECESSARY_THINGS: self.get_logger().info(f"Publishing Twist: linear={twist.linear.x:.2f}, angular={twist.angular.z:.2f}")
       
 
 
     def publish_marker_timer(self):
+        if not self.active:
+            return
         self.publish_markers(self.path)
 
     def publish_markers(self, raw_path):
+        if not self.active:
+            return
+        
         if raw_path is None:
             return
 
@@ -358,6 +389,7 @@ class Controller(Node):
         except Exception as e:
             self.get_logger().warn(f"Transform failed: {e}")
             return None
+        
 
 def main(args=None):
     rclpy.init(args=args)

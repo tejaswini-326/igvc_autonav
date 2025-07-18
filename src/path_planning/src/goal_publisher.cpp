@@ -46,7 +46,7 @@ public:
         goal_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/goal_point", 10);
         debug_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/debug_points", 10);
         marker_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(
-            "/lane_visualization", 10, std::bind(&GoalPublisher::marker_callback, this, _1));
+            "/lane_visualization", 10, std::bind(&GoalPublisher::lane_visualization_callback, this, _1));
         override_sub_ = this->create_subscription<std_msgs::msg::String>(
             "/intersection", 10, std::bind(&GoalPublisher::override_callback_, this, _1));
         odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -80,6 +80,7 @@ private:
     std::string override_;
     std::pair<double, double> olp_, omp_, orp_;
     std::pair<double, double> robot_pose_;
+    std::map<std::string, geometry_msgs::msg::Point> detected_objects_;
 
     struct tracked_points
     {
@@ -149,6 +150,38 @@ private:
         }
     }
 
+    void object_data_callback(const object_detection::msg::ObjectArray::SharedPtr msg)
+    {
+        for (const auto &obj : msg->objects)
+        {
+            geometry_msgs::msg::PointStamped in_pt, out_pt;
+            in_pt.point = obj.position;
+
+            // 🔧 Hardcode the frame ID
+            in_pt.header.frame_id = "camera_link";
+            in_pt.header.stamp = this->get_clock()->now(); // Optional: keep timestamp current
+
+            try
+            {
+                geometry_msgs::msg::TransformStamped transformStamped = tf_buffer_->lookupTransform(
+                    "odom", in_pt.header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.5));
+
+                tf2::doTransform(in_pt, out_pt, transformStamped);
+
+                detected_objects_[obj.label] = out_pt.point;
+
+                RCLCPP_INFO(this->get_logger(), "Detected %s at (%.2f, %.2f, %.2f) in odom",
+                            obj.label.c_str(),
+                            out_pt.point.x, out_pt.point.y, out_pt.point.z);
+            }
+            catch (tf2::TransformException &ex)
+            {
+                RCLCPP_WARN(this->get_logger(), "Transform failed for %s: %s",
+                            obj.label.c_str(), ex.what());
+            }
+        }
+    }
+
     void debug_markers()
     {
         visualization_msgs::msg::MarkerArray MarkerArray;
@@ -190,7 +223,7 @@ private:
         }
     }
 
-    void marker_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
+    void lane_visualization_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
     {
         int toggle[] = {0, 0, 0};
         for (const auto &marker : msg->markers)
