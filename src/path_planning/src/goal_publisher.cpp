@@ -14,7 +14,10 @@
 #include <cmath>
 #include <optional>
 #include <deque>
+#include <unordered_set>
 // horizontal_line_stop_point -> pointstamped object, listens to it
+
+float MINIMUM_TIME_BEFORE_SWITCHING_LANES_AGAIN = 5.0;
 
 // intersection -> "none"
 using std::placeholders::_1;
@@ -41,6 +44,7 @@ class GoalPublisher : public rclcpp::Node
 public:
     GoalPublisher() : Node("goal_publisher")
     {
+        last_lane_switch_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
         goal_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/goal_point", 10);
@@ -58,7 +62,7 @@ public:
         target_lane_ = "right";
         current_lane_ = "right";
 
-        buffer_size_ = 10;
+        lane_history_memory_buffer_size_ = 10;
         RCLCPP_INFO(this->get_logger(), "GoalPublisher node initialized");
     }
 
@@ -76,10 +80,13 @@ private:
 
     std::string target_lane_;
     std::string current_lane_;
-    size_t buffer_size_;
+    size_t lane_history_memory_buffer_size_;
     std::string override_;
     std::pair<double, double> olp_, omp_, orp_;
     std::pair<double, double> robot_pose_;
+    std::optional<geometry_msgs::msg::PoseStamped> last_goal_;
+
+    rclcpp::Time last_lane_switch_;
 
     struct tracked_points
     {
@@ -103,7 +110,7 @@ private:
         robot_pose_.second = msg->pose.pose.position.y;
     }
 
-    std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 10.0, double min_distance = 4.0)
+    std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 7.0, double min_distance = 4.0)
     {
         double max_distance_squared = 0.0;
         pt ans;
@@ -134,18 +141,16 @@ private:
     void publish_goal(const geometry_msgs::msg::PointStamped &goal_point)
     {
         geometry_msgs::msg::PoseStamped goal_pose;
-        goal_pose.header.stamp = this->get_clock()->now();
-        goal_pose.header.frame_id = "odom";
-        goal_pose.pose.position.x = goal_point.point.x;
-        goal_pose.pose.position.y = goal_point.point.y;
-        goal_pose.pose.position.z = 0.0;
-        goal_pose.pose.orientation.x = 0.0;
-        goal_pose.pose.orientation.y = 0.0;
-        goal_pose.pose.orientation.z = 0.0;
-        goal_pose.pose.orientation.w = 1.0;
-        if (override_ == "none")
-        {
+        goal_pose.header.stamp         = this->get_clock()->now();
+        goal_pose.header.frame_id      = "odom";
+        goal_pose.pose.position.x      = goal_point.point.x;
+        goal_pose.pose.position.y      = goal_point.point.y;
+        goal_pose.pose.position.z      = 0.0;
+        goal_pose.pose.orientation.w   = 1.0;
+
+        if (override_ == "none") {
             goal_pub_->publish(goal_pose);
+            last_goal_ = goal_pose;
         }
     }
 
@@ -157,37 +162,6 @@ private:
         MarkerArray.markers.push_back(left_lane_history_[0]);   // blue
 
         debug_pub_->publish(MarkerArray);
-    }
-    void object_data_callback(const object_detection::msg::ObjectArray::SharedPtr msg)
-    {
-        for (const auto &obj : msg->objects)
-        {
-            geometry_msgs::msg::PointStamped in_pt, out_pt;
-            in_pt.point = obj.position;
-
-            // 🔧 Hardcode the frame ID
-            in_pt.header.frame_id = "camera_link";
-            in_pt.header.stamp = this->get_clock()->now(); // Optional: keep timestamp current
-
-            try
-            {
-                geometry_msgs::msg::TransformStamped transformStamped = tf_buffer_->lookupTransform(
-                    "odom", in_pt.header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.5));
-
-                tf2::doTransform(in_pt, out_pt, transformStamped);
-
-                detected_objects_[obj.label] = out_pt.point;
-
-                RCLCPP_INFO(this->get_logger(), "Detected %s at (%.2f, %.2f, %.2f) in odom",
-                            obj.label.c_str(),
-                            out_pt.point.x, out_pt.point.y, out_pt.point.z);
-            }
-            catch (tf2::TransformException &ex)
-            {
-                RCLCPP_WARN(this->get_logger(), "Transform failed for %s: %s",
-                            obj.label.c_str(), ex.what());
-            }
-        }
     }
 
     void marker_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
@@ -233,7 +207,7 @@ private:
                     {
                         olp_ = pair;
                         left_lane_history_.push_front(transformed_marker);
-                        while (left_lane_history_.size() > buffer_size_)
+                        while (left_lane_history_.size() > lane_history_memory_buffer_size_)
                             left_lane_history_.pop_back();
                     }
                 }
@@ -255,7 +229,7 @@ private:
                         omp_ = pair;
                         middle_lane_history_.push_front(transformed_marker);
                         // cout << "MID POINT ADDED: (" << omp_.first << ", " << omp_.second << ")\n";
-                        while (middle_lane_history_.size() > buffer_size_)
+                        while (middle_lane_history_.size() > lane_history_memory_buffer_size_)
                             middle_lane_history_.pop_back();
                     }
                 }
@@ -275,7 +249,7 @@ private:
                     {
                         orp_ = pair;
                         right_lane_history_.push_front(transformed_marker);
-                        while (right_lane_history_.size() > buffer_size_)
+                        while (right_lane_history_.size() > lane_history_memory_buffer_size_)
                             right_lane_history_.pop_back();
                     }
                 }
@@ -312,11 +286,11 @@ private:
             }
         }
 
-        if (right_lane_history_.size() < 3 || middle_lane_history_.size() < 3 || left_lane_history_.size() < 3 || override_ != "none")
+        if ((right_lane_history_.size() < 3 || middle_lane_history_.size() < 3 || left_lane_history_.size() < 3) && override_ == "none")
         {
-            return; // Not enough data or overridden externally
+            if (last_goal_) goal_pub_->publish(*last_goal_);
+            return;
         }
-
 
 
 
@@ -369,6 +343,8 @@ private:
 
 
 
+
+
         std::pair<double, double> goal;
         if (target_lane_ == "right")
         {
@@ -394,6 +370,43 @@ private:
         debug_markers();
     }
 
+
+
+
+
+
+
+    void object_data_callback(const object_detection::msg::ObjectArray::SharedPtr msg)
+    {
+        for (const auto &obj : msg->objects)
+        {
+            geometry_msgs::msg::PointStamped in_pt, out_pt;
+            in_pt.point = obj.position;
+
+            // 🔧 Hardcode the frame ID
+            in_pt.header.frame_id = "camera_link";
+            in_pt.header.stamp = this->get_clock()->now(); // Optional: keep timestamp current
+
+            try
+            {
+                geometry_msgs::msg::TransformStamped transformStamped = tf_buffer_->lookupTransform(
+                    "odom", in_pt.header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.5));
+
+                tf2::doTransform(in_pt, out_pt, transformStamped);
+
+                detected_objects_[obj.label] = out_pt.point;
+
+                RCLCPP_INFO(this->get_logger(), "Detected %s at (%.2f, %.2f, %.2f) in odom",
+                            obj.label.c_str(),
+                            out_pt.point.x, out_pt.point.y, out_pt.point.z);
+            }
+            catch (tf2::TransformException &ex)
+            {
+                RCLCPP_WARN(this->get_logger(), "Transform failed for %s: %s",
+                            obj.label.c_str(), ex.what());
+            }
+        }
+    }
 
 
     bool is_between_lanes(const std::pair<double,double>& lane_a,
@@ -429,6 +442,11 @@ private:
         else                       // a → b is a right turn
             return cross_ap <= 0 && cross_pb <= 0;
     }
+
+
+
+
+
 };
 
 int main(int argc, char **argv)
