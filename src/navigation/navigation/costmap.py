@@ -22,6 +22,11 @@ from std_msgs.msg import Header
 from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import Buffer, TransformListener
 
+
+
+OBJECT_HOLD_SEC = 0.3
+
+
 def transform_to_matrix(tf_msg) -> np.ndarray:
     """geometry_msgs/TransformStamped → 4×4 float32 homogeneous matrix"""
     q = tf_msg.transform.rotation
@@ -90,7 +95,10 @@ class CostmapNode(Node):
         self.origin_x = self.origin_y = 0.0
 
         # ---------------------------- timer -------------------------------
-        self.create_timer(0.05, self._timer_cb)   # 10 Hz
+        self._object_last_update = None
+
+        self.create_timer(0.05, self._timer_cb)
+
 
         # --------------------- logger level tweak -------------------------
         # Set ROS_CONSOLE_STDOUT_LINE_BUFFERED=1 for live prints in docker
@@ -101,7 +109,11 @@ class CostmapNode(Node):
         #     if level == 'debug' else rclpy.logging.LoggingSeverity.INFO)
 
     # ---------------------- subscriber callbacks --------------------------
-    def _object_cb(self, msg):  self._object_pc, self._new_object = msg, True
+    def _object_cb(self, msg):
+        self._object_pc = msg
+        self._new_object = True
+        self._object_last_update = self.get_clock().now()
+
     def _white_cb(self,  msg):  self._white_pc,  self._new_white  = msg, True
     def _yellow_cb(self, msg: MarkerArray):
         points = []
@@ -142,9 +154,24 @@ class CostmapNode(Node):
             self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 250, 'yellow')
             self._new_yellow = False
 
-        if self._object_pc is not None:
+
+        now = self.get_clock().now()
+
+        # ... after TF and before fuse:
+        if self._new_object and self._object_pc is not None:
             self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
             self._new_object = False
+
+        elif self._object_last_update is not None:
+            age = (now - self._object_last_update).nanoseconds * 1e-9
+            if age > OBJECT_HOLD_SEC:
+                # hard clear (cheap & predictable)
+                self.object_map.fill(0)
+                self._object_last_update = None
+            # else: still within hold window → keep last drawn object_map
+        else:
+            # never seen an object yet
+            self.object_map.fill(0)
 
         # ---------- fuse + distance penalty + publish ----------------------
         combined = np.maximum.reduce([self.white_map,

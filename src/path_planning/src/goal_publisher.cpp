@@ -317,6 +317,58 @@ private:
             return; // Not enough data or overridden externally
         }
 
+
+
+
+
+
+
+
+
+        //---------------------------------------------------------------------
+        // Decide if an obstacle blocks the corridor we are following
+        //---------------------------------------------------------------------
+        static const std::unordered_set<std::string> kObstacles{
+            "traffic barrel", "cone", "tire"};
+
+        bool corridor_blocked = false;
+        for (const auto &[label, p] : detected_objects_)
+        {
+            if (kObstacles.find(label) == kObstacles.end()) continue;
+
+            std::pair<double,double> obj{p.x, p.y};
+            bool inside = false;
+
+            if (target_lane_ == "left")
+                inside = is_between_lanes(olp_, omp_, obj);   // between left & mid
+            else
+                inside = is_between_lanes(orp_, omp_, obj);   // between right & mid
+
+            if (inside) { corridor_blocked = true; break; }
+        }
+
+        auto now = this->get_clock()->now();
+        if (corridor_blocked && (now - last_lane_switch_) > rclcpp::Duration::from_seconds(MINIMUM_TIME_BEFORE_SWITCHING_LANES_AGAIN))
+        {
+            target_lane_ = (target_lane_ == "left" ? "right" : "left");
+            last_lane_switch_ = now;
+            RCLCPP_WARN(this->get_logger(),
+                        "Obstacle detected between %s & middle ‑> switching to %s lane",
+                        (target_lane_ == "left" ? "right" : "left"),
+                        target_lane_.c_str());
+        }
+        //---------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
         std::pair<double, double> goal;
         if (target_lane_ == "right")
         {
@@ -340,6 +392,42 @@ private:
         publish_goal(goal_point);
 
         debug_markers();
+    }
+
+
+
+    bool is_between_lanes(const std::pair<double,double>& lane_a,
+                        const std::pair<double,double>& lane_b,
+                        const std::pair<double,double>& obj) const
+    {
+        auto vec = [](const std::pair<double,double>& s,
+                    const std::pair<double,double>& t){
+            return std::pair<double,double>{t.first - s.first, t.second - s.second};
+        };
+        auto cross = [](const std::pair<double,double>& u,
+                        const std::pair<double,double>& v){
+            return u.first * v.second - u.second * v.first;
+        };
+        auto dot = [](const std::pair<double,double>& u,
+                    const std::pair<double,double>& v){
+            return u.first * v.first + u.second * v.second;
+        };
+
+        auto a = vec(robot_pose_, lane_a);
+        auto b = vec(robot_pose_, lane_b);
+        auto p = vec(robot_pose_, obj);
+
+        // ahead of the robot?
+        if (dot(a,p) <= 0.0 || dot(b,p) <= 0.0) return false;
+
+        double cross_ab = cross(a,b);
+        double cross_ap = cross(a,p);
+        double cross_pb = cross(p,b);
+
+        if (cross_ab > 0)          // a → b is a left turn
+            return cross_ap >= 0 && cross_pb >= 0;
+        else                       // a → b is a right turn
+            return cross_ap <= 0 && cross_pb <= 0;
     }
 };
 
