@@ -26,7 +26,7 @@ class Controller(Node):
         self.path = []
 
         self.lookahead_distance = 0.5
-        self.linear_speed = 0.5
+        self.linear_speed = 1.0
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
@@ -34,7 +34,7 @@ class Controller(Node):
         self.prev_angular_z = 0.0
         self.angular_damping_factor = .95
         self.current_lookahead = None
-        self.max_angular_speed = 0.25
+        self.max_angular_speed = 0.5
 
         self.last_log_time = 0.0
         self.log_interval = 0.5
