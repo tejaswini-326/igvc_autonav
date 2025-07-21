@@ -25,7 +25,7 @@ class Controller(Node):
 
         self.path = []
 
-        self.lookahead_distance = 0.3
+        self.lookahead_distance = 1
         self.linear_speed = 0.5
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
@@ -34,7 +34,7 @@ class Controller(Node):
         self.prev_angular_z = 0.0
         self.angular_damping_factor = .95
         self.current_lookahead = None
-        self.max_angular_speed = 0.65
+        self.max_angular_speed = 0.75
 
         self.last_log_time = 0.0
         self.log_interval = 0.5
@@ -223,7 +223,7 @@ class Controller(Node):
             self.cmd_pub.publish(Twist())
             return
 
-        self.lookahead_distance = min(self.adaptive_lookahead(), 0.75)
+        self.lookahead_distance = min(self.adaptive_lookahead(), 1.2)
         lookahead = self.find_lookahead_point()
         self.current_lookahead = lookahead
         if lookahead is None:

@@ -99,7 +99,7 @@ private:
 
         goal_ = *msg;
 
-        int start_x = 165;
+        int start_x = 155;
         int start_y = 150;
         // Change to actual robot pose
         auto [goal_x, goal_y] = world_to_map(goal_.pose.position.x, goal_.pose.position.y);
@@ -173,7 +173,7 @@ private:
                     continue;
 
                 int cost = costmap_->data[index(nx, ny)];
-                if (cost < 0 || cost > 50)
+                if (cost < 0 || cost > 500)
                     continue;
 
                 float g_new = current->g + std::hypot(dx[i], dy[i]) + cost / 100.0;
