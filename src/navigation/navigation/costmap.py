@@ -15,6 +15,7 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 import cv2
+import math
 
 from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import PointCloud2
@@ -145,17 +146,19 @@ class CostmapNode(Node):
         if self._object_pc is not None:
             self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
             self._new_object = False
+        rear_mask_layer = np.zeros_like(self.white_map, dtype=np.uint8)
+        rear_mask_layer[:, :math.ceil(0.9*(self.width // 2))] = 250
 
         # ---------- fuse + distance penalty + publish ----------------------
         combined = np.maximum.reduce([self.white_map,
                                     self.yellow_map,
-                                    self.object_map])
+                                    self.object_map,
+                                    rear_mask_layer])
 
         penalty  = self._distance_penalty(combined, thresh=200,
                                         radius_m=1.5, steepness=1.0)
 
         final    = np.maximum(combined, penalty)      # 0-100 uint8
-
         self._publish_costmap(final, self.get_clock().now().to_msg())
 
 
