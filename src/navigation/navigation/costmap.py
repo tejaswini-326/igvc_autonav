@@ -163,7 +163,7 @@ class CostmapNode(Node):
 			#self.get_logger().info("IMU callback received.")
 
 	def draw_v_lines(self):
-		center_x = 130
+		center_x = 125
 		center_y = self.height // 2
 		center = (center_x, center_y)
 
@@ -189,8 +189,8 @@ class CostmapNode(Node):
 
 		# Create mask and draw thick lines
 		v_line_layer = np.zeros_like(self.white_map, dtype=np.uint8)
-		cv2.line(v_line_layer, center, pt1, color=250, thickness=7)
-		cv2.line(v_line_layer, center, pt2, color=250, thickness=7)
+		cv2.line(v_line_layer, center, pt1, color=250, thickness=5)
+		cv2.line(v_line_layer, center, pt2, color=250, thickness=5)
 
 		return v_line_layer
 	# ---------------------------- timer loop -----------------------------
