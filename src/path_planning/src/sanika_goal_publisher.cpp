@@ -1,4 +1,5 @@
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/int32.hpp" 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "geometry_msgs/msg/point_stamped.hpp"
@@ -47,9 +48,14 @@ public:
             "/igvc/white_points", 10, std::bind(&GoalPublisher::pointcloud_callback, this, _1));
         tangent_points_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("/tangent_points", 10);
 
+        lanes_pub_ = this->create_publisher<std_msgs::msg::Int32>("/lane_count", 10);
+
+
         override_ = "none";
         target_lane_ = "right";
         current_lane_ = "right";
+
+        last_lane_count_pub_ = -1;
 
         buffer_size_ = 10;
         RCLCPP_INFO(this->get_logger(), "GoalPublisher node initialized");
@@ -66,8 +72,9 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub_;
     sensor_msgs::msg::PointCloud2::SharedPtr last_pointcloud_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr tangent_points_pub_;
-
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+    // NEW: lane count publisher
+    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr lanes_pub_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     std::map<std::string, geometry_msgs::msg::Point> detected_objects_;
@@ -80,15 +87,14 @@ private:
     std::pair<double, double> robot_pose_;
     tf2::Quaternion current_orientation_;
 
+    // NEW: track last published count (avoid spam)
+    int last_lane_count_pub_ = -1;
+
     struct tracked_points {
         std::pair<double, double> left;
         std::pair<double, double> mid;
         std::pair<double, double> right;
     };
-
-    std::deque<visualization_msgs::msg::Marker> left_lane_history_;
-    std::deque<visualization_msgs::msg::Marker> right_lane_history_;
-    std::deque<visualization_msgs::msg::Marker> middle_lane_history_;
 
     // === SIMPLE 2D POINT STRUCT FOR CLUSTERING ===
     struct Pt2 { double x; double y; };
@@ -230,14 +236,6 @@ private:
         if (override_ == "none") { goal_pub_->publish(goal_pose); }
     }
 
-    void debug_markers() {
-        visualization_msgs::msg::MarkerArray MarkerArray;
-        MarkerArray.markers.push_back(right_lane_history_[0]);  // red
-        MarkerArray.markers.push_back(middle_lane_history_[0]); // green
-        MarkerArray.markers.push_back(left_lane_history_[0]);   // blue
-        debug_pub_->publish(MarkerArray);
-    }
-
     void object_data_callback(const object_detection::msg::ObjectArray::SharedPtr msg) {
         for (const auto &obj : msg->objects) {
             geometry_msgs::msg::PointStamped in_pt, out_pt;
@@ -264,7 +262,10 @@ private:
         RCLCPP_INFO(rclcpp::get_logger("GoalPublisher"), "⭐ Tangent is being computed");
         const size_t num_points = points.size();
         if (num_points < 2) { RCLCPP_WARN(rclcpp::get_logger("GoalPublisher"), "Not enough points to compute tangent."); return std::nullopt; }
-        const size_t lookahead_index = std::max<size_t>(1, num_points / TUNABLE_LOOKAHEAD_FACTOR);
+        const size_t lookahead_index = std::min<size_t>(
+            num_points - 1, 
+            static_cast<size_t>(std::round(num_points / TUNABLE_LOOKAHEAD_FACTOR))
+        );
         const auto &p1 = points.front();
         const auto &p2 = points[lookahead_index];
         publish_tangent_points(p1, p2);
@@ -286,23 +287,17 @@ private:
                 visualization_msgs::msg::Marker transformed_marker = marker;
                 transformed_marker.header.frame_id = "odom";
                 for (auto &pt : transformed_marker.points) {
-                    geometry_msgs::msg::PointStamped in_pt, out_pt; in_pt.header = marker.header; in_pt.point = pt; tf2::doTransform(in_pt, out_pt, transformStamped); pt = out_pt.point; }
+                    geometry_msgs::msg::PointStamped in_pt, out_pt; in_pt.header = marker.header; in_pt.point = pt; tf2::doTransform(in_pt, out_pt, transformStamped); pt = out_pt.point;
+                }
                 if (marker.id == 0 && transformed_marker.points.size() >= 5) {
-                    toggle[0] = 1; std::pair<double, double> pair = get_last_point(transformed_marker.points);
-                    if (pair.first == 0.0 && pair.second == 0.0) { if (!left_lane_history_.empty()) { olp_ = get_last_point(left_lane_history_[0].points, 9.0, 0.0); } }
-                    else { olp_ = pair; left_lane_history_.push_front(transformed_marker); while (left_lane_history_.size() > buffer_size_) left_lane_history_.pop_back(); }
+                    toggle[0] = 1;
+                    olp_ = get_last_point(transformed_marker.points);
                 } else if (marker.id == 1 && transformed_marker.points.size() >= 5) {
-                    toggle[1] = 1; std::pair<double, double> pair = get_last_point(transformed_marker.points);
-                    if (pair.first == 0.0 && pair.second == 0.0) { if (!middle_lane_history_.empty()) { omp_ = get_last_point(middle_lane_history_[0].points, 9.0, 0.0); } }
-                    else { omp_ = pair; middle_lane_history_.push_front(transformed_marker); while (middle_lane_history_.size() > buffer_size_) middle_lane_history_.pop_back(); }
+                    toggle[1] = 1;
+                    omp_ = get_last_point(transformed_marker.points);
                 } else if (marker.id == 2 && transformed_marker.points.size() >= 5) {
-                    toggle[2] = 1; std::pair<double, double> pair = get_last_point(transformed_marker.points);
-                    if (pair.first == 0.0 && pair.second == 0.0) { if (!right_lane_history_.empty()) { orp_ = get_last_point(right_lane_history_[0].points, 9.0, 0.0); } }
-                    else { orp_ = pair; right_lane_history_.push_front(transformed_marker); while (right_lane_history_.size() > buffer_size_) right_lane_history_.pop_back(); }
-                } else {
-                    if (toggle[0] == 0) { if (!left_lane_history_.empty()) { olp_ = get_last_point(left_lane_history_[0].points, 9.0, 0.0); } }
-                    if (toggle[1] == 0) { if (!middle_lane_history_.empty()) { omp_ = get_last_point(middle_lane_history_[0].points, 9.0, 0.0); } }
-                    if (toggle[2] == 0) { if (!right_lane_history_.empty()) { orp_ = get_last_point(right_lane_history_[0].points, 9.0, 0.0); } }
+                    toggle[2] = 1;
+                    orp_ = get_last_point(transformed_marker.points);
                 }
             } catch (tf2::TransformException &ex) {
                 RCLCPP_WARN(this->get_logger(), "Transform failed: %s", ex.what());
@@ -311,6 +306,16 @@ private:
         }
 
         int count_detected = toggle[0] + toggle[1] + toggle[2];
+        
+        // --- NEW: publish lane count only when it changes (avoid spam) ---
+        if (count_detected != last_lane_count_pub_) {
+            std_msgs::msg::Int32 lc_msg;
+            lc_msg.data = count_detected;
+            lanes_pub_->publish(lc_msg);
+            last_lane_count_pub_ = count_detected;
+            RCLCPP_INFO(this->get_logger(), "Lane count changed: %d", count_detected);
+        }
+        // ------------------------------------------------------------------
 
         // === SINGLE LANE (OR ONLY ONE MARKER) CASE WITH SIMPLE RADIUS FILTER + DBSCAN CLUSTERING ===
         if (count_detected == 1 && override_ == "none") {
@@ -328,8 +333,9 @@ private:
                     in_pt.point.x = *iter_x; in_pt.point.y = *iter_y; in_pt.point.z = *iter_z;
                     tf2::doTransform(in_pt, out_pt, transform);
                     double dx = out_pt.point.x - robot_pose_.first; double dy = out_pt.point.y - robot_pose_.second;
-                    // Basic ROI: only forward, within 10m, lateral ±3m
-                    if (dx > 0.0 && dx*dx + dy*dy < 100.0 && std::fabs(dy) < 3.0) {
+                    float TUNABLE_LATERAL_ROI = 5.0; // Adjust this lateral ROI as needed
+                    // Basic ROI: only forward, within 10m, lateral ±Tunable_lateral_roi meters
+                    if (dx > 0.0 && dx*dx + dy*dy < 100.0 && std::fabs(dy) < TUNABLE_LATERAL_ROI) {
                         lane_pts.push_back(out_pt.point);
                     }
                 }
@@ -394,7 +400,7 @@ private:
             return; // end single-lane branch
         }
 
-        if (right_lane_history_.size() < 3 || middle_lane_history_.size() < 3 || left_lane_history_.size() < 3 || override_ != "none") { return; }
+        if (override_ != "none") { return; }
 
         std::pair<double, double> goal;
         if (target_lane_ == "right") { goal.first = (orp_.first + omp_.first) / 2; goal.second = (orp_.second + omp_.second) / 2; }
@@ -403,7 +409,6 @@ private:
         geometry_msgs::msg::PointStamped goal_point; goal_point.header.stamp = this->get_clock()->now(); goal_point.header.frame_id = "odom";
         goal_point.point.x = goal.first; goal_point.point.y = goal.second; goal_point.point.z = 0.0;
         publish_goal(goal_point);
-        debug_markers();
     }
 };
 
