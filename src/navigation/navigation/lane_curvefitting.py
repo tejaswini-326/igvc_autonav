@@ -22,6 +22,49 @@ VERBOSE_UNNESSARY_THINGS = False
 
 MIN_CLUSTERING_DISTANCE = 0.6
 MIN_CLUSTERING_POINTS = 20
+MAX_YELLOW_CLUSTERING_POINTS = 100_000
+
+
+
+
+
+
+def remove_large_clusters(dbscan_model, max_samples):
+    """
+    Post-process a fitted sklearn.cluster.DBSCAN model so that every cluster
+    whose population exceeds *max_samples* is treated as noise.
+
+    Parameters
+    ----------
+    dbscan_model : sklearn.cluster.DBSCAN (already fitted)
+    max_samples  : int
+        Maximum allowed number of points in any cluster.
+
+    Returns
+    -------
+    dbscan_model : the same object, with `.labels_` updated in-place.
+                   All points belonging to an oversized cluster are
+                   relabelled to -1 (noise).
+    """
+    labels = dbscan_model.labels_
+    if labels is None:
+        raise ValueError("DBSCAN model must be fitted before calling this.")
+
+    # count points per cluster id (excluding noise = -1)
+    unique, counts = np.unique(labels[labels != -1], return_counts=True)
+    cluster_sizes = dict(zip(unique, counts))
+
+    # relabel points in clusters that are too large
+    for cid, size in cluster_sizes.items():
+        if size > max_samples:
+            labels[labels == cid] = -1   # mark as noise
+
+    dbscan_model.labels_ = labels  # update in‑place so you can keep using it
+    return dbscan_model
+
+
+
+
 
 class LaneFollowerNode(Node):
     def __init__(self):
@@ -322,6 +365,7 @@ class LaneFollowerNode(Node):
         if len(points_np_yellow) >= MIN_CLUSTERING_POINTS:
             points_xy_yellow = points_np_yellow[:, :2]
             clustering_yellow = DBSCAN(eps=MIN_CLUSTERING_DISTANCE, min_samples=MIN_CLUSTERING_POINTS).fit(points_xy_yellow)
+            clustering_yellow = remove_large_clusters(clustering_yellow, MAX_YELLOW_CLUSTERING_POINTS)
             labels_yellow = clustering_yellow.labels_
 
             # CHANGE 3: Modified logic - filter based on white cluster count

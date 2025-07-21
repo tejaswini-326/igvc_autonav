@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <cmath>
 #include <algorithm>
+#include <chrono>
 
 using std::placeholders::_1;
 
@@ -39,6 +40,8 @@ public:
             "/goal_point", 10, std::bind(&AStarPlanner::goal_callback, this, _1));
 
         path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/sm_planned_path", 10);
+
+        old_path_ = std::make_shared<nav_msgs::msg::Path>();
     }
 
 private:
@@ -48,6 +51,8 @@ private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+    nav_msgs::msg::Path::SharedPtr old_path_;
+
 
     std::pair<int, int> world_to_map(double wx, double wy)
     {
@@ -94,12 +99,13 @@ private:
 
         goal_ = *msg;
 
-        int start_x = 150;
+        int start_x = 155;
         int start_y = 150;
         // Change to actual robot pose
         auto [goal_x, goal_y] = world_to_map(goal_.pose.position.x, goal_.pose.position.y);
 
-        if (VERBOSE_UNNECESSARY_THINGS) RCLCPP_INFO(this->get_logger(), "Planning from (%d, %d) to (%d, %d)", start_x, start_y, goal_x, goal_y);
+        if (VERBOSE_UNNECESSARY_THINGS)
+            RCLCPP_INFO(this->get_logger(), "Planning from (%d, %d) to (%d, %d)", start_x, start_y, goal_x, goal_y);
 
         auto raw_path = a_star(start_x, start_y, goal_x, goal_y);
         raw_path.header.stamp = this->now();
@@ -108,7 +114,7 @@ private:
         // Smooth the path
         auto smoothed_poses = smooth_path(raw_path.poses);
         raw_path.poses = smoothed_poses;
-
+        *old_path_ = raw_path;
         path_pub_->publish(raw_path);
     }
 
@@ -118,7 +124,7 @@ private:
     }
 
     nav_msgs::msg::Path a_star(int start_x, int start_y, int goal_x, int goal_y)
-    {   
+    {
         nav_msgs::msg::Path path_msg;
 
         auto cmp = [](AStarNode *a, AStarNode *b)
@@ -133,8 +139,12 @@ private:
         const int dx[8] = {-1, 1, 0, 0, -1, -1, 1, 1};
         const int dy[8] = {0, 0, -1, 1, -1, 1, -1, 1};
 
+        auto start_time = std::chrono::high_resolution_clock::now();
         while (!open.empty())
         {
+            auto end_time = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> elapsed = end_time - start_time;
+            if(elapsed.count() > 0.3 && old_path_!= nullptr) return *old_path_;
             AStarNode *current = open.top();
             open.pop();
 
@@ -163,7 +173,7 @@ private:
                     continue;
 
                 int cost = costmap_->data[index(nx, ny)];
-                if (cost < 0 || cost > 50)
+                if (cost < 0 || cost > 500)
                     continue;
 
                 float g_new = current->g + std::hypot(dx[i], dy[i]) + cost / 100.0;
@@ -173,6 +183,9 @@ private:
                 open.push(neighbor);
             }
         }
+        // auto end_time = std::chrono::high_resolution_clock::now();
+        // std::chrono::duration<double> elapsed = end_time - start_time;
+        // std::cout<<"TIME TAKEN: "<<elapsed.count()<<'\n';
         return path_msg;
     }
     std::vector<geometry_msgs::msg::PoseStamped> smooth_path(const std::vector<geometry_msgs::msg::PoseStamped> &path, float alpha = 0.009, float beta = 0.4, float tolerance = 0.00001)

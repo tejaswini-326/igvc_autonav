@@ -15,283 +15,360 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 import cv2
+import math
+from collections import deque
 
 from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import Imu
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import Buffer, TransformListener
+import tf_transformations
+
+VERBOSE_UNECESSARY_THINGS = False
+
+
+
+OBJECT_HOLD_SEC = 0.2
+
 
 def transform_to_matrix(tf_msg) -> np.ndarray:
-    """geometry_msgs/TransformStamped → 4×4 float32 homogeneous matrix"""
-    q = tf_msg.transform.rotation
-    t = tf_msg.transform.translation
-    qx, qy, qz, qw = q.x, q.y, q.z, q.w
-    R = np.array([
-        [1 - 2 * (qy*qy + qz*qz),     2 * (qx*qy - qz*qw),     2 * (qx*qz + qy*qw)],
-        [2 * (qx*qy + qz*qw),         1 - 2 * (qx*qx + qz*qz), 2 * (qy*qz - qx*qw)],
-        [2 * (qx*qz - qy*qw),         2 * (qy*qz + qx*qw),     1 - 2 * (qx*qx + qy*qy)]
-    ], dtype=np.float32)
-    M = np.eye(4, dtype=np.float32)
-    M[:3, :3] = R
-    M[:3, 3]  = np.array([t.x, t.y, t.z], dtype=np.float32)
-    return M
+	"""geometry_msgs/TransformStamped → 4×4 float32 homogeneous matrix"""
+	q = tf_msg.transform.rotation
+	t = tf_msg.transform.translation
+	qx, qy, qz, qw = q.x, q.y, q.z, q.w
+	R = np.array([
+		[1 - 2 * (qy*qy + qz*qz),     2 * (qx*qy - qz*qw),     2 * (qx*qz + qy*qw)],
+		[2 * (qx*qy + qz*qw),         1 - 2 * (qx*qx + qz*qz), 2 * (qy*qz - qx*qw)],
+		[2 * (qx*qz - qy*qw),         2 * (qy*qz + qx*qw),     1 - 2 * (qx*qx + qy*qy)]
+	], dtype=np.float32)
+	M = np.eye(4, dtype=np.float32)
+	M[:3, :3] = R
+	M[:3, 3]  = np.array([t.x, t.y, t.z], dtype=np.float32)
+	return M
 
 
 def pc2_numpy_xyz(msg: PointCloud2) -> np.ndarray:
-    """
-    Fast zero-copy extraction of an (N,3) float32 array (x,y,z) from a
-    sensor_msgs/PointCloud2, regardless of point_step.
-    """
-    # dtype whose itemsize == point_step so NumPy respects the stride
-    dtype_xyz = np.dtype({'names': ('x', 'y', 'z'),
-                          'formats': ('<f4', '<f4', '<f4'),
-                          'itemsize': msg.point_step})
-    cloud = np.frombuffer(msg.data, dtype=dtype_xyz,
-                          count=msg.width * msg.height)
-    return np.vstack((cloud['x'], cloud['y'], cloud['z'])).T.astype(np.float32)
+	"""
+	Fast zero-copy extraction of an (N,3) float32 array (x,y,z) from a
+	sensor_msgs/PointCloud2, regardless of point_step.
+	"""
+	# dtype whose itemsize == point_step so NumPy respects the stride
+	dtype_xyz = np.dtype({'names': ('x', 'y', 'z'),
+						  'formats': ('<f4', '<f4', '<f4'),
+						  'itemsize': msg.point_step})
+	cloud = np.frombuffer(msg.data, dtype=dtype_xyz,
+						  count=msg.width * msg.height)
+	return np.vstack((cloud['x'], cloud['y'], cloud['z'])).T.astype(np.float32)
 
 
 class CostmapNode(Node):
-    def __init__(self):
-        super().__init__('costmap_node_fast_debug')
+	def __init__(self):
+		super().__init__('costmap_node_fast_debug')
 
-        # ----------------------- map parameters ---------------------------
-        self.resolution = 0.067   # metres / cell
-        self.width      = 300
-        self.height     = 300
-        self.frame_id   = 'odom'
+		# ----------------------- map parameters ---------------------------
+		self.resolution = 0.067   # metres / cell
+		self.width      = 300
+		self.height     = 300
+		self.frame_id   = 'odom'
 
-        # --------------------- pre-allocated buffers ----------------------
-        self._empty   = np.zeros((self.height, self.width),  np.uint8)
-        self._scratch = np.zeros_like(self._empty)           # reusable work buf
-        self.white_map  = self._empty.copy()
-        self.yellow_map = self._empty.copy()
-        self.object_map = self._empty.copy()
-
-        # --------------------------- I/O ----------------------------------
-        qos = 10
-        self.create_subscription(PointCloud2, '/object_pc',
-                                 self._object_cb, qos)
-        self.create_subscription(PointCloud2, '/white_lane_points',
-                                 self._white_cb,  qos)
-        self.create_subscription(MarkerArray, '/lane_fitted_yellow',
-                                 self._yellow_cb, qos)
-        self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', qos)
-
-        # ----------------------------- TF ---------------------------------
-        self.tf_buffer   = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
-
-        # --------------------------- state --------------------------------
-        self._object_pc = self._white_pc = self._yellow_pc = None
-        self._new_object = self._new_white = self._new_yellow = False
-        self._T_odom_cam = np.eye(4, dtype=np.float32)
-        self.origin_x = self.origin_y = 0.0
-
-        # ---------------------------- timer -------------------------------
-        self.create_timer(0.05, self._timer_cb)   # 10 Hz
-
-        # --------------------- logger level tweak -------------------------
-        # Set ROS_CONSOLE_STDOUT_LINE_BUFFERED=1 for live prints in docker
-        # level = os.getenv('COSTMAP_DEBUG_LEVEL', 'info').lower()
-        # self.get_logger().info(f'Cost-map node up (log level = {level})')
-        # self.get_logger().set_level(
-        #     rclpy.logging.LoggingSeverity.DEBUG
-        #     if level == 'debug' else rclpy.logging.LoggingSeverity.INFO)
-
-    # ---------------------- subscriber callbacks --------------------------
-    def _object_cb(self, msg):  self._object_pc, self._new_object = msg, True
-    def _white_cb(self,  msg):  self._white_pc,  self._new_white  = msg, True
-    def _yellow_cb(self, msg: MarkerArray):
-        points = []
-        for marker in msg.markers:
-            for p in marker.points:
-                points.append([p.x, p.y, p.z])
-        if points:
-            self._yellow_pc = np.array(points, dtype=np.float32)
-            self._new_yellow = True
-        else:
-            self._yellow_pc = None
-            self._new_yellow = False
+		# --------------------- pre-allocated buffers ----------------------
+		self._empty   = np.zeros((self.height, self.width),  np.uint8)
+		self._scratch = np.zeros_like(self._empty)           # reusable work buf
+		self.white_map  = self._empty.copy()
+		self.yellow_map = self._empty.copy()
+		self.object_map = self._empty.copy()
+		self.imu_yaw = None
+		self.yaw_buffer = deque(maxlen=10)
+		# --------------------------- I/O ----------------------------------
+		qos = 10
+		self.create_subscription(PointCloud2, '/object_pc',
+								 self._object_cb, qos)
+		self.create_subscription(PointCloud2, '/white_lane_points',
+								 self._white_cb,  qos)
+		self.create_subscription(MarkerArray, '/lane_fitted_yellow',
+								 self._yellow_cb, qos)
+		self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', qos)
+		self.create_subscription(Imu, '/imu', self.imu_callback, 10)
 
 
+		# ----------------------------- TF ---------------------------------
+		self.tf_buffer   = Buffer()
+		self.tf_listener = TransformListener(self.tf_buffer, self)
 
-    # ---------------------------- timer loop -----------------------------
-    def _timer_cb(self):
-        # ---------- TF lookup --------------------------------------------
-        try:
-            tf = self.tf_buffer.lookup_transform('odom', 'camera_link',
-                                                 rclpy.time.Time())
-            self._T_odom_cam = transform_to_matrix(tf)
-            rx, ry = tf.transform.translation.x, tf.transform.translation.y
-            self.origin_x = rx - (self.width  * self.resolution) / 2.0
-            self.origin_y = ry - (self.height * self.resolution) / 2.0
-        except Exception as e:
-            self.get_logger().warn(f'TF lookup failed: {e}')
-            return
+		# --------------------------- state --------------------------------
+		self._object_pc = self._white_pc = self._yellow_pc = None
+		self._new_object = self._new_white = self._new_yellow = False
+		self._T_odom_cam = np.eye(4, dtype=np.float32)
+		self.origin_x = self.origin_y = 0.0
 
-        # self.get_logger().debug(
-        #     f"TF OK  | origin=({self.origin_x:.2f},{self.origin_y:.2f})")
+		# ---------------------------- timer -------------------------------
+		self.create_timer(0.05, self._timer_cb)   # 10 Hz
 
-        # ---------- regenerate each layer --------------------------------
-        if self._new_white and self._white_pc is not None:
-            self.white_map[:] = self._make_layer(self._white_pc, 250, 'white')
-            self._new_white = False
-        if self._new_yellow and self._yellow_pc is not None:
-            self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 250, 'yellow')
-            self._new_yellow = False
+		# --------------------- logger level tweak -------------------------
+		# Set ROS_CONSOLE_STDOUT_LINE_BUFFERED=1 for live prints in docker
+		# level = os.getenv('COSTMAP_DEBUG_LEVEL', 'info').lower()
+		# self.get_logger().info(f'Cost-map node up (log level = {level})')
+		# self.get_logger().set_level(
+		#     rclpy.logging.LoggingSeverity.DEBUG
+		#     if level == 'debug' else rclpy.logging.LoggingSeverity.INFO)
 
-        if self._new_object and self._object_pc is not None:
-            self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
-            self._new_object = False
+	# ---------------------- subscriber callbacks --------------------------
+	def _object_cb(self, msg):  self._object_pc, self._new_object = msg, True
+	def _white_cb(self,  msg):  self._white_pc,  self._new_white  = msg, True
+	def _yellow_cb(self, msg: MarkerArray):
+		points = []
+		for marker in msg.markers:
+			for p in marker.points:
+				points.append([p.x, p.y, p.z])
+		if points:
+			self._yellow_pc = np.array(points, dtype=np.float32)
+			self._new_yellow = True
+		else:
+			self._yellow_pc = None
+			self._new_yellow = False
 
-        # ---------- fuse + distance penalty + publish ----------------------
-        combined = np.maximum.reduce([self.white_map,
-                                    self.yellow_map,
-                                    self.object_map])
+	def imu_callback(self, msg):
+			try:
+				q = msg.orientation
+				quat = [q.x, q.y, q.z, q.w]
+				_, _, yaw = tf_transformations.euler_from_quaternion(quat)
 
-        penalty  = self._distance_penalty(combined, thresh=200,
-                                        radius_m=1.5, steepness=1.0)
+				self.imu_yaw = yaw
+				if VERBOSE_UNECESSARY_THINGS: self.get_logger().info("IMU yaw = {:.2f}".format(yaw))
+			except Exception as e:
+				if VERBOSE_UNECESSARY_THINGS: self.get_logger().warn(f"[IMU callback error] {e}")
 
-        final    = np.maximum(combined, penalty)      # 0-100 uint8
+			self.yaw_buffer.append(yaw)
 
-        self._publish_costmap(final, self.get_clock().now().to_msg())
+			if len(self.yaw_buffer) > 2:
+				yaw_array = np.unwrap(np.array(self.yaw_buffer))
+
+				median = np.median(yaw_array)
+				deviation = np.abs(yaw_array - median)
+				std_dev = np.std(yaw_array)
+
+				if std_dev > 0.05:
+					filtered_yaws = yaw_array[deviation < 1.5 * std_dev]
+				else:
+					filtered_yaws = yaw_array 
+
+				if len(filtered_yaws) > 0:
+					self.imu_yaw = float(np.mean(filtered_yaws))
+				else:
+					self.imu_yaw = float(median)
+			else:
+				self.imu_yaw = yaw
+			#self.get_logger().info("IMU callback received.")
+
+	def draw_v_lines(self):
+		center_x = 125
+		center_y = self.height // 2
+		center = (center_x, center_y)
+
+		# Get current yaw from IMU
+		angle_rad = self.imu_yaw  # in radians
+
+		# Define angles for the V arms (e.g., ±30 degrees from heading)
+		spread_deg = 50
+		left_angle = angle_rad + np.radians(spread_deg)
+		right_angle = angle_rad - np.radians(spread_deg)
+
+		# Define length of each arm
+		line_length = 400  # in pixels (you can tweak this)
+
+		# Compute endpoints
+		def endpoint(angle):
+			dx = int(np.cos(angle) * line_length)
+			dy = int(np.sin(angle) * line_length)
+			return (center_x + dx, center_y + dy)  # minus dy since y increases up
+
+		pt1 = endpoint(left_angle)
+		pt2 = endpoint(right_angle)
+
+		# Create mask and draw thick lines
+		v_line_layer = np.zeros_like(self.white_map, dtype=np.uint8)
+		cv2.line(v_line_layer, center, pt1, color=250, thickness=5)
+		cv2.line(v_line_layer, center, pt2, color=250, thickness=5)
+
+		return v_line_layer
+	# ---------------------------- timer loop -----------------------------
+	def _timer_cb(self):
+		# ---------- TF lookup --------------------------------------------
+		try:
+			tf = self.tf_buffer.lookup_transform('odom', 'camera_link',
+												 rclpy.time.Time())
+			self._T_odom_cam = transform_to_matrix(tf)
+			rx, ry = tf.transform.translation.x, tf.transform.translation.y
+			self.origin_x = rx - (self.width  * self.resolution) / 2.0
+			self.origin_y = ry - (self.height * self.resolution) / 2.0
+		except Exception as e:
+			self.get_logger().warn(f'TF lookup failed: {e}')
+			return
+
+		# self.get_logger().debug(
+		#     f"TF OK  | origin=({self.origin_x:.2f},{self.origin_y:.2f})")
+
+		# ---------- regenerate each layer --------------------------------
+		if self._new_white and self._white_pc is not None:
+			self.white_map[:] = self._make_layer(self._white_pc, 250, 'white')
+			self._new_white = False
+		if self._new_yellow and self._yellow_pc is not None:
+			self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 250, 'yellow')
+			self._new_yellow = False
+
+		if self._object_pc is not None:
+			self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
+			self._new_object = False
+		# rear_mask_layer = np.zeros_like(self.white_map, dtype=np.uint8)
+		# rear_mask_layer[:, :math.ceil(1.15*(self.width // 2))] = 250
+		roi_layer = self.draw_v_lines()
+		# ---------- fuse + distance penalty + publish ----------------------
+		combined = np.maximum.reduce([self.white_map,
+									self.yellow_map,
+									self.object_map,
+									roi_layer])
+
+		penalty  = self._distance_penalty(combined, thresh=200,radius_m=1.5, steepness=1.0)
+
+		final    = np.maximum(combined, penalty)      # 0-100 uint8
+		self._publish_costmap(final, self.get_clock().now().to_msg())
 
 
-    # ------------------------ layer construction -------------------------
-    def _make_layer(self, pc_msg: PointCloud2, value: int, tag: str) -> np.ndarray:
-        # 1) cloud → NumPy -------------------------------------------------
-        pts = pc2_numpy_xyz(pc_msg)
-        # self.get_logger().debug(f"[{tag}] cloud points: {pts.shape[0]}")
-        if pts.size == 0:
-            return self._empty
+	# ------------------------ layer construction -------------------------
+	def _make_layer(self, pc_msg: PointCloud2, value: int, tag: str) -> np.ndarray:
+		# 1) cloud → NumPy -------------------------------------------------
+		pts = pc2_numpy_xyz(pc_msg)
+		# self.get_logger().debug(f"[{tag}] cloud points: {pts.shape[0]}")
+		if pts.size == 0:
+			return self._empty
 
-        # 2) transform -----------------------------------------------------
-        xyz1 = np.hstack((pts, np.ones((pts.shape[0], 1), np.float32)))
-        xyz  = (self._T_odom_cam @ xyz1.T).T[:, :3]          # (N,3)
+		# 2) transform -----------------------------------------------------
+		xyz1 = np.hstack((pts, np.ones((pts.shape[0], 1), np.float32)))
+		xyz  = (self._T_odom_cam @ xyz1.T).T[:, :3]          # (N,3)
 
-        # 3) map indices ---------------------------------------------------
-        mx_raw = (xyz[:, 0] - self.origin_x) / self.resolution
-        my_raw = (xyz[:, 1] - self.origin_y) / self.resolution
-        valid  = ((mx_raw >= 0) & (mx_raw < self.width) &
-                  (my_raw >= 0) & (my_raw < self.height))
-                #   (mx_raw > 100))             # ignore rear half
-        vcount = int(np.count_nonzero(valid))
-        # self.get_logger().debug(f"[{tag}] valid pts: {vcount}")
-        if vcount == 0:
-            return self._empty
+		# 3) map indices ---------------------------------------------------
+		mx_raw = (xyz[:, 0] - self.origin_x) / self.resolution
+		my_raw = (xyz[:, 1] - self.origin_y) / self.resolution
+		valid  = ((mx_raw >= 0) & (mx_raw < self.width) &
+				  (my_raw >= 0) & (my_raw < self.height))
+				#   (mx_raw > 100))             # ignore rear half
+		vcount = int(np.count_nonzero(valid))
+		# self.get_logger().debug(f"[{tag}] valid pts: {vcount}")
+		if vcount == 0:
+			return self._empty
 
-        mx = mx_raw[valid].astype(np.int32)
-        my = my_raw[valid].astype(np.int32)
+		mx = mx_raw[valid].astype(np.int32)
+		my = my_raw[valid].astype(np.int32)
 
-        # 4) draw points ---------------------------------------------------
-        layer = self._scratch
-        layer.fill(0)
-        layer[my, mx] = value
+		# 4) draw points ---------------------------------------------------
+		layer = self._scratch
+		layer.fill(0)
+		layer[my, mx] = value
 
-        # 5) gaussian blur -------------------------------------------------
-        #blurred = layer
-        blurred = cv2.GaussianBlur(layer.astype(np.float32),(5, 5), sigmaX=60.0)
-        gmax = float(blurred.max())
-        # self.get_logger().debug(f"[{tag}] gmax before scale: {gmax:.1f}")
-        if gmax > 0.0:
-            power = 2.0 if value == 245 else 0.8
-            blurred = ((blurred / (gmax ** power)) * 100).astype(np.uint8)
-            np.maximum(layer, blurred, out=layer)
+		# 5) gaussian blur -------------------------------------------------
+		#blurred = layer
+		blurred = cv2.GaussianBlur(layer.astype(np.float32),(5, 5), sigmaX=60.0)
+		gmax = float(blurred.max())
+		# self.get_logger().debug(f"[{tag}] gmax before scale: {gmax:.1f}")
+		if gmax > 0.0:
+			power = 2.0 if value == 245 else 0.8
+			blurred = ((blurred / (gmax ** power)) * 100).astype(np.uint8)
+			np.maximum(layer, blurred, out=layer)
 
-        # copy because scratch will be reused next layer
-        return layer.copy()
-    
-    def _make_layer_numpy(self, pts: np.ndarray, value: int, tag: str) -> np.ndarray:
-        if pts is None or pts.size == 0:
-            return self._empty
+		# copy because scratch will be reused next layer
+		return layer.copy()
+	
+	def _make_layer_numpy(self, pts: np.ndarray, value: int, tag: str) -> np.ndarray:
+		if pts is None or pts.size == 0:
+			return self._empty
 
-        xyz1 = np.hstack((pts, np.ones((pts.shape[0], 1), np.float32)))
-        xyz  = (self._T_odom_cam @ xyz1.T).T[:, :3]
+		xyz1 = np.hstack((pts, np.ones((pts.shape[0], 1), np.float32)))
+		xyz  = (self._T_odom_cam @ xyz1.T).T[:, :3]
 
-        mx_raw = (xyz[:, 0] - self.origin_x) / self.resolution
-        my_raw = (xyz[:, 1] - self.origin_y) / self.resolution
-        valid  = ((mx_raw >= 0) & (mx_raw < self.width) &
-                (my_raw >= 0) & (my_raw < self.height))
-        vcount = int(np.count_nonzero(valid))
-        if vcount == 0:
-            return self._empty
+		mx_raw = (xyz[:, 0] - self.origin_x) / self.resolution
+		my_raw = (xyz[:, 1] - self.origin_y) / self.resolution
+		valid  = ((mx_raw >= 0) & (mx_raw < self.width) &
+				(my_raw >= 0) & (my_raw < self.height))
+		vcount = int(np.count_nonzero(valid))
+		if vcount == 0:
+			return self._empty
 
-        mx = mx_raw[valid].astype(np.int32)
-        my = my_raw[valid].astype(np.int32)
+		mx = mx_raw[valid].astype(np.int32)
+		my = my_raw[valid].astype(np.int32)
 
-        layer = self._scratch
-        layer.fill(0)
-        layer[my, mx] = value
+		layer = self._scratch
+		layer.fill(0)
+		layer[my, mx] = value
 
-        blurred = cv2.GaussianBlur(layer.astype(np.float32), (5, 5), sigmaX=60.0)
-        gmax = float(blurred.max())
-        if gmax > 0.0:
-            power = 2.0 if value == 245 else 0.8
-            blurred = ((blurred / (gmax ** power)) * 100).astype(np.uint8)
-            np.maximum(layer, blurred, out=layer)
+		blurred = cv2.GaussianBlur(layer.astype(np.float32), (5, 5), sigmaX=60.0)
+		gmax = float(blurred.max())
+		if gmax > 0.0:
+			power = 2.0 if value == 245 else 0.8
+			blurred = ((blurred / (gmax ** power)) * 100).astype(np.uint8)
+			np.maximum(layer, blurred, out=layer)
 
-        return layer.copy()
+		return layer.copy()
 
-    def _distance_penalty(self, grid: np.ndarray,
-                        thresh: int = 200,
-                        radius_m: float = 1.5,
-                        steepness: float = 1) -> np.ndarray:
-        """
-        Turn a binary 'obstacle mask' (anything ≥ `thresh`) into a smooth
-        clearance penalty 0‥100 using an Euclidean distance transform.
+	def _distance_penalty(self, grid: np.ndarray,
+						thresh: int = 200,
+						radius_m: float = 1.5,
+						steepness: float = 1) -> np.ndarray:
+		"""
+		Turn a binary 'obstacle mask' (anything ≥ `thresh`) into a smooth
+		clearance penalty 0‥100 using an Euclidean distance transform.
 
-        • `radius_m`    – how far (metres) the penalty should reach
-        • `steepness`   – >1 ⇒ sharper walls, <1 ⇒ gentler slope
-        """
-        # 1) binary obstacle mask  (lane pixels, objects, walls …)
-        occ = (grid >= thresh).astype(np.uint8)
+		• `radius_m`    – how far (metres) the penalty should reach
+		• `steepness`   – >1 ⇒ sharper walls, <1 ⇒ gentler slope
+		"""
+		# 1) binary obstacle mask  (lane pixels, objects, walls …)
+		occ = (grid >= thresh).astype(np.uint8)
 
-        # 2) OpenCV distance-transform on the *inverted* mask
-        dist_cells = cv2.distanceTransform(255 - occ * 255,
-                                        cv2.DIST_L2, 5).astype(np.float32)
+		# 2) OpenCV distance-transform on the *inverted* mask
+		dist_cells = cv2.distanceTransform(255 - occ * 255,
+										cv2.DIST_L2, 5).astype(np.float32)
 
-        # 3) metres → normalised 0-1 “closeness”
-        dist_m     = dist_cells * self.resolution
-        closeness  = np.clip((radius_m - dist_m) / radius_m, 0.0, 1.0)
+		# 3) metres → normalised 0-1 “closeness”
+		dist_m     = dist_cells * self.resolution
+		closeness  = np.clip((radius_m - dist_m) / radius_m, 0.0, 1.0)
 
-        # 4) non-linear mapping and scale to 0-100 int8
-        penalty    = (closeness ** steepness) * 200.0
-        return penalty.astype(np.uint8)
+		# 4) non-linear mapping and scale to 0-100 int8
+		penalty    = (closeness ** steepness) * 200.0
+		return penalty.astype(np.uint8)
 
-    # -------------------------- grid publisher ---------------------------
-    @staticmethod
-    def _scale_to_ogrid(grid: np.ndarray) -> np.ndarray:
-        """
-        Convert uint8 [0,255] → int8 [0,100] as required by nav2.
-        We use *float* scaling first to avoid the bug that produced only 0.
-        """
-        return ((grid.astype(np.float32) / 255.0) * 100.0 + 0.5).astype(np.int8)
+	# -------------------------- grid publisher ---------------------------
+	@staticmethod
+	def _scale_to_ogrid(grid: np.ndarray) -> np.ndarray:
+		"""
+		Convert uint8 [0,255] → int8 [0,100] as required by nav2.
+		We use *float* scaling first to avoid the bug that produced only 0.
+		"""
+		return ((grid.astype(np.float32) / 255.0) * 100.0 + 0.5).astype(np.int8)
 
-    def _publish_costmap(self, grid: np.ndarray, stamp):
-        msg = OccupancyGrid()
-        msg.header = Header(stamp=stamp, frame_id=self.frame_id)
-        msg.info.resolution = self.resolution
-        msg.info.width      = self.width
-        msg.info.height     = self.height
-        msg.info.origin.position.x = float(self.origin_x)
-        msg.info.origin.position.y = float(self.origin_y)
-        msg.info.origin.orientation.w = 1.0
+	def _publish_costmap(self, grid: np.ndarray, stamp):
+		msg = OccupancyGrid()
+		msg.header = Header(stamp=stamp, frame_id=self.frame_id)
+		msg.info.resolution = self.resolution
+		msg.info.width      = self.width
+		msg.info.height     = self.height
+		msg.info.origin.position.x = float(self.origin_x)
+		msg.info.origin.position.y = float(self.origin_y)
+		msg.info.origin.orientation.w = 1.0
 
-        scaled = self._scale_to_ogrid(grid)
-        nz = int(np.count_nonzero(scaled))
-        # self.get_logger().debug(f"publish grid: non-zero cells = {nz}")
-        msg.data = scaled.flatten().tolist()
-        self.costmap_pub.publish(msg)
+		scaled = self._scale_to_ogrid(grid)
+		nz = int(np.count_nonzero(scaled))
+		# self.get_logger().debug(f"publish grid: non-zero cells = {nz}")
+		msg.data = scaled.flatten().tolist()
+		self.costmap_pub.publish(msg)
 
 def main(args=None):
-    rclpy.init(args=args)
-    node = CostmapNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+	rclpy.init(args=args)
+	node = CostmapNode()
+	rclpy.spin(node)
+	node.destroy_node()
+	rclpy.shutdown()
 
 
 if __name__ == '__main__':
-    main()
+	main()
