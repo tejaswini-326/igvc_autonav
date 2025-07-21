@@ -24,7 +24,7 @@ from tf2_ros import Buffer, TransformListener
 
 
 
-OBJECT_HOLD_SEC = 0.3
+OBJECT_HOLD_SEC = 0.2
 
 
 def transform_to_matrix(tf_msg) -> np.ndarray:
