@@ -28,6 +28,11 @@ import tf_transformations
 
 VERBOSE_UNECESSARY_THINGS = False
 
+
+
+OBJECT_HOLD_SEC = 0.2
+
+
 def transform_to_matrix(tf_msg) -> np.ndarray:
 	"""geometry_msgs/TransformStamped → 4×4 float32 homogeneous matrix"""
 	q = tf_msg.transform.rotation
