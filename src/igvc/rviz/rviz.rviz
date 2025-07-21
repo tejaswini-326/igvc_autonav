@@ -490,6 +490,46 @@ Visualization Manager:
         Reliability Policy: Reliable
         Durability Policy: Volatile
       Value: true
+
+    # ── Goal‑point pose ─────────────────────────────────────────────────────
+    - Class: rviz_default_plugins/Pose           # geometry_msgs/PoseStamped
+      Name: Goal Point
+      Enabled: true
+      Arrow Color: 0; 255; 0                    # green
+      Shaft Length: 0.30
+      Arrow Shaft Diameter: 0.03
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /goal_point
+      Value: true
+
+    # ── Lane‑visualization markers ──────────────────────────────────────────
+    - Class: rviz_default_plugins/MarkerArray         # MarkerArray works here too
+      Name: Lane Visualization
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lane_visualization
+      Value: true
+
+    # ── Debug‑points markers ────────────────────────────────────────────────
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Debug Points
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug_points
+      Value: true
+
       
   Enabled: true
   Global Options:

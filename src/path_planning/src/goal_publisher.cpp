@@ -60,7 +60,6 @@ public:
 
         override_ = "none";
         target_lane_ = "right";
-        current_lane_ = "right";
 
         lane_history_memory_buffer_size_ = 10;
         RCLCPP_INFO(this->get_logger(), "GoalPublisher node initialized");
@@ -79,7 +78,6 @@ private:
     std::map<std::string, geometry_msgs::msg::Point> detected_objects_;
 
     std::string target_lane_;
-    std::string current_lane_;
     size_t lane_history_memory_buffer_size_;
     std::string override_;
     std::pair<double, double> olp_, omp_, orp_;
@@ -102,8 +100,10 @@ private:
     void override_callback_(const std_msgs::msg::String::SharedPtr msg)
     {
         override_ = msg->data;
-        RCLCPP_INFO(this->get_logger(), "Overriding goal publisher\n");
+        target_lane_ = "right";
+        RCLCPP_INFO(this->get_logger(), "Received from /intersection: '%s'", override_.c_str());
     }
+
     void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
     {
         robot_pose_.first = msg->pose.pose.position.x;
@@ -312,6 +312,8 @@ private:
             "traffic barrel", "cone", "tire"};
 
         bool corridor_blocked = false;
+        std::string blocking_label;                       // NEW: store obstacle name
+
         for (const auto &[label, p] : detected_objects_)
         {
             if (kObstacles.find(label) == kObstacles.end()) continue;
@@ -324,20 +326,32 @@ private:
             else
                 inside = is_between_lanes(orp_, omp_, obj);   // between right & mid
 
-            if (inside) { corridor_blocked = true; break; }
+            if (inside) {
+                corridor_blocked = true;
+                blocking_label = label;                      // NEW: remember which obstacle
+                break;
+            }
         }
 
         auto now = this->get_clock()->now();
-        if (corridor_blocked && (now - last_lane_switch_) > rclcpp::Duration::from_seconds(MINIMUM_TIME_BEFORE_SWITCHING_LANES_AGAIN))
+        if (corridor_blocked &&
+            (now - last_lane_switch_) >
+                rclcpp::Duration::from_seconds(MINIMUM_TIME_BEFORE_SWITCHING_LANES_AGAIN))
         {
+            const std::string prev_lane = target_lane_;      // NEW: lane we’re leaving
             target_lane_ = (target_lane_ == "left" ? "right" : "left");
             last_lane_switch_ = now;
+
             RCLCPP_WARN(this->get_logger(),
-                        "Obstacle detected between %s & middle ‑> switching to %s lane",
-                        (target_lane_ == "left" ? "right" : "left"),
-                        target_lane_.c_str());
+                "Obstacle '%s' detected between %s & middle — switching from %s to %s lane",
+                blocking_label.c_str(),
+                prev_lane.c_str(),   // corridor: prev lane ↔ middle
+                prev_lane.c_str(),   // leaving
+                target_lane_.c_str() // entering
+            );
         }
         //---------------------------------------------------------------------
+
 
 
 
@@ -384,6 +398,8 @@ private:
 
     void object_data_callback(const object_detection::msg::ObjectArray::SharedPtr msg)
     {
+        detected_objects_.clear();
+        
         for (const auto &obj : msg->objects)
         {
             geometry_msgs::msg::PointStamped in_pt, out_pt;
