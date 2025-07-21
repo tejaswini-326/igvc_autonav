@@ -99,12 +99,13 @@ private:
 
         goal_ = *msg;
 
-        int start_x = 150;
+        int start_x = 165;
         int start_y = 150;
         // Change to actual robot pose
         auto [goal_x, goal_y] = world_to_map(goal_.pose.position.x, goal_.pose.position.y);
 
-        if (VERBOSE_UNNECESSARY_THINGS) RCLCPP_INFO(this->get_logger(), "Planning from (%d, %d) to (%d, %d)", start_x, start_y, goal_x, goal_y);
+        if (VERBOSE_UNNECESSARY_THINGS)
+            RCLCPP_INFO(this->get_logger(), "Planning from (%d, %d) to (%d, %d)", start_x, start_y, goal_x, goal_y);
 
         auto raw_path = a_star(start_x, start_y, goal_x, goal_y);
         raw_path.header.stamp = this->now();
@@ -123,7 +124,7 @@ private:
     }
 
     nav_msgs::msg::Path a_star(int start_x, int start_y, int goal_x, int goal_y)
-    {   
+    {
         nav_msgs::msg::Path path_msg;
 
         auto cmp = [](AStarNode *a, AStarNode *b)
