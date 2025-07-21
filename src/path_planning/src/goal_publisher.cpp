@@ -8,6 +8,9 @@
 #include "std_msgs/msg/string.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "object_detection/msg/object_array.hpp"
+#include <sstream>
+#include <iomanip>
+
 
 #include <vector>
 #include <algorithm>
@@ -58,6 +61,8 @@ public:
         object_data_sub_ = this->create_subscription<object_detection::msg::ObjectArray>(
             "/object_data", 10, std::bind(&GoalPublisher::object_data_callback, this, _1));
 
+        distance_viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/a_goalpub_debug_distances", 10);     
+
         override_ = "none";
         target_lane_ = "right";
 
@@ -71,6 +76,7 @@ private:
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr override_sub_;
     rclcpp::Subscription<object_detection::msg::ObjectArray>::SharedPtr object_data_sub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr distance_viz_pub_;  
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -110,33 +116,166 @@ private:
         robot_pose_.second = msg->pose.pose.position.y;
     }
 
-    std::pair<double, double> get_last_point(const std::vector<geometry_msgs::msg::Point> &points, double max_distance = 7.0, double min_distance = 4.0)
+
+
+
+
+
+
+
+    std::pair<double, double>
+    get_last_point(const std::vector<geometry_msgs::msg::Point> &points,
+                double max_distance = 7.0,
+                double min_distance = 4.0,
+                bool   show_text_points = true)
     {
-        double max_distance_squared = 0.0;
-        pt ans;
-        ans.x = 0.0;
-        ans.y = 0.0;
-        for (const pt &p : points)
-        {
-            // cout << "POINT : (" << p.x << ", " << p.y << ")\n";
-            double dx = p.x - robot_pose_.first;
-            double dy = p.y - robot_pose_.second;
-            double current_distance_squared = dx * dx + dy * dy;
-            // cout << "CURRENT DISTANCE SQUARED: " << current_distance_squared << "\n";
+    using visualization_msgs::msg::Marker;
+    using visualization_msgs::msg::MarkerArray;
+    using geometry_msgs::msg::Point;
+    using std_msgs::msg::ColorRGBA;
 
-            if (current_distance_squared >= min_distance * min_distance &&
-                current_distance_squared <= max_distance * max_distance &&
-                current_distance_squared > max_distance_squared)
-            {
-                ans = p;
-                max_distance_squared = current_distance_squared;
-            }
+    const rclcpp::Time stamp = now();
+
+    double max_distance_sq = 0.0;
+    Point  best_pt;   // default zeros
+
+    /* -------- Marker: candidate points (sphere list) -------- */
+    Marker pts;
+    pts.header.frame_id = "odom";          // <-- change if you use another fixed frame
+    pts.header.stamp    = stamp;
+    pts.ns   = "distance_debug";
+    pts.id   = 0;
+    pts.type = Marker::SPHERE_LIST;
+    pts.action = Marker::ADD;
+    pts.scale.x = pts.scale.y = pts.scale.z = 0.12;
+    pts.lifetime = rclcpp::Duration(0,0);  // forever until replaced
+
+    /* -------- We'll collect optional TEXT markers in a vector -------- */
+    MarkerArray markers;
+    std::vector<Marker> text_markers; text_markers.reserve(points.size());
+
+    // Precompute thresholds^2
+    const double min_sq = min_distance * min_distance;
+    const double max_sq = max_distance * max_distance;
+
+    /* -------- Iterate over points -------- */
+    uint32_t text_id = 100;   // start text IDs well above 0/1/2 we use elsewhere
+    size_t in_window_count = 0;
+
+    for (const auto &p : points)
+    {
+        double dx = p.x - robot_pose_.first;
+        double dy = p.y - robot_pose_.second;
+        double dist_sq = dx*dx + dy*dy;
+
+        // Colour bucket
+        ColorRGBA c;
+        if (dist_sq < min_sq) { c.r=1.0; c.g=0.0; c.b=0.0; c.a=1.0; }             // RED  too close
+        else if (dist_sq > max_sq) { c.r=0.5; c.g=0.5; c.b=0.5; c.a=0.4; }        // GREY too far
+        else { c.r=0.0; c.g=1.0; c.b=0.0; c.a=1.0; in_window_count++; }           // GREEN in range
+
+        pts.points.push_back(p);
+        pts.colors.push_back(c);
+
+        // Track furthest in window
+        if (dist_sq >= min_sq && dist_sq <= max_sq && dist_sq > max_distance_sq) {
+        best_pt = p;
+        max_distance_sq = dist_sq;
         }
-        // cout << "DISTANCE SQUARED: " << max_distance_squared << " CALCULATED: (" << ans.x << ", " << ans.y << ")\n";
-        // cout << "ROBOT POSITION CALCULATED: (" << robot_pose_.first << ", " << robot_pose_.second << ")\n";
 
-        return {ans.x, ans.y};
+        // Optional per-point label (only for points in window, else unreadable)
+        if (show_text_points && dist_sq >= min_sq && dist_sq <= max_sq)
+        {
+        Marker txt;
+        txt.header = pts.header;
+        txt.ns     = "distance_debug_txt";
+        txt.id     = text_id++;                   // unique per publish cycle
+        txt.type   = Marker::TEXT_VIEW_FACING;
+        txt.action = Marker::ADD;
+        txt.pose.position = p;
+        txt.pose.position.z += 0.15;              // float above the sphere
+        txt.scale.z = 0.30;                       // text height in meters
+        txt.color.r = 1.0; txt.color.g = 1.0; txt.color.b = 1.0; txt.color.a = 1.0;
+        double dist = std::sqrt(dist_sq);
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), "%.2f", dist);
+        txt.text = buf;
+        txt.lifetime = rclcpp::Duration(0,0);     // persistent until overwritten
+        text_markers.push_back(std::move(txt));
+        }
     }
+
+    /* -------- Marker: chosen point -------- */
+    Marker chosen;
+    chosen.header = pts.header;
+    chosen.ns     = "distance_debug";
+    chosen.id     = 1;
+    chosen.type   = Marker::SPHERE;
+    chosen.action = Marker::ADD;
+    chosen.scale.x = chosen.scale.y = chosen.scale.z = 0.18;
+    chosen.color.r = 0.0; chosen.color.g = 1.0; chosen.color.b = 1.0; chosen.color.a = 1.0;
+    chosen.pose.position = best_pt;
+    chosen.lifetime = rclcpp::Duration(0,0);
+
+    /* -------- Marker: line robot → chosen -------- */
+    Marker sel_line;
+    sel_line.header = pts.header;
+    sel_line.ns     = "distance_debug";
+    sel_line.id     = 2;
+    sel_line.type   = Marker::LINE_STRIP;
+    sel_line.action = Marker::ADD;
+    sel_line.scale.x = 0.05;
+    sel_line.color.r = 1.0; sel_line.color.g = 1.0; sel_line.color.b = 0.0; sel_line.color.a = 1.0;
+    {
+        Point robot_pt;
+        robot_pt.x = robot_pose_.first;
+        robot_pt.y = robot_pose_.second;
+        robot_pt.z = 0.0;
+        sel_line.points = {robot_pt, best_pt};
+    }
+    sel_line.lifetime = rclcpp::Duration(0,0);
+
+    /* -------- Marker: summary text at robot -------- */
+    Marker summary;
+    summary.header = pts.header;
+    summary.ns     = "distance_debug_summary";
+    summary.id     = 3;
+    summary.type   = Marker::TEXT_VIEW_FACING;
+    summary.action = Marker::ADD;
+    summary.pose.position.x = robot_pose_.first;
+    summary.pose.position.y = robot_pose_.second;
+    summary.pose.position.z = 0.6;                    // above robot
+    summary.scale.z = 0.45;
+    summary.color.r = 1.0; summary.color.g = 1.0; summary.color.b = 0.0; summary.color.a = 1.0;
+    {
+        double chosen_dist = (max_distance_sq > 0.0) ? std::sqrt(max_distance_sq) : 0.0;
+        std::ostringstream oss;
+        oss.setf(std::ios::fixed); oss.precision(2);
+        oss << "min=" << min_distance << "  max=" << max_distance
+            << "  chosen=" << chosen_dist << "  N=" << in_window_count;
+        summary.text = oss.str();
+    }
+    summary.lifetime = rclcpp::Duration(0,0);
+
+    /* -------- Assemble & publish -------- */
+    markers.markers.reserve(3 + 1 + text_markers.size());
+    markers.markers.push_back(pts);
+    markers.markers.push_back(chosen);
+    markers.markers.push_back(sel_line);
+    markers.markers.push_back(summary);
+    markers.markers.insert(markers.markers.end(),
+                            std::make_move_iterator(text_markers.begin()),
+                            std::make_move_iterator(text_markers.end()));
+
+    distance_viz_pub_->publish(markers);
+
+    return {best_pt.x, best_pt.y};
+    }
+
+
+
+
+
 
     void publish_goal(const geometry_msgs::msg::PointStamped &goal_point)
     {

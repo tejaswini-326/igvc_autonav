@@ -38,7 +38,7 @@ ANGLE_TOLERANCE                                 = radians(20)        # ± deg wi
 INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (12)**2             # metres 
 
 # Completion Threshold - After this distance this node will handover control to main lane follower
-TARGET_FORWARD_DISPLACEMENT = 15
+TARGET_FORWARD_DISPLACEMENT = 16
 # ──────────────────────────────────────────────────────────────────────────────
 
 

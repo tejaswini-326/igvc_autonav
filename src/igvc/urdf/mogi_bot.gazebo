@@ -25,6 +25,8 @@
       <max_angular_velocity>100.0</max_angular_velocity>
       <min_angular_velocity>-100.0</min_angular_velocity>
 
+      <publish_tf>true</publish_tf>
+
       <!-- Other parameters (optional) -->
       <odom_topic>odom</odom_topic>      <!-- Odometry topic -->
       <tf_topic>tf</tf_topic>
