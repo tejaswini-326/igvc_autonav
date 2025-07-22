@@ -183,37 +183,38 @@ class CostmapNode(Node):
 		x = self.pose.position.x
 		y = self.pose.position.y
 		costmap_coords = self.odom_to_costmap(x, y)
+		if not costmap_coords:
+			return np.zeros_like(self.white_map, dtype=np.uint8)
+
 		xm, ym = costmap_coords
-		center_x = xm - 10
-		center_y = ym
+
+		# Offset 10 pixels in yaw direction
+		dx = int(-15 * np.cos(self.imu_yaw))
+		dy = int(np.sin(self.imu_yaw))
+		center_x = xm + dx
+		center_y = ym - dy  # invert dy due to image coords
 		center = (center_x, center_y)
 
-		# Get current yaw from IMU
-		angle_rad = self.imu_yaw  # in radians
-
-		# Define angles for the V arms (e.g., ±30 degrees from heading)
+		# Define arms of the V
 		spread_deg = 50
-		left_angle = angle_rad + np.radians(spread_deg)
-		right_angle = angle_rad - np.radians(spread_deg)
+		left_angle = self.imu_yaw + np.radians(spread_deg)
+		right_angle = self.imu_yaw - np.radians(spread_deg)
+		line_length = 400
 
-		# Define length of each arm
-		line_length = 400  # in pixels (you can tweak this)
-
-		# Compute endpoints
 		def endpoint(angle):
 			dx = int(np.cos(angle) * line_length)
 			dy = int(np.sin(angle) * line_length)
-			return (center_x + dx, center_y + dy)  # minus dy since y increases up
+			return (center_x + dx, center_y + dy)
 
 		pt1 = endpoint(left_angle)
 		pt2 = endpoint(right_angle)
 
-		# Create mask and draw thick lines
 		v_line_layer = np.zeros_like(self.white_map, dtype=np.uint8)
-		cv2.line(v_line_layer, center, pt1, color=250, thickness=5)
-		cv2.line(v_line_layer, center, pt2, color=250, thickness=5)
+		cv2.line(v_line_layer, center, pt1, color=250, thickness=3)
+		cv2.line(v_line_layer, center, pt2, color=250, thickness=3)
 
 		return v_line_layer
+
 	# ---------------------------- timer loop -----------------------------
 	def _timer_cb(self):
 		# ---------- TF lookup --------------------------------------------
