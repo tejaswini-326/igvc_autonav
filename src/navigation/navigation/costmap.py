@@ -83,6 +83,8 @@ class CostmapNode(Node):
 		self.object_map = self._empty.copy()
 		self.imu_yaw = None
 		self.yaw_buffer = deque(maxlen=6)
+		self.last_object_msg_time = None
+
 		# --------------------------- I/O ----------------------------------
 		qos = 10
 		self.create_subscription(PointCloud2, '/object_pc',
@@ -119,7 +121,11 @@ class CostmapNode(Node):
 		#     if level == 'debug' else rclpy.logging.LoggingSeverity.INFO)
 
 	# ---------------------- subscriber callbacks --------------------------
-	def _object_cb(self, msg):  self._object_pc, self._new_object = msg, True
+	def _object_cb(self, msg):  
+		self._object_pc, self._new_object = msg, True
+		self._object_pc, self._new_object = msg, True
+
+
 	def _white_cb(self,  msg):  self._white_pc,  self._new_white  = msg, True
 	def _yellow_cb(self, msg: MarkerArray):
 		points = []
@@ -240,9 +246,20 @@ class CostmapNode(Node):
 			self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 250, 'yellow')
 			self._new_yellow = False
 
+		now = self.get_clock().now()
+
 		if self._object_pc is not None:
-			self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
-			self._new_object = False
+			age = (now - self._object_last_update).nanoseconds * 1e-9 if self._object_last_update else float('inf')
+			if self._new_object:
+				self.object_map[:] = self._make_layer(self._object_pc, 245, 'object')
+				self._new_object = False
+			elif age > OBJECT_HOLD_SEC:
+				self.object_map.fill(0)
+				self._object_pc = None
+				self._object_last_update = None
+		else:
+			self.object_map.fill(0)
+
 		# rear_mask_layer = np.zeros_like(self.white_map, dtype=np.uint8)
 		# rear_mask_layer[:, :math.ceil(1.15*(self.width // 2))] = 250
 		roi_layer = self.draw_v_lines()
