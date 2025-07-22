@@ -19,8 +19,10 @@ import math
 from collections import deque
 
 from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs.msg import Imu
+import tf2_geometry_msgs
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import Buffer, TransformListener
@@ -80,7 +82,7 @@ class CostmapNode(Node):
 		self.yellow_map = self._empty.copy()
 		self.object_map = self._empty.copy()
 		self.imu_yaw = None
-		self.yaw_buffer = deque(maxlen=10)
+		self.yaw_buffer = deque(maxlen=6)
 		# --------------------------- I/O ----------------------------------
 		qos = 10
 		self.create_subscription(PointCloud2, '/object_pc',
@@ -90,7 +92,8 @@ class CostmapNode(Node):
 		self.create_subscription(MarkerArray, '/lane_fitted_yellow',
 								 self._yellow_cb, qos)
 		self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', qos)
-		self.create_subscription(Imu, '/imu', self.imu_callback, 10)
+		self.create_subscription(Odometry, '/odom', self.odom_callback, qos)
+		self.create_subscription(Imu, '/imu', self.imu_callback, qos)
 
 
 		# ----------------------------- TF ---------------------------------
@@ -102,6 +105,7 @@ class CostmapNode(Node):
 		self._new_object = self._new_white = self._new_yellow = False
 		self._T_odom_cam = np.eye(4, dtype=np.float32)
 		self.origin_x = self.origin_y = 0.0
+		self.pose = None
 
 		# ---------------------------- timer -------------------------------
 		self.create_timer(0.05, self._timer_cb)   # 10 Hz
@@ -162,37 +166,55 @@ class CostmapNode(Node):
 				self.imu_yaw = yaw
 			#self.get_logger().info("IMU callback received.")
 
+	def odom_callback(self, msg):
+		self.pose = msg.pose.pose
+
+	def odom_to_costmap(self, x: float, y: float) -> tuple[int, int] | None:
+		mx = int((x - self.origin_x) / self.resolution)
+		my = int((y - self.origin_y) / self.resolution)
+
+		if 0 <= mx < self.width and 0 <= my < self.height:
+			return (mx, my)
+		else:
+			return None
+
+
 	def draw_v_lines(self):
-		center_x = 125
-		center_y = self.height // 2
+		x = self.pose.position.x
+		y = self.pose.position.y
+		costmap_coords = self.odom_to_costmap(x, y)
+		if not costmap_coords:
+			return np.zeros_like(self.white_map, dtype=np.uint8)
+
+		xm, ym = costmap_coords
+
+		# Offset 10 pixels in yaw direction
+		dx = int(-15 * np.cos(self.imu_yaw))
+		dy = int(np.sin(self.imu_yaw))
+		center_x = xm + dx
+		center_y = ym - dy  # invert dy due to image coords
 		center = (center_x, center_y)
 
-		# Get current yaw from IMU
-		angle_rad = self.imu_yaw  # in radians
-
-		# Define angles for the V arms (e.g., ±30 degrees from heading)
+		# Define arms of the V
 		spread_deg = 50
-		left_angle = angle_rad + np.radians(spread_deg)
-		right_angle = angle_rad - np.radians(spread_deg)
+		left_angle = self.imu_yaw + np.radians(spread_deg)
+		right_angle = self.imu_yaw - np.radians(spread_deg)
+		line_length = 400
 
-		# Define length of each arm
-		line_length = 400  # in pixels (you can tweak this)
-
-		# Compute endpoints
 		def endpoint(angle):
 			dx = int(np.cos(angle) * line_length)
 			dy = int(np.sin(angle) * line_length)
-			return (center_x + dx, center_y + dy)  # minus dy since y increases up
+			return (center_x + dx, center_y + dy)
 
 		pt1 = endpoint(left_angle)
 		pt2 = endpoint(right_angle)
 
-		# Create mask and draw thick lines
 		v_line_layer = np.zeros_like(self.white_map, dtype=np.uint8)
-		cv2.line(v_line_layer, center, pt1, color=250, thickness=5)
-		cv2.line(v_line_layer, center, pt2, color=250, thickness=5)
+		cv2.line(v_line_layer, center, pt1, color=250, thickness=3)
+		cv2.line(v_line_layer, center, pt2, color=250, thickness=3)
 
 		return v_line_layer
+
 	# ---------------------------- timer loop -----------------------------
 	def _timer_cb(self):
 		# ---------- TF lookup --------------------------------------------

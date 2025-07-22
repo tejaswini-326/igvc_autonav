@@ -6,7 +6,7 @@ from nav_msgs.msg import Odometry
 import math
 from geometry_msgs.msg import Twist, Point, PointStamped
 import tf_transformations
-from std_msgs.msg import String
+from std_msgs.msg import String, Int32 
 from visualization_msgs.msg import Marker, MarkerArray
 from builtin_interfaces.msg import Duration
 from sensor_msgs.msg import Imu
@@ -25,7 +25,7 @@ class Controller(Node):
 
         self.path = []
 
-        self.lookahead_distance = 1.2
+        self.lookahead_distance = 1
         self.linear_speed = 0.5
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
@@ -42,10 +42,13 @@ class Controller(Node):
         self.active = True
         self.pose = None
         self.imu_yaw = None
+        self.lane_count = None
+        self._last_lane_count = None  # for transition logic
 
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
         self.create_subscription(Path, '/sm_planned_path', self.path_callback, 10)
-        self.create_subscription(String, '/intersection', self.intersection_cb, 10) 
+        self.create_subscription(String, '/intersection', self.intersection_cb, 10)
+        self.create_subscription(Int32, '/lane_count', self.lane_count_cb, 10)
 
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/path_markers', 10)
@@ -69,6 +72,25 @@ class Controller(Node):
         else:
             self.active = False
             self.get_logger().info(f"🛑 Ignoring '{msg.data}' from /intersection.")
+
+    def lane_count_cb(self, msg: Int32):
+        """Receive lane count published by GoalPublisher.
+
+        If lane_count == 1 we *yield control* to the single-lane tangent controller
+        by (a) sending a zero Twist once at transition, and (b) suppressing control_loop output.
+        """
+        lc = msg.data
+        self.lane_count = lc
+
+        if lc != self._last_lane_count:
+            if lc == 1:
+                # publish zero once so we stop fighting the tangent node
+                zero = Twist()
+                self.cmd_pub.publish(zero)
+                self.get_logger().info("🟣 Lane count = 1 → Controller relinquishing /cmd_vel to GoalPublisher tangent mode.")
+            else:
+                self.get_logger().info(f"🟢 Lane count = {lc} → Controller resuming normal operation.")
+            self._last_lane_count = lc
 
     def log_info_throttled(self, msg):
         if not self.active:
@@ -211,6 +233,8 @@ class Controller(Node):
     def control_loop(self):
         if not self.active:
             return
+        if self.lane_count == 1:
+            return
         if self.pose is None or not self.path:
             return
 
@@ -310,6 +334,8 @@ class Controller(Node):
     def publish_marker_timer(self):
         if not self.active:
             return
+        if self.lane_count == 1:
+            return 
         self.publish_markers(self.path)
 
     def publish_markers(self, raw_path):
