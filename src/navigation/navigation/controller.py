@@ -26,7 +26,7 @@ class Controller(Node):
         self.path = []
 
         self.lookahead_distance = 1.2
-        self.linear_speed = 0.5
+        self.linear_speed = 1
         self.goal_tolerance = 0.5
         self.control_rate = 10  # Hz
 
@@ -47,7 +47,7 @@ class Controller(Node):
         self.create_subscription(Path, '/sm_planned_path', self.path_callback, 10)
         self.create_subscription(String, '/intersection', self.intersection_cb, 10) 
 
-        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.cmd_pub = self.create_publisher(Twist, '/cmd_velfe', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/path_markers', 10)
         
         self.control_timer = self.create_timer(0.05, self.control_loop)

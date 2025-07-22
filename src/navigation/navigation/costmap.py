@@ -32,7 +32,7 @@ VERBOSE_UNECESSARY_THINGS = False
 
 
 
-OBJECT_HOLD_SEC = 0.2
+OBJECT_HOLD_SEC = 0.1
 
 
 def transform_to_matrix(tf_msg) -> np.ndarray:
