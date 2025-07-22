@@ -199,7 +199,7 @@ private:
                     {
                         if (!left_lane_history_.empty())
                         {
-                            olp_ = get_last_point(left_lane_history_[0].points, 9.0, 0.0);
+                            olp_ = get_last_point(left_lane_history_[0].points, 5.0, 0.0);
                         }
                         // cout<<"LEFT POINT TAKEN FROM HISTORY\n";
                     }
@@ -219,7 +219,7 @@ private:
                     {
                         if (!middle_lane_history_.empty())
                         {
-                            omp_ = get_last_point(middle_lane_history_[0].points, 9.0, 0.0);
+                            omp_ = get_last_point(middle_lane_history_[0].points, 5.0, 0.0);
                         }
                         // cout << "MID POINT TAKEN HISTORY: (" << omp_.first << ", " << omp_.second << ")\n";
                         //  cout<<"MID POINT TAKEN FROM HISTORY\n";
@@ -241,7 +241,7 @@ private:
                     {
                         if (!right_lane_history_.empty())
                         {
-                            orp_ = get_last_point(right_lane_history_[0].points, 9.0, 0.0);
+                            orp_ = get_last_point(right_lane_history_[0].points, 5.0, 0.0);
                         }
                         // cout<<"RIGHT POINT TAKEN FROM HISTORY\n";
                     }
@@ -259,21 +259,21 @@ private:
                     {
                         if (!left_lane_history_.empty())
                         {
-                            olp_ = get_last_point(left_lane_history_[0].points, 9.0, 0.0);
+                            olp_ = get_last_point(left_lane_history_[0].points, 5.0, 0.0);
                         }
                     }
                     if (toggle[1] == 0)
                     {
                         if (!middle_lane_history_.empty())
                         {
-                            omp_ = get_last_point(middle_lane_history_[0].points, 9.0, 0.0);
+                            omp_ = get_last_point(middle_lane_history_[0].points, 5.0, 0.0);
                         }
                     }
                     if (toggle[2] == 0)
                     {
                         if (!right_lane_history_.empty())
                         {
-                            orp_ = get_last_point(right_lane_history_[0].points, 9.0, 0.0);
+                            orp_ = get_last_point(right_lane_history_[0].points, 5.0, 0.0);
                         }
                     }
                 }
@@ -282,7 +282,6 @@ private:
             {
                 RCLCPP_WARN(this->get_logger(), "Transform failed: %s", ex.what());
                 continue;
-                ;
             }
         }
 
