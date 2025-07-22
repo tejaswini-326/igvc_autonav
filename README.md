@@ -20,9 +20,13 @@ pip install --upgrade pip
 pip install ultralytics opencv-python numpy
 
 
-2 - build your workspace, source it.
+2 - build your workspace
 
 <b>DO NOT BUILD IN VENV. IT WILL RUIN YOUR ROS INSTALLATION.</b>
+
+, source it.
+
+
 
 3- in a separate terminal start the virtual environment
 
