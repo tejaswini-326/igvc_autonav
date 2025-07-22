@@ -18,6 +18,8 @@ from nav_msgs.msg import Path
 
 VERBOSE_UNECESSARY_THINGS = False
 
+MAXLOOKAHEAD_DISTANCE = 1
+
 
 class Controller(Node):
     def __init__(self):
@@ -25,14 +27,14 @@ class Controller(Node):
 
         self.path = []
 
-        self.lookahead_distance = 1.2
+        self.lookahead_distance = 1
         self.linear_speed = 1
         self.goal_tolerance = 0.5
-        self.control_rate = 10  # Hz
+        self.control_rate = 20  # Hz
 
-        self.yaw_buffer = deque(maxlen=10)
+        self.yaw_buffer = deque(maxlen=5)
         self.prev_angular_z = 0.0
-        self.angular_damping_factor = .95
+        self.angular_damping_factor = 0.5
         self.current_lookahead = None
         self.max_angular_speed = 0.75
 
@@ -47,13 +49,11 @@ class Controller(Node):
         self.create_subscription(Path, '/sm_planned_path', self.path_callback, 10)
         self.create_subscription(String, '/intersection', self.intersection_cb, 10) 
 
-        self.cmd_pub = self.create_publisher(Twist, '/cmd_velfe', 10)
+        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/path_markers', 10)
         
         self.control_timer = self.create_timer(0.05, self.control_loop)
         self.marker_timer = self.create_timer(0.05, self.publish_marker_timer)
-
-        self.create_subscription(Imu, '/imu', self.imu_callback, 10)
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
@@ -65,6 +65,7 @@ class Controller(Node):
     def intersection_cb(self, msg: String):
         if msg.data.lower()  == "none":
             self.active = True
+            self.prev_angular_z = 0
             self.get_logger().info(f"🟢 Received '{msg.data}' from /intersection.")
         else:
             self.active = False
@@ -82,21 +83,10 @@ class Controller(Node):
         if not self.active:
             return
         self.pose = msg.pose.pose
-
-    def imu_callback(self, msg):
-        if not self.active:
-            return
-
-        try:
-            q = msg.orientation
-            quat = [q.x, q.y, q.z, q.w]
-            _, _, yaw = tf_transformations.euler_from_quaternion(quat)
-
-            self.imu_yaw = yaw
-            if VERBOSE_UNECESSARY_THINGS: self.get_logger().info("IMU yaw = {:.2f}".format(yaw))
-        except Exception as e:
-            if VERBOSE_UNECESSARY_THINGS: self.get_logger().warn(f"[IMU callback error] {e}")
-
+        q = msg.pose.pose.orientation
+        _, _, yaw = tf_transformations.euler_from_quaternion((q.x, q.y, q.z, q.w))
+        #self.get_logger().info(f"Raw Yaw {yaw}")
+        self.imu_yaw = yaw
         self.yaw_buffer.append(yaw)
 
         if len(self.yaw_buffer) > 2:
@@ -117,7 +107,8 @@ class Controller(Node):
                 self.imu_yaw = float(median)
         else:
             self.imu_yaw = yaw
-        #self.get_logger().info("IMU callback received.")
+
+        #self.get_logger().info(f"Filtered Yaw {yaw}")
 
     def path_callback(self, msg: Path):
         if not self.active:
@@ -126,7 +117,7 @@ class Controller(Node):
  
         if VERBOSE_UNECESSARY_THINGS: self.get_logger().info(f"Received path with {len(self.path)} valid points.")
 
-    def adaptive_lookahead(self, base_distance=1.2):
+    def adaptive_lookahead(self, base_distance=MAXLOOKAHEAD_DISTANCE):
         if not self.active:
             return
         yaw_variability = np.std(self.yaw_buffer) if len(self.yaw_buffer) > 2 else 0.0

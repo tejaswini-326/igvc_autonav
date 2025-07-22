@@ -550,9 +550,9 @@ private:
 
                 detected_objects_[obj.label] = out_pt.point;
 
-                RCLCPP_INFO(this->get_logger(), "Detected %s at (%.2f, %.2f, %.2f) in odom",
-                            obj.label.c_str(),
-                            out_pt.point.x, out_pt.point.y, out_pt.point.z);
+                // RCLCPP_INFO(this->get_logger(), "Detected %s at (%.2f, %.2f, %.2f) in odom",
+                //             obj.label.c_str(),
+                //             out_pt.point.x, out_pt.point.y, out_pt.point.z);
             }
             catch (tf2::TransformException &ex)
             {
