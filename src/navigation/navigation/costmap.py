@@ -121,11 +121,9 @@ class CostmapNode(Node):
 		#     if level == 'debug' else rclpy.logging.LoggingSeverity.INFO)
 
 	# ---------------------- subscriber callbacks --------------------------
-	def _object_cb(self, msg):  
+	def _object_cb(self, msg):
 		self._object_pc, self._new_object = msg, True
-		self._object_pc, self._new_object = msg, True
-
-
+		self._object_last_update = self.get_clock().now()
 	def _white_cb(self,  msg):  self._white_pc,  self._new_white  = msg, True
 	def _yellow_cb(self, msg: MarkerArray):
 		points = []
