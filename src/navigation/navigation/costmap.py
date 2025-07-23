@@ -31,8 +31,7 @@ import tf_transformations
 VERBOSE_UNECESSARY_THINGS = False
 
 
-
-OBJECT_HOLD_SEC = 0.2
+OBJECT_HOLD_SEC = 1/15 # Just slightly more than the 20 Hz we receive objects at
 
 
 def transform_to_matrix(tf_msg) -> np.ndarray:
@@ -86,17 +85,12 @@ class CostmapNode(Node):
 		self.last_object_msg_time = None
 
 		# --------------------------- I/O ----------------------------------
-		qos = 10
-		self.create_subscription(PointCloud2, '/object_pc',
-								 self._object_cb, qos)
-		self.create_subscription(PointCloud2, '/white_lane_points',
-								 self._white_cb,  qos)
-		self.create_subscription(MarkerArray, '/lane_fitted_yellow',
-								 self._yellow_cb, qos)
+		qos = 20
+		self.create_subscription(PointCloud2, '/object_pc',self._object_cb, qos)
+		self.create_subscription(PointCloud2, '/white_lane_points',self._white_cb,  qos)
+		self.create_subscription(MarkerArray, '/lane_fitted_yellow',self._yellow_cb, qos)
 		self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', qos)
 		self.create_subscription(Odometry, '/odom', self.odom_callback, qos)
-		self.create_subscription(Imu, '/imu', self.imu_callback, qos)
-
 
 		# ----------------------------- TF ---------------------------------
 		self.tf_buffer   = Buffer()
@@ -137,41 +131,34 @@ class CostmapNode(Node):
 			self._yellow_pc = None
 			self._new_yellow = False
 
-	def imu_callback(self, msg):
-			try:
-				q = msg.orientation
-				quat = [q.x, q.y, q.z, q.w]
-				_, _, yaw = tf_transformations.euler_from_quaternion(quat)
-
-				self.imu_yaw = yaw
-				if VERBOSE_UNECESSARY_THINGS: self.get_logger().info("IMU yaw = {:.2f}".format(yaw))
-			except Exception as e:
-				if VERBOSE_UNECESSARY_THINGS: self.get_logger().warn(f"[IMU callback error] {e}")
-
-			self.yaw_buffer.append(yaw)
-
-			if len(self.yaw_buffer) > 2:
-				yaw_array = np.unwrap(np.array(self.yaw_buffer))
-
-				median = np.median(yaw_array)
-				deviation = np.abs(yaw_array - median)
-				std_dev = np.std(yaw_array)
-
-				if std_dev > 0.05:
-					filtered_yaws = yaw_array[deviation < 1.5 * std_dev]
-				else:
-					filtered_yaws = yaw_array 
-
-				if len(filtered_yaws) > 0:
-					self.imu_yaw = float(np.mean(filtered_yaws))
-				else:
-					self.imu_yaw = float(median)
-			else:
-				self.imu_yaw = yaw
-			#self.get_logger().info("IMU callback received.")
 
 	def odom_callback(self, msg):
 		self.pose = msg.pose.pose
+		q = msg.pose.pose.orientation
+		_, _, yaw = tf_transformations.euler_from_quaternion((q.x, q.y, q.z, q.w))
+		self.imu_yaw = yaw
+		self.yaw_buffer.append(yaw)
+
+		if len(self.yaw_buffer) > 2:
+			yaw_array = np.unwrap(np.array(self.yaw_buffer))
+
+			median = np.median(yaw_array)
+			deviation = np.abs(yaw_array - median)
+			std_dev = np.std(yaw_array)
+
+			if std_dev > 0.05:
+				filtered_yaws = yaw_array[deviation < 1.5 * std_dev]
+			else:
+				filtered_yaws = yaw_array 
+
+			if len(filtered_yaws) > 0:
+				self.imu_yaw = float(np.mean(filtered_yaws))
+			else:
+				self.imu_yaw = float(median)
+		else:
+			self.imu_yaw = yaw
+
+
 
 	def odom_to_costmap(self, x: float, y: float) -> tuple[int, int] | None:
 		mx = int((x - self.origin_x) / self.resolution)
@@ -260,12 +247,11 @@ class CostmapNode(Node):
 
 		# rear_mask_layer = np.zeros_like(self.white_map, dtype=np.uint8)
 		# rear_mask_layer[:, :math.ceil(1.15*(self.width // 2))] = 250
-		roi_layer = self.draw_v_lines()
+		#roi_layer = self.draw_v_lines()
 		# ---------- fuse + distance penalty + publish ----------------------
 		combined = np.maximum.reduce([self.white_map,
 									self.yellow_map,
-									self.object_map,
-									roi_layer])
+									self.object_map]) # 
 
 		penalty  = self._distance_penalty(combined, thresh=200,radius_m=1.5, steepness=1.0)
 

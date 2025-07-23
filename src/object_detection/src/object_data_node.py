@@ -16,9 +16,11 @@ from PIL import Image as PILImage, ImageDraw, ImageFont
 import os
 from ament_index_python.packages import get_package_share_directory
 import torch
+import cv2
+from time import perf_counter
 
 CONFIDENCE_THRESHOLD = 0.5
-FRAME_INTERVAL_SEC = 0.15  # Process every 150 ms
+#FRAME_INTERVAL_SEC = 0.05
 
 class ObjectDataNode(Node):
     def __init__(self):
@@ -26,7 +28,6 @@ class ObjectDataNode(Node):
 
         self.image_sub = self.create_subscription(Image, '/camera/image', self.image_callback, 10)
         self.depth_sub = self.create_subscription(Image, '/camera/depth_image', self.depth_callback, 10)
-        self.pc_sub = self.create_subscription(PointCloud2, '/camera/points_downsampled', self.pc_callback, 10)
 
         self.object_pub = self.create_publisher(ObjectArray, 'object_data', 10)
         self.pc_pub = self.create_publisher(PointCloud2, 'object_pc', 10)
@@ -37,13 +38,14 @@ class ObjectDataNode(Node):
         model_path = os.path.join(pkg_share, 'models', 'best.pt')
         self.model = YOLO(model_path)
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.model.to(self.device).eval() 
         if torch.cuda.is_available():
-            self.model.to('cuda')
             self.get_logger().info(f"Model moved to {next(self.model.model.parameters()).device}")
         self.get_logger().info('YOLOv8 model loaded.')
 
+        self.xy_grid = None
+
         self.depth_img = None
-        self.latest_pc = None
         self.last_processed_time = self.get_clock().now()
 
         self.fx = 246.49
@@ -57,14 +59,13 @@ class ObjectDataNode(Node):
         except Exception as e:
             self.get_logger().error(f'Depth image conversion failed: {e}')
 
-    def pc_callback(self, msg):
-        self.latest_pc = msg
-
     def image_callback(self, msg):
+        t0 = perf_counter()
+
         now = self.get_clock().now()
-        if (now - self.last_processed_time).nanoseconds * 1e-9 < FRAME_INTERVAL_SEC:
-            return
-        self.last_processed_time = now
+        # if (now - self.last_processed_time).nanoseconds * 1e-9 < FRAME_INTERVAL_SEC:
+        #     return
+        # self.last_processed_time = now
 
         if self.depth_img is None:
             return
@@ -75,67 +76,77 @@ class ObjectDataNode(Node):
             self.get_logger().error(f'Image decoding error: {e}')
             return
 
-        results = self.model.predict(cv_image, device=self.device)[0]
+        t1 = perf_counter()
+        results = self.model.predict(cv_image,device=self.device, verbose=False)[0] 
+        self.get_logger().info(f"Model Inference: {(perf_counter() - t1)*1000}")
 
         detections = results.boxes
         if not detections or len(detections) == 0:
             return
             
-        stamp = now.to_msg()
-        frame_id = self.latest_pc.header.frame_id if self.latest_pc else "camera_link"
+        stamp    = now.to_msg()
+        frame_id = "camera_link"
+
+        names = self.model.names
+        header_pc = Header(stamp=stamp, frame_id=frame_id)
+
         object_pointclouds = []
-        msg_out = ObjectArray()
-        msg_out.objects = []
-
-        # Convert to PIL for drawing
-        image = PILImage.fromarray(cv_image)
-        draw = ImageDraw.Draw(image)
-
-        names = self.model.names  # Cache class names once
+        objects_out        = []
 
         for box in detections:
-            if float(box.conf[0]) < CONFIDENCE_THRESHOLD:
+            conf = float(box.conf[0])
+            if conf < CONFIDENCE_THRESHOLD:
                 continue
 
-            xmin, ymin, xmax, ymax = map(int, box.xyxy[0].tolist())
-            label = names[int(box.cls[0].item())]
+            xmin, ymin, xmax, ymax = map(int, box.xyxy[0]) 
+            class_id = int(box.cls[0])
+            label    = names[class_id]
 
-            # Annotate
-            draw.rectangle([(xmin, ymin), (xmax, ymax)], outline=(0, 255, 0), width=2)
-            draw.text((xmin, max(ymin - 12, 0)), f"{label} ({box.conf[0]:.2f})", fill=(255, 255, 255))
+            # ---- annotate image with OpenCV (faster than PIL) ----
+            cv2.rectangle(cv_image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+            cv2.putText(cv_image,
+                        f"{label} {conf:.2f}",
+                        (xmin, max(ymin - 6, 0)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
 
+            # ---- depth → XYZ ----
             points_3d = self.get_points_from_depth(xmin, ymin, xmax, ymax)
-            if points_3d.shape[0] == 0:
+            if points_3d.size == 0:
                 continue
 
-            centroid = np.mean(points_3d, axis=0)
+            centroid = points_3d.mean(axis=0)
+
             obj = ObjectData()
             obj.label = label
-            obj.position = Point(x=float(centroid[0]), y=float(centroid[1]), z=float(centroid[2]))
+            obj.position = Point(x=float(centroid[0]),
+                                y=float(centroid[1]),
+                                z=float(centroid[2]))
 
-            if self.latest_pc:
-                header = Header(stamp=stamp, frame_id=frame_id)
-                obj.pointcloud = pc2.create_cloud_xyz32(header, points_3d.astype(np.float32))
-
-            msg_out.objects.append(obj)
+            # per‑object point cloud (optional – remove if you don’t need it)
+            obj.pointcloud = pc2.create_cloud_xyz32(header_pc,
+                                                    points_3d.astype(np.float32))
+            objects_out.append(obj)
             object_pointclouds.append(points_3d)
 
+
+        # ---- publish ObjectArray ----
+        msg_out = ObjectArray()
+        msg_out.objects = objects_out
         self.object_pub.publish(msg_out)
 
+        # ---- publish merged point cloud (all objects together) ----
         if object_pointclouds:
-            all_points = np.concatenate(object_pointclouds, axis=0)
-            header = Header(stamp=stamp, frame_id=frame_id)
-            self.pc_pub.publish(pc2.create_cloud_xyz32(header, all_points.astype(np.float32)))
+            all_pts = np.concatenate(object_pointclouds, axis=0).astype(np.float32)
+            self.pc_pub.publish(pc2.create_cloud_xyz32(header_pc, all_pts))
 
-        try:
-            # Convert annotated PIL image back to NumPy array then to ROS msg
-            annotated_cv_img = np.array(image)
-            img_msg = self.bridge.cv2_to_imgmsg(annotated_cv_img, encoding="bgr8")
-            img_msg.header.stamp = stamp
-            img_msg.header.frame_id = frame_id
-            self.annotated_img_pub.publish(img_msg)
-        except Exception as e:
-            self.get_logger().warn(f"Annotated image publish failed: {e}")
+        # ---- publish annotated image ----
+        img_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
+        img_msg.header.stamp = stamp
+        img_msg.header.frame_id = frame_id
+        self.annotated_img_pub.publish(img_msg)
+        # ----------------------------------------------------------------------
+
+        self.get_logger().info(f"Total: {(perf_counter() - t0)*1000}ms")
 
     def get_points_from_depth(self, xmin, ymin, xmax, ymax):
         margin = 5

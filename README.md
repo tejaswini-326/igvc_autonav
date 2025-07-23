@@ -7,8 +7,6 @@ export GZ_SIM_RESOURCE_PATH=/<path to igvc-sim/igvc-sim/src/igvc/models
 
 Running the object detection node on your pc:
 
-0 - download the model and change its path in object_data/src/object_data_node.py
-
 1 -  Make a python virtual environment - so that the model can be loaded. -
 
 python3 -m venv ~/yolo_env
@@ -20,9 +18,13 @@ pip install --upgrade pip
 pip install ultralytics opencv-python numpy
 
 
-2 - build your workspace, source it.
+2 - build your workspace
 
 <b>DO NOT BUILD IN VENV. IT WILL RUIN YOUR ROS INSTALLATION.</b>
+
+, source it.
+
+
 
 3- in a separate terminal start the virtual environment
 
