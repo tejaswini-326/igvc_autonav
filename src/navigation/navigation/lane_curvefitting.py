@@ -173,6 +173,7 @@ class LaneFollowerNode(Node):
         if VERBOSE_UNNESSARY_THINGS: print("length of marker array: ")
         if VERBOSE_UNNESSARY_THINGS: print(len(marker_array.markers))
         self.markers_pub.publish(marker_array)
+        print("MARKERS PUBLISHED\n")
         self.yellow_curve_pub.publish(yellow_marker_array)
 
         
