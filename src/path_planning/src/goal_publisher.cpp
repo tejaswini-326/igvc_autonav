@@ -1,3 +1,16 @@
+// #define LANE_DEBUG
+// #define RVIZ_DISTANCE_DEBUG
+
+constexpr double MINIMUM_TIME_BEFORE_SWITCHING_LANES_AGAIN = 5.0;
+
+constexpr int LANE_HISTORY_BUFFER_SIZE = 10;
+
+constexpr double MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE = 7.0;
+constexpr double MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE = 4.0;
+
+constexpr double REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE = 5.0;
+constexpr double REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE = 0.0;
+
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
@@ -18,18 +31,10 @@
 #include <deque>
 #include <unordered_set>
 
-float MINIMUM_TIME_BEFORE_SWITCHING_LANES_AGAIN = 5.0;
-// #define LANE_DEBUG
-// #define RVIZ_DISTANCE_DEBUG
 
 using std::placeholders::_1;
 using namespace std;
 typedef geometry_msgs::msg::Point pt;
-
-inline std::pair<double, double> operator*(const std::pair<double, double> &p, double scalar)
-{
-    return {p.first * scalar, p.second * scalar};
-}
 
 inline std::pair<double, double> operator+(const std::pair<double, double> &a, const std::pair<double, double> &b)
 {
@@ -41,12 +46,22 @@ inline std::pair<double, double> operator-(const std::pair<double, double> &a, c
     return {a.first - b.first, a.second - b.second};
 }
 
+inline std::pair<double, double> operator*(const std::pair<double, double> &p, double scalar)
+{
+    return {p.first * scalar, p.second * scalar};
+}
+
+inline std::pair<double, double> operator/(const std::pair<double, double> &p, double scalar)
+{
+    if(scalar == 0.0) return{0.0, 0.0};
+    return {p.first / scalar, p.second / scalar};
+}
+
 class GoalPublisher : public rclcpp::Node
 {
 public:
     GoalPublisher() : Node("goal_publisher")
     {
-        lane_history_memory_buffer_size_ = 10;
         last_lane_switch_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
         override_ = "none";
         target_lane_ = "right";
@@ -63,7 +78,9 @@ public:
         object_data_sub_ = this->create_subscription<object_detection::msg::ObjectArray>(
             "/object_data", 10, std::bind(&GoalPublisher::object_data_callback, this, _1));
 
+#ifdef RVIZ_DISTANCE_DEBUG
         distance_viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/a_goalpub_debug_distances", 10);
+#endif
 
         RCLCPP_INFO(this->get_logger(), "GoalPublisher node initialized");
     }
@@ -74,7 +91,10 @@ private:
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr override_sub_;
     rclcpp::Subscription<object_detection::msg::ObjectArray>::SharedPtr object_data_sub_;
+
+#ifdef RVIZ_DISTANCE_DEBUG
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr distance_viz_pub_;
+#endif
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -82,7 +102,6 @@ private:
     std::map<std::string, geometry_msgs::msg::Point> detected_objects_;
 
     std::string target_lane_;
-    size_t lane_history_memory_buffer_size_;
     std::string override_;
     std::pair<double, double> olp_, omp_, orp_;
     std::pair<double, double> robot_pose_;
@@ -109,8 +128,8 @@ private:
 
     std::pair<double, double>
     get_last_point(const std::vector<geometry_msgs::msg::Point> &points,
-                   double max_distance = 7.0,
-                   double min_distance = 4.0)
+                   double max_distance = MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE,
+                   double min_distance = MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE)
     {
         double max_distance_squared = 0.0;
         pt ans;
@@ -315,6 +334,9 @@ private:
     void debug_markers()
     {
         visualization_msgs::msg::MarkerArray MarkerArray;
+        if(!right_lane_history_.empty()) MarkerArray.markers.push_back(right_lane_history_[0]);  // red
+        if(!middle_lane_history_.empty()) MarkerArray.markers.push_back(middle_lane_history_[0]); // green
+        if(!left_lane_history_.empty()) MarkerArray.markers.push_back(left_lane_history_[0]);   // blue
 
         debug_pub_->publish(MarkerArray);
     }
@@ -361,7 +383,9 @@ private:
 #ifdef LANE_DEBUG
                             cout << "LEFT LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            olp_ = get_last_point(left_lane_history_[0].points, 5.0, 0.0);
+                            olp_ = get_last_point(left_lane_history_[0].points, 
+                                REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE, 
+                                REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
                         }
                     }
                     else
@@ -371,7 +395,7 @@ private:
 #endif
                         olp_ = pair;
                         left_lane_history_.push_front(transformed_marker);
-                        while (left_lane_history_.size() > lane_history_memory_buffer_size_)
+                        while (left_lane_history_.size() > LANE_HISTORY_BUFFER_SIZE)
                             left_lane_history_.pop_back();
                     }
                 }
@@ -388,7 +412,9 @@ private:
 #ifdef LANE_DEBUG
                             cout << "MID LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            omp_ = get_last_point(middle_lane_history_[0].points, 5.0, 0.0);
+                            omp_ = get_last_point(middle_lane_history_[0].points, 
+                                REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE, 
+                                REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
                         }
                     }
                     else
@@ -398,7 +424,7 @@ private:
 #endif
                         omp_ = pair;
                         middle_lane_history_.push_front(transformed_marker);
-                        while (middle_lane_history_.size() > lane_history_memory_buffer_size_)
+                        while (middle_lane_history_.size() > LANE_HISTORY_BUFFER_SIZE)
                             middle_lane_history_.pop_back();
                     }
                 }
@@ -415,7 +441,9 @@ private:
 #ifdef LANE_DEBUG
                             cout << "RIGHT LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            orp_ = get_last_point(right_lane_history_[0].points, 5.0, 0.0);
+                            orp_ = get_last_point(right_lane_history_[0].points, 
+                                REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE, 
+                                REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
                         }
                     }
                     else
@@ -425,7 +453,7 @@ private:
 #endif
                         orp_ = pair;
                         right_lane_history_.push_front(transformed_marker);
-                        while (right_lane_history_.size() > lane_history_memory_buffer_size_)
+                        while (right_lane_history_.size() > LANE_HISTORY_BUFFER_SIZE)
                             right_lane_history_.pop_back();
                     }
                 }
@@ -489,13 +517,11 @@ private:
         std::pair<double, double> goal;
         if (target_lane_ == "right")
         {
-            goal.first = (orp_.first + omp_.first) / 2;
-            goal.second = (orp_.second + omp_.second) / 2;
+            goal = (orp_ + omp_) / 2;
         }
         if (target_lane_ == "left")
         {
-            goal.first = (olp_.first + omp_.first) / 2;
-            goal.second = (olp_.second + omp_.second) / 2;
+            goal = (olp_ + omp_) / 2;
         }
 #ifdef LANE_DEBUG
         cout << "GOAL IS: " << goal.first << ", " << goal.second << '\n';
@@ -550,11 +576,6 @@ private:
                           const std::pair<double, double> &lane_b,
                           const std::pair<double, double> &obj) const
     {
-        auto vec = [](const std::pair<double, double> &s,
-                      const std::pair<double, double> &t)
-        {
-            return std::pair<double, double>{t.first - s.first, t.second - s.second};
-        };
         auto cross = [](const std::pair<double, double> &u,
                         const std::pair<double, double> &v)
         {
@@ -566,9 +587,9 @@ private:
             return u.first * v.first + u.second * v.second;
         };
 
-        auto a = vec(robot_pose_, lane_a);
-        auto b = vec(robot_pose_, lane_b);
-        auto p = vec(robot_pose_, obj);
+        std::pair<double, double> a = lane_a - robot_pose_;
+        std::pair<double, double> b = lane_b - robot_pose_;
+        std::pair<double, double> p = obj - robot_pose_;
 
         // ahead of the robot?
         if (dot(a, p) <= 0.0 || dot(b, p) <= 0.0)
