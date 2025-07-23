@@ -1,3 +1,13 @@
+#define DEBUG
+
+constexpr int X_OF_STARTING_POSITION_IN_PATH = 155;
+constexpr int Y_OF_STARTING_POSITION_IN_PATH = 150;
+
+constexpr double MAX_TIME_FOR_PATH_PLANNING = 0.3;
+
+constexpr int MAX_COST = 225;
+constexpr double COST_RATIO = 100.0; // Used to scale down the raw cost by dividing it
+
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
@@ -11,8 +21,6 @@
 #include <chrono>
 
 using std::placeholders::_1;
-
-bool VERBOSE_UNNECESSARY_THINGS = false;
 
 struct AStarNode
 {
@@ -39,6 +47,10 @@ public:
         goal_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
             "/goal_point", 10, std::bind(&AStarPlanner::goal_callback, this, _1));
 
+#ifdef DEBUG
+        raw_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/raw_planned_path", 10);
+#endif
+
         path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/sm_planned_path", 10);
 
         old_path_ = std::make_shared<nav_msgs::msg::Path>();
@@ -51,6 +63,11 @@ private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+    
+#ifdef DEBUG
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr raw_path_pub_;
+#endif
+
     nav_msgs::msg::Path::SharedPtr old_path_;
 
 
@@ -99,19 +116,24 @@ private:
 
         goal_ = *msg;
 
-        int start_x = 155;
-        int start_y = 150;
+        int start_x = X_OF_STARTING_POSITION_IN_PATH;
+        int start_y = Y_OF_STARTING_POSITION_IN_PATH;
         // Change to actual robot pose
         auto [goal_x, goal_y] = world_to_map(goal_.pose.position.x, goal_.pose.position.y);
 
-        if (VERBOSE_UNNECESSARY_THINGS)
-            RCLCPP_INFO(this->get_logger(), "Planning from (%d, %d) to (%d, %d)", start_x, start_y, goal_x, goal_y);
+#ifdef DEBUG
+        RCLCPP_INFO(this->get_logger(), "Planning from (%d, %d) to (%d, %d)", start_x, start_y, goal_x, goal_y);
+#endif
 
         auto raw_path = a_star(start_x, start_y, goal_x, goal_y);
         raw_path.header.stamp = this->now();
         raw_path.header.frame_id = costmap_->header.frame_id;
 
-        // Smooth the path
+#ifdef DEBUG
+        raw_path_pub_->publish(raw_path);
+#endif
+
+        // Smooth the raw path itself
         auto smoothed_poses = smooth_path(raw_path.poses);
         raw_path.poses = smoothed_poses;
         *old_path_ = raw_path;
@@ -144,7 +166,7 @@ private:
         {
             auto end_time = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> elapsed = end_time - start_time;
-            if(elapsed.count() > 0.3 && old_path_!= nullptr) return *old_path_;
+            if(elapsed.count() > MAX_TIME_FOR_PATH_PLANNING && old_path_!= nullptr) return *old_path_;
             AStarNode *current = open.top();
             open.pop();
 
@@ -173,10 +195,10 @@ private:
                     continue;
 
                 int cost = costmap_->data[index(nx, ny)];
-                if (cost < 0 || cost > 500)
+                if (cost < 0 || cost > MAX_COST)
                     continue;
 
-                float g_new = current->g + std::hypot(dx[i], dy[i]) + cost / 100.0;
+                float g_new = current->g + std::hypot(dx[i], dy[i]) + cost / COST_RATIO;
                 float h_new = heuristic(nx, ny, goal_x, goal_y);
 
                 AStarNode *neighbor = new AStarNode{nx, ny, g_new, h_new, current};

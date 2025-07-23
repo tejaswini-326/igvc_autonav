@@ -228,7 +228,7 @@ class CostmapNode(Node):
 			self.white_map[:] = self._make_layer(self._white_pc, 250, 'white')
 			self._new_white = False
 		if self._new_yellow and self._yellow_pc is not None:
-			self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 250, 'yellow')
+			self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 200, 'yellow')
 			self._new_yellow = False
 
 		now = self.get_clock().now()
