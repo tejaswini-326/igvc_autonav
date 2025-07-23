@@ -44,6 +44,7 @@ class Controller(Node):
         self.active = True
         self.pose = None
         self.imu_yaw = None
+        self.scanning = False
 
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
         self.create_subscription(Path, '/sm_planned_path', self.path_callback, 10)
@@ -65,11 +66,11 @@ class Controller(Node):
     def intersection_cb(self, msg: String):
         if msg.data.lower()  == "none":
             self.active = True
-            self.prev_angular_z = 0
+            self.reset_controller()
             self.get_logger().info(f"🟢 Received '{msg.data}' from /intersection.")
         else:
             self.active = False
-            self.get_logger().info(f"🛑 Ignoring '{msg.data}' from /intersection.")
+            self.get_logger().info(f"ignoring '{msg.data}' from /intersection.")
 
     def log_info_throttled(self, msg):
         if not self.active:
@@ -78,6 +79,31 @@ class Controller(Node):
         if now - self.last_log_time > self.log_interval:
             if VERBOSE_UNECESSARY_THINGS: self.get_logger().info(msg)
             self.last_log_time = now
+
+    def reset_controller(self):
+        self.prev_angular_z = 0.0
+        self.scan_start_time = self.get_clock().now().nanoseconds
+        self.yaw_buffer.clear()
+
+
+    def scan(self):
+        self.scanning = True
+        self.scan_direction = 1
+        self.scan_start_time = self.get_clock().now().nanoseconds
+        self.scan_timer = self.create_timer(0.1, self.scan_step)
+
+    def scan_step(self):
+        if not self.scanning:
+            return
+
+        twist = Twist()
+        twist.angular.z = 0.4 * self.scan_direction
+        self.cmd_pub.publish(twist)
+
+        elapsed = (self.get_clock().now().nanoseconds - self.scan_start_time) / 1e9
+        if elapsed > 2.0:
+            self.scan_direction *= -1
+            self.scan_start_time = self.get_clock().now().nanoseconds
 
     def odom_callback(self, msg):
         if not self.active:
@@ -111,9 +137,17 @@ class Controller(Node):
         #self.get_logger().info(f"Filtered Yaw {yaw}")
 
     def path_callback(self, msg: Path):
-        if not self.active:
-            return
-        self.path = [(pose.pose.position.x, pose.pose.position.y)for pose in msg.poses]
+        if msg and msg.poses:
+            self.path = [(pose.pose.position.x, pose.pose.position.y) for pose in msg.poses]
+            if self.scanning:
+                self.get_logger().info("Path received. Stopping scan.")
+                self.scanning = False
+                if hasattr(self, 'scan_timer'):
+                    self.scan_timer.cancel()
+        else:
+            if not self.scanning:
+                self.get_logger().info("No path received. Starting scan.")
+                self.scan()
  
         if VERBOSE_UNECESSARY_THINGS: self.get_logger().info(f"Received path with {len(self.path)} valid points.")
 
@@ -201,6 +235,11 @@ class Controller(Node):
 
     def control_loop(self):
         if not self.active:
+            return
+        if not self.path:
+            if not self.scanning:
+                self.get_logger().info("No path in memory. Triggering scan from control loop.")
+                self.scan()
             return
         if self.pose is None or not self.path:
             return
