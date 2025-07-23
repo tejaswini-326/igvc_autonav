@@ -18,6 +18,7 @@ from geometry_msgs.msg import Point, PoseStamped
 from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
 import time
+from std_msgs.msg import Bool 
 
 # self.last_long_seg logic needs have a better fallback. like right now we are just checking if this is not None, but this could be some very old data and
 # it will just silently go to that.
@@ -61,6 +62,8 @@ class M_HorizontalLineDetect(Node):
         self.line_pub = self.create_publisher(Marker, '/hori/stop_line', 10)
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.stop_spot = self.create_publisher(PointStamped, '/hori/stop_spot', 10)
+        self.pothole_detected = False  # Default state
+        self.create_subscription(Bool, 'pothole_detected', self.pothole_callback, 10)
 
         self.create_subscription(Float64MultiArray, '/igvc/next_waypoint', self.next_waypoint_cb, 10)
         self.create_subscription(String, '/intersection', self.intersection_cb, 10) 
@@ -84,6 +87,9 @@ class M_HorizontalLineDetect(Node):
         self.tf_buffer   = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
+    def pothole_callback(self, msg: Bool):
+        self.pothole_detected = msg.data
+
     def intersection_cb(self, msg: String):
         if msg.data.lower() == "none":
             self.stage = 'searching_for_lines_in_the_background'
@@ -91,10 +97,16 @@ class M_HorizontalLineDetect(Node):
 
     # --------------------------------------------------------------------- #
     def cloud_cb(self, msg: PointCloud2):
+        # Completely skip horizontal line logic if pothole is detected
+        if self.pothole_detected:
+            self.get_logger().info("Pothole detected! Skipping point cloud processing for horizontal lines.")
+            return
+
         if self.stage == 'deactive':
             return
-        
+
         self.cloud = msg
+
 
     # --------------------------------------------------------------------- #
     def detect_right_angle(self, mask):

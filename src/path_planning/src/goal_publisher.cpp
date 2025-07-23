@@ -11,7 +11,7 @@
 #include <sstream>
 #include <iomanip>
 
-
+#include <map> 
 #include <vector>
 #include <algorithm>
 #include <cmath>
@@ -60,13 +60,18 @@ public:
             "/odom", 10, std::bind(&GoalPublisher::odom_callback, this, _1));
         object_data_sub_ = this->create_subscription<object_detection::msg::ObjectArray>(
             "/object_data", 10, std::bind(&GoalPublisher::object_data_callback, this, _1));
-
+        pothole_sub_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
+            "/pothole_position", 10,
+            std::bind(&GoalPublisher::pothole_callback, this, _1));
+            
         distance_viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/a_goalpub_debug_distances", 10);     
 
         override_ = "none";
         target_lane_ = "right";
 
         lane_history_memory_buffer_size_ = 10;
+        pothole_detected_ = false;
+        pothole_pos_.x = pothole_pos_.y = pothole_pos_.z = 0.0;
         RCLCPP_INFO(this->get_logger(), "GoalPublisher node initialized");
     }
 
@@ -77,6 +82,9 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr override_sub_;
     rclcpp::Subscription<object_detection::msg::ObjectArray>::SharedPtr object_data_sub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr distance_viz_pub_;  
+    rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr pothole_sub_;
+    rclcpp::Time pothole_stamp_;                 // when last pothole msg received
+    double pothole_ttl_sec_ = 1.0;               // consider param; 1s default
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -92,6 +100,10 @@ private:
 
     rclcpp::Time last_lane_switch_;
 
+    // Pothole tracking
+    bool pothole_detected_;
+    geometry_msgs::msg::Point pothole_pos_;
+
     struct tracked_points
     {
         std::pair<double, double> left;
@@ -102,6 +114,32 @@ private:
     std::deque<visualization_msgs::msg::Marker> left_lane_history_;
     std::deque<visualization_msgs::msg::Marker> right_lane_history_;
     std::deque<visualization_msgs::msg::Marker> middle_lane_history_;
+
+    void pothole_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg)
+    {
+        geometry_msgs::msg::PointStamped in_pt = *msg, out_pt;
+
+        try {
+            // Transform from the incoming frame (msg->header.frame_id) to odom
+            auto tf = tf_buffer_->lookupTransform(
+                "odom", msg->header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.2));
+
+            tf2::doTransform(in_pt, out_pt, tf);
+
+            pothole_pos_ = out_pt.point;          // now in odom coords
+            pothole_stamp_ = this->get_clock()->now();
+            pothole_detected_ = true;
+
+            RCLCPP_INFO(this->get_logger(),
+                        "Pothole @ odom (%.2f, %.2f, %.2f) from frame '%s'",
+                        pothole_pos_.x, pothole_pos_.y, pothole_pos_.z,
+                        msg->header.frame_id.c_str());
+        }
+        catch (tf2::TransformException &ex) {
+            RCLCPP_WARN(this->get_logger(), "Pothole TF failed: %s", ex.what());
+            // leave pothole_detected_ as-is (or clear?)
+        }
+    }
 
     void override_callback_(const std_msgs::msg::String::SharedPtr msg)
     {
@@ -115,13 +153,6 @@ private:
         robot_pose_.first = msg->pose.pose.position.x;
         robot_pose_.second = msg->pose.pose.position.y;
     }
-
-
-
-
-
-
-
 
     std::pair<double, double>
     get_last_point(const std::vector<geometry_msgs::msg::Point> &points,
@@ -271,11 +302,6 @@ private:
 
     return {best_pt.x, best_pt.y};
     }
-
-
-
-
-
 
     void publish_goal(const geometry_msgs::msg::PointStamped &goal_point)
     {
@@ -440,63 +466,69 @@ private:
         //---------------------------------------------------------------------
         // Decide if an obstacle blocks the corridor we are following
         //---------------------------------------------------------------------
-        static const std::unordered_set<std::string> kObstacles{
-            "traffic barrel", "cone", "tire"};
-
         bool corridor_blocked = false;
-        std::string blocking_label;                       // NEW: store obstacle name
+        std::string blocking_label;
 
-        for (const auto &[label, p] : detected_objects_)
-        {
-            if (kObstacles.find(label) == kObstacles.end()) continue;
+        auto now = this->get_clock()->now();
+        bool pothole_fresh = pothole_detected_ &&
+                            ((now - pothole_stamp_) < rclcpp::Duration::from_seconds(pothole_ttl_sec_));
 
-            std::pair<double,double> obj{p.x, p.y};
-            bool inside = false;
+        if (pothole_fresh) {
 
-            if (target_lane_ == "left")
-                inside = is_between_lanes(olp_, omp_, obj);   // between left & mid
-            else
-                inside = is_between_lanes(orp_, omp_, obj);   // between right & mid
+            // ---- Pothole logic ----
+            std::pair<double, double> pothole_xy{pothole_pos_.x, pothole_pos_.y};
+            bool inside = (target_lane_ == "left")
+                            ? is_between_lanes(olp_, omp_, pothole_xy)  // between left & mid
+                            : is_between_lanes(orp_, omp_, pothole_xy); // between right & mid
 
             if (inside) {
                 corridor_blocked = true;
-                blocking_label = label;                      // NEW: remember which obstacle
-                break;
+                blocking_label = "pothole";
+            }
+        } else {
+            // ---- Regular object detection logic ----
+            static const std::unordered_set<std::string> kObstacles{
+                "traffic barrel", "cone", "tire"};
+
+            for (const auto &[label, p] : detected_objects_) {
+                if (kObstacles.find(label) == kObstacles.end())
+                    continue;
+
+                std::pair<double, double> obj{p.x, p.y};
+                bool inside = (target_lane_ == "left")
+                                ? is_between_lanes(olp_, omp_, obj)
+                                : is_between_lanes(orp_, omp_, obj);
+
+                if (inside) {
+                    corridor_blocked = true;
+                    blocking_label = label;
+                    break;
+                }
             }
         }
 
-        auto now = this->get_clock()->now();
+        if (!pothole_fresh) {
+            pothole_detected_ = false;   // optional: clear state when stale
+        }
+        
+
         if (corridor_blocked &&
             (now - last_lane_switch_) >
                 rclcpp::Duration::from_seconds(MINIMUM_TIME_BEFORE_SWITCHING_LANES_AGAIN))
         {
-            const std::string prev_lane = target_lane_;      // NEW: lane we’re leaving
+            const std::string prev_lane = target_lane_;
             target_lane_ = (target_lane_ == "left" ? "right" : "left");
             last_lane_switch_ = now;
 
             RCLCPP_WARN(this->get_logger(),
                 "Obstacle '%s' detected between %s & middle — switching from %s to %s lane",
                 blocking_label.c_str(),
-                prev_lane.c_str(),   // corridor: prev lane ↔ middle
-                prev_lane.c_str(),   // leaving
-                target_lane_.c_str() // entering
+                prev_lane.c_str(),
+                prev_lane.c_str(),
+                target_lane_.c_str()
             );
         }
         //---------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         std::pair<double, double> goal;
         if (target_lane_ == "right")
         {
