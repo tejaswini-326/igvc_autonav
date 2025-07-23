@@ -66,7 +66,7 @@ class Controller(Node):
     def intersection_cb(self, msg: String):
         if msg.data.lower()  == "none":
             self.active = True
-            self.prev_angular_z = 0
+            self.reset_controller()
             self.get_logger().info(f"🟢 Received '{msg.data}' from /intersection.")
         else:
             self.active = False
@@ -80,9 +80,30 @@ class Controller(Node):
             if VERBOSE_UNECESSARY_THINGS: self.get_logger().info(msg)
             self.last_log_time = now
 
+    def reset_controller(self):
+        self.prev_angular_z = 0.0
+        self.scan_start_time = self.get_clock().now().nanoseconds
+        self.yaw_buffer.clear()
+
+
     def scan(self):
         self.scanning = True
+        self.scan_direction = 1
+        self.scan_start_time = self.get_clock().now().nanoseconds
+        self.scan_timer = self.create_timer(0.1, self.scan_step)
 
+    def scan_step(self):
+        if not self.scanning:
+            return
+
+        twist = Twist()
+        twist.angular.z = 0.4 * self.scan_direction
+        self.cmd_pub.publish(twist)
+
+        elapsed = (self.get_clock().now().nanoseconds - self.scan_start_time) / 1e9
+        if elapsed > 2.0:
+            self.scan_direction *= -1
+            self.scan_start_time = self.get_clock().now().nanoseconds
 
     def odom_callback(self, msg):
         if not self.active:
@@ -214,6 +235,11 @@ class Controller(Node):
 
     def control_loop(self):
         if not self.active:
+            return
+        if not self.path:
+            if not self.scanning:
+                self.get_logger().info("No path in memory. Triggering scan from control loop.")
+                self.scan()
             return
         if self.pose is None or not self.path:
             return
