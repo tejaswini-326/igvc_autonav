@@ -245,9 +245,9 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'camera.image.compressed.jpeg_quality': 75
+            #'camera.image.compressed.jpeg_quality': 75
         }],
-    )
+    )   
 
     # ------------------------------------------------------------------------
     # Relay camera_info under the proper topic namespace
@@ -268,7 +268,7 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'camera.image.compressed.jpeg_quality': 75
+            #'camera.image.compressed.jpeg_quality': 75
         }],
     )   
 
@@ -296,24 +296,6 @@ def generate_launch_description():
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ],
     )
-
-    # ------------------------------------------------------------------------
-    # Trajectory server nodes (custom mogi_trajectory_server package)
-    # ------------------------------------------------------------------------
-    # trajectory_odom_topic_node = Node(
-    #     package='mogi_trajectory_server',
-    #     executable='mogi_trajectory_server_topic_based',
-    #     name='mogi_trajectory_server_odom_topic',
-    #     parameters=[
-    #         {'trajectory_topic': 'trajectory_raw'},
-    #         {'odometry_topic': 'odom'}
-    #     ],
-    # )
-    # trajectory_node = Node(
-    #     package='mogi_trajectory_server',
-    #     executable='mogi_trajectory_server',
-    #     name='mogi_trajectory_server'
-    # )
 
     # ------------------------------------------------------------------------
     # Robot State Publisher (publishes TF from the robot_description)
@@ -349,15 +331,16 @@ def generate_launch_description():
     ld.add_action(world_launch)
     ld.add_action(rviz_node)
     ld.add_action(spawn_urdf_node)
+
     ld.add_action(gz_bridge_node)
     ld.add_action(gz_image_bridge_node)
+    ld.add_action(gz_bimage_bridge_node)
     ld.add_action(relay_camera_info_node)
     ld.add_action(relay_bcamera_info_node)
+
     ld.add_action(ekf_node)
-
     ld.add_action(robot_state_publisher_node)
-    ld.add_action(gz_bimage_bridge_node)
-
+    
     ld.add_action(gps_waypoint_publisher_node)
     ld.add_action(pointcloud_downscaler_node)
     ld.add_action(back_pointcloud_downscaler_node)
