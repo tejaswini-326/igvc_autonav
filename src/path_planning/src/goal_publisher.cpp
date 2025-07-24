@@ -81,13 +81,11 @@ public:
         pothole_sub_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
             "/pothole_position", 10,
             std::bind(&GoalPublisher::pothole_callback, this, _1));
+
 #ifdef RVIZ_DISTANCE_DEBUG
         distance_viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/a_goalpub_debug_distances", 10);
 #endif
-        override_ = "none";
-        target_lane_ = "right";
 
-        lane_history_memory_buffer_size_ = 10;
         pothole_detected_ = false;
         pothole_pos_.x = pothole_pos_.y = pothole_pos_.z = 0.0;
         RCLCPP_INFO(this->get_logger(), "GoalPublisher node initialized");
@@ -99,9 +97,11 @@ private:
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr override_sub_;
     rclcpp::Subscription<object_detection::msg::ObjectArray>::SharedPtr object_data_sub_;
+
 #ifdef RVIZ_DISTANCE_DEBUG
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr distance_viz_pub_;
 #endif 
+
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr pothole_sub_;
     rclcpp::Time pothole_stamp_;                 // when last pothole msg received
     double pothole_ttl_sec_ = 1.0;               // consider param; 1s default
@@ -122,13 +122,6 @@ private:
     // Pothole tracking
     bool pothole_detected_;
     geometry_msgs::msg::Point pothole_pos_;
-
-    struct tracked_points
-    {
-        std::pair<double, double> left;
-        std::pair<double, double> mid;
-        std::pair<double, double> right;
-    };
 
     std::deque<visualization_msgs::msg::Marker> left_lane_history_;
     std::deque<visualization_msgs::msg::Marker> right_lane_history_;
