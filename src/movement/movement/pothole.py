@@ -127,14 +127,14 @@ class PotholeDetectorNode(Node):
 
             cy, cx = int(y), int(x)
             if cy < 0 or cy >= depth.shape[0] or cx < 0 or cx >= depth.shape[1]:
-                self.get_logger().warn(f"Skipping contour: ({cx},{cy}) out of bounds for depth size {depth.shape}")
+                #self.get_logger().warn(f"Skipping contour: ({cx},{cy}) out of bounds for depth size {depth.shape}")
                 continue
             z_val = depth[cy, cx]
             z = float(z_val) if np.isfinite(z_val) else None
 
 
             if z is None or not np.isfinite(z) or z <= 0.1 or z > 10.0:
-                self.get_logger().info(f"Skipping contour: invalid depth at ({cx},{cy})")
+                #self.get_logger().info(f"Skipping contour: invalid depth at ({cx},{cy})")
                 continue
 
             normalized_area = area * (z ** 2)
@@ -146,10 +146,10 @@ class PotholeDetectorNode(Node):
                 cv2.putText(debug_image, "oval pothole", (int(x) - 20, int(y) - 20),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
-        cv2.imshow("4. Pothole Detection Overlay", debug_image)
+        #cv2.imshow("4. Pothole Detection Overlay", debug_image)
 
         # Allow OpenCV windows to refresh
-        cv2.waitKey(1)
+        #cv2.waitKey(1)
 
         return ellipses
     
@@ -217,7 +217,7 @@ class PotholeDetectorNode(Node):
                     continue
 
                 if z > Y_HEIGHT_THRESHOLD:  # height filter
-                    self.get_logger().info(f"Rejected ellipse due to height z={z:.2f}")
+                    #self.get_logger().info(f"Rejected ellipse due to height z={z:.2f}")
                     continue
 
                 # Publish point cloud for debug

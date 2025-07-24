@@ -1,4 +1,4 @@
-#define DEBUG
+//#define DEBUG
 
 constexpr int X_OF_STARTING_POSITION_IN_PATH = 155;
 constexpr int Y_OF_STARTING_POSITION_IN_PATH = 150;
