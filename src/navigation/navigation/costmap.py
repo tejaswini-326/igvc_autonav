@@ -228,7 +228,7 @@ class CostmapNode(Node):
 			self.white_map[:] = self._make_layer(self._white_pc, 250, 'white')
 			self._new_white = False
 		if self._new_yellow and self._yellow_pc is not None:
-			self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 250, 'yellow')
+			self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 200, 'yellow')
 			self._new_yellow = False
 
 		now = self.get_clock().now()
@@ -247,11 +247,11 @@ class CostmapNode(Node):
 
 		# rear_mask_layer = np.zeros_like(self.white_map, dtype=np.uint8)
 		# rear_mask_layer[:, :math.ceil(1.15*(self.width // 2))] = 250
-		#roi_layer = self.draw_v_lines()
+		# v_layer = self.draw_v_lines()
 		# ---------- fuse + distance penalty + publish ----------------------
 		combined = np.maximum.reduce([self.white_map,
 									self.yellow_map,
-									self.object_map]) # 
+									self.object_map]) # v_layer
 
 		penalty  = self._distance_penalty(combined, thresh=200,radius_m=1.5, steepness=1.0)
 
