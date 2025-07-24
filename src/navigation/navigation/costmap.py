@@ -30,6 +30,7 @@ import tf_transformations
 
 VERBOSE_UNECESSARY_THINGS = False
 
+FANCY_HISTORY_COSTMAP = False
 
 OBJECT_HOLD_SEC = 1/15 # Just slightly more than the 20 Hz we receive objects at
 
@@ -103,8 +104,16 @@ class CostmapNode(Node):
 		self.origin_x = self.origin_y = 0.0
 		self.pose = None
 
+		if FANCY_HISTORY_COSTMAP: 
+			# ------------ GLOBAL “memory” cost‑map (fixed origin) ------------
+			self.g_size       = 2000              # 2000×2000 cells ≈134 m × 134 m
+			self.g_map        = np.zeros((self.g_size, self.g_size), np.uint8)
+			self.g_origin_set = False             # we’ll set it after first TF
+			self.g_origin_x   = self.g_origin_y = 0.0
+
 		# ---------------------------- timer -------------------------------
 		self.create_timer(0.05, self._timer_cb)   # 10 Hz
+
 
 		# --------------------- logger level tweak -------------------------
 		# Set ROS_CONSOLE_STDOUT_LINE_BUFFERED=1 for live prints in docker
@@ -249,13 +258,50 @@ class CostmapNode(Node):
 		# rear_mask_layer[:, :math.ceil(1.15*(self.width // 2))] = 250
 		# v_layer = self.draw_v_lines()
 		# ---------- fuse + distance penalty + publish ----------------------
-		combined = np.maximum.reduce([self.white_map,
+		combined_raw = np.maximum.reduce([self.white_map,
 									self.yellow_map,
 									self.object_map]) # v_layer
+		
+		# ▸ Fancy “remember everything” mode
+		if FANCY_HISTORY_COSTMAP:
+			if not self.g_origin_set:
+				# centre global map on the robot’s *starting* odom pose
+				self.g_origin_x = tf.transform.translation.x - \
+								(self.g_size * self.resolution) / 2.0
+				self.g_origin_y = tf.transform.translation.y - \
+								(self.g_size * self.resolution) / 2.0
+				self.g_origin_set = True
+				self.get_logger().info(
+					f"Global map anchored at ({self.g_origin_x:.2f},"
+					f"{self.g_origin_y:.2f}) in odom")
+						# offset (cells) of this window within the global map
+			gi0 = int((self.origin_x - self.g_origin_x) / self.resolution)
+			gj0 = int((self.origin_y - self.g_origin_y) / self.resolution)
 
-		penalty  = self._distance_penalty(combined, thresh=200,radius_m=1.5, steepness=1.0)
+			# bounds‑checked slice targets
+			i1 = gi0 + self.width
+			j1 = gj0 + self.height
+			si0, sj0 = max(0, gi0), max(0, gj0)
+			si1 = min(self.g_size, i1)
+			sj1 = min(self.g_size, j1)
 
-		final    = np.maximum(combined, penalty)      # 0-100 uint8
+			li0 = si0 - gi0            # how much of the local grid is clipped
+			lj0 = sj0 - gj0
+			li1 = self.width  - (i1 - si1)
+			lj1 = self.height - (j1 - sj1)
+
+			if li1 > li0 and lj1 > lj0:  # anything left after clipping?
+				decay = 0.5                                # value to subtract every tick
+				self.g_map = np.clip(self.g_map.astype(np.int16) - decay, 0, 255).astype(np.uint8)
+				np.maximum(self.g_map[sj0:sj1, si0:si1],combined_raw[lj0:lj1, li0:li1],out=self.g_map[sj0:sj1, si0:si1])
+
+			# --------- crop robot‑centred window back out --------------
+			combined_raw = self.g_map[sj0:sj1, si0:si1].copy()
+	
+
+		penalty  = self._distance_penalty(combined_raw, thresh=200,radius_m=1.5, steepness=1.0)
+
+		final    = np.maximum(combined_raw, penalty)      # 0-100 uint8
 		self._publish_costmap(final, self.get_clock().now().to_msg())
 
 
