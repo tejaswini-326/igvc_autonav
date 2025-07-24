@@ -85,7 +85,6 @@ public:
 #ifdef RVIZ_DISTANCE_DEBUG
         distance_viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/a_goalpub_debug_distances", 10);
 #endif
-
         pothole_detected_ = false;
         pothole_pos_.x = pothole_pos_.y = pothole_pos_.z = 0.0;
         RCLCPP_INFO(this->get_logger(), "GoalPublisher node initialized");
