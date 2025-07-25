@@ -21,17 +21,16 @@ constexpr double REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE = 0.0;
 #include "std_msgs/msg/string.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "object_detection/msg/object_array.hpp"
+
 #include <sstream>
 #include <iomanip>
-
-#include <map> 
+#include <map>
 #include <vector>
 #include <algorithm>
 #include <cmath>
 #include <optional>
 #include <deque>
 #include <unordered_set>
-
 
 using std::placeholders::_1;
 using namespace std;
@@ -54,7 +53,8 @@ inline std::pair<double, double> operator*(const std::pair<double, double> &p, d
 
 inline std::pair<double, double> operator/(const std::pair<double, double> &p, double scalar)
 {
-    if(scalar == 0.0) return{0.0, 0.0};
+    if (scalar == 0.0)
+        return {0.0, 0.0};
     return {p.first / scalar, p.second / scalar};
 }
 
@@ -100,11 +100,11 @@ private:
 
 #ifdef RVIZ_DISTANCE_DEBUG
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr distance_viz_pub_;
-#endif 
+#endif
 
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr pothole_sub_;
-    rclcpp::Time pothole_stamp_;                 // when last pothole msg received
-    double pothole_ttl_sec_ = 1.0;               // consider param; 1s default
+    rclcpp::Time pothole_stamp_;   // when last pothole msg received
+    double pothole_ttl_sec_ = 1.0; // consider param; 1s default
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -131,14 +131,15 @@ private:
     {
         geometry_msgs::msg::PointStamped in_pt = *msg, out_pt;
 
-        try {
+        try
+        {
             // Transform from the incoming frame (msg->header.frame_id) to odom
             auto tf = tf_buffer_->lookupTransform(
                 "odom", msg->header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.2));
 
             tf2::doTransform(in_pt, out_pt, tf);
 
-            pothole_pos_ = out_pt.point;          // now in odom coords
+            pothole_pos_ = out_pt.point; // now in odom coords
             pothole_stamp_ = this->get_clock()->now();
             pothole_detected_ = true;
 
@@ -147,7 +148,8 @@ private:
                         pothole_pos_.x, pothole_pos_.y, pothole_pos_.z,
                         msg->header.frame_id.c_str());
         }
-        catch (tf2::TransformException &ex) {
+        catch (tf2::TransformException &ex)
+        {
             RCLCPP_WARN(this->get_logger(), "Pothole TF failed: %s", ex.what());
             // leave pothole_detected_ as-is (or clear?)
         }
@@ -212,8 +214,8 @@ private:
             double dx = p.x - robot_pose_.first;
             double dy = p.y - robot_pose_.second;
             double current_distance_squared = dx * dx + dy * dy;
-            if (current_distance_squared >= min_sq && 
-                current_distance_squared <= max_sq && 
+            if (current_distance_squared >= min_sq &&
+                current_distance_squared <= max_sq &&
                 current_distance_squared > max_distance_squared)
             {
                 ans = p;
@@ -354,8 +356,6 @@ private:
         return {ans.x, ans.y};
     }
 
- 
-
     void publish_goal(const geometry_msgs::msg::PointStamped &goal_point)
     {
         geometry_msgs::msg::PoseStamped goal_pose;
@@ -376,9 +376,12 @@ private:
     void debug_markers()
     {
         visualization_msgs::msg::MarkerArray MarkerArray;
-        if(!right_lane_history_.empty()) MarkerArray.markers.push_back(right_lane_history_[0]);  // red
-        if(!middle_lane_history_.empty()) MarkerArray.markers.push_back(middle_lane_history_[0]); // green
-        if(!left_lane_history_.empty()) MarkerArray.markers.push_back(left_lane_history_[0]);   // blue
+        if (!right_lane_history_.empty())
+            MarkerArray.markers.push_back(right_lane_history_[0]); // red
+        if (!middle_lane_history_.empty())
+            MarkerArray.markers.push_back(middle_lane_history_[0]); // green
+        if (!left_lane_history_.empty())
+            MarkerArray.markers.push_back(left_lane_history_[0]); // blue
 
         debug_pub_->publish(MarkerArray);
     }
@@ -425,15 +428,15 @@ private:
 #ifdef LANE_DEBUG
                             cout << "LEFT LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            olp_ = get_last_point(left_lane_history_[0].points, 
-                                REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE, 
-                                REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
+                            olp_ = get_last_point(left_lane_history_[0].points,
+                                                  REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE,
+                                                  REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
                         }
                     }
                     else
                     {
 #ifdef LANE_DEBUG
-                        cout<<"GOT LEFT LANE POINT FROM CURRENT DATA\n";
+                        cout << "GOT LEFT LANE POINT FROM CURRENT DATA\n";
 #endif
                         olp_ = pair;
                         left_lane_history_.push_front(transformed_marker);
@@ -454,9 +457,9 @@ private:
 #ifdef LANE_DEBUG
                             cout << "MID LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            omp_ = get_last_point(middle_lane_history_[0].points, 
-                                REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE, 
-                                REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
+                            omp_ = get_last_point(middle_lane_history_[0].points,
+                                                  REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE,
+                                                  REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
                         }
                     }
                     else
@@ -483,9 +486,9 @@ private:
 #ifdef LANE_DEBUG
                             cout << "RIGHT LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            orp_ = get_last_point(right_lane_history_[0].points, 
-                                REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE, 
-                                REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
+                            orp_ = get_last_point(right_lane_history_[0].points,
+                                                  REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE,
+                                                  REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
                         }
                     }
                     else
@@ -515,36 +518,41 @@ private:
 
         auto now = this->get_clock()->now();
         bool pothole_fresh = pothole_detected_ &&
-                            ((now - pothole_stamp_) < rclcpp::Duration::from_seconds(pothole_ttl_sec_));
+                             ((now - pothole_stamp_) < rclcpp::Duration::from_seconds(pothole_ttl_sec_));
 
-        if (pothole_fresh) {
+        if (pothole_fresh)
+        {
 
             // ---- Pothole logic ----
             std::pair<double, double> pothole_xy{pothole_pos_.x, pothole_pos_.y};
             bool inside = (target_lane_ == "left")
-                            ? is_between_lanes(olp_, omp_, pothole_xy)  // between left & mid
-                            : is_between_lanes(orp_, omp_, pothole_xy); // between right & mid
+                              ? is_between_lanes(olp_, omp_, pothole_xy)  // between left & mid
+                              : is_between_lanes(orp_, omp_, pothole_xy); // between right & mid
 
             if (inside)
             {
                 corridor_blocked = true;
                 blocking_label = "pothole";
             }
-        } else {
+        }
+        else
+        {
             // ---- Regular object detection logic ----
             static const std::unordered_set<std::string> kObstacles{
                 "traffic barrel", "cone", "tire"};
 
-            for (const auto &[label, p] : detected_objects_) {
+            for (const auto &[label, p] : detected_objects_)
+            {
                 if (kObstacles.find(label) == kObstacles.end())
                     continue;
 
                 std::pair<double, double> obj{p.x, p.y};
                 bool inside = (target_lane_ == "left")
-                                ? is_between_lanes(olp_, omp_, obj)
-                                : is_between_lanes(orp_, omp_, obj);
+                                  ? is_between_lanes(olp_, omp_, obj)
+                                  : is_between_lanes(orp_, omp_, obj);
 
-                if (inside) {
+                if (inside)
+                {
                     corridor_blocked = true;
                     blocking_label = label;
                     break;
@@ -552,10 +560,10 @@ private:
             }
         }
 
-        if (!pothole_fresh) {
-            pothole_detected_ = false;   // optional: clear state when stale
+        if (!pothole_fresh)
+        {
+            pothole_detected_ = false; // optional: clear state when stale
         }
-        
 
         if (corridor_blocked &&
             (now - last_lane_switch_) >
@@ -566,12 +574,11 @@ private:
             last_lane_switch_ = now;
 
             RCLCPP_WARN(this->get_logger(),
-                "Obstacle '%s' detected between %s & middle — switching from %s to %s lane",
-                blocking_label.c_str(),
-                prev_lane.c_str(),
-                prev_lane.c_str(),
-                target_lane_.c_str()
-            );
+                        "Obstacle '%s' detected between %s & middle — switching from %s to %s lane",
+                        blocking_label.c_str(),
+                        prev_lane.c_str(),
+                        prev_lane.c_str(),
+                        target_lane_.c_str());
         }
         //---------------------------------------------------------------------
         std::pair<double, double> goal;
