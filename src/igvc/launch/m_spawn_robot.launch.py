@@ -101,94 +101,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    pointcloud_downscaler_node = Node(
-        package='movement',
-        executable='pointcloud_downscaler',
-        name='PointCloudDownscaler',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
-    back_pointcloud_downscaler_node = Node(
-        package='movement',
-        executable='back_pointcloud_downscaler',
-        name='BackPointCloudDownscaler',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
-    m_horizontal_line_detect_node = Node(
-        package='movement',
-        executable='m_horizontal_line_detect',
-        name='M_HorizontalLineDetect',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
-    gps_waypoint_publisher_node = Node(
-        package='movement',
-        executable='gps_waypoint_publisher',
-        name='GPSNextWaypointPublisherNode',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
-    intersection_straight_node = Node(
-        package='movement',
-        executable='intersection_straight',
-        name='IntersectionStraightDriver',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
-    intersection_left_node = Node(
-        package='movement',
-        executable='intersection_left',
-        name='IntersectionLeftTurnDriver',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
-
-    goal_publisher_node = Node(
-        package='path_planning',
-        executable='goal_publisher',
-        name='goal_publisher',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-        output='screen'
-    )
-
-    costmap_publisher_node = Node(
-        package='navigation',
-        executable='costmap',
-        name='costmap_publisher',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-        output='screen'
-    )
-
-    path_publisher_node = Node(
-        package='path_planning',
-        executable='path_planner',
-        name='path_planner',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-        output='screen'
-    )
-
-    curve_fit_node = Node(
-        package='navigation',
-        executable='curve_fit',
-        name='lane_fit',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-        output='screen'
-    )
-    controller_node = Node(
-        package='navigation',
-        executable='controller',
-        name='controller',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-        output='screen'
-    )
-
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
     # ------------------------------------------------------------------------
@@ -218,11 +130,11 @@ def generate_launch_description():
             "/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist",
             "/odom@nav_msgs/msg/Odometry@gz.msgs.Odometry",
             "/joint_states@sensor_msgs/msg/JointState@gz.msgs.Model",
+
             "/camera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo",
             "/imu@sensor_msgs/msg/Imu@gz.msgs.IMU",
             "/navsat@sensor_msgs/msg/NavSatFix@gz.msgs.NavSat",
             "/scan@sensor_msgs/msg/LaserScan@gz.msgs.LaserScan",
-            "/scan/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
             "/camera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image",
             "/camera/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
             "/bcamera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo",
@@ -245,7 +157,7 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'camera.image.compressed.jpeg_quality': 75
+            #'camera.image.compressed.jpeg_quality': 75
         }],
     )
 
@@ -268,7 +180,7 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'camera.image.compressed.jpeg_quality': 75
+            #'camera.image.compressed.jpeg_quality': 75
         }],
     )   
 
@@ -358,19 +270,6 @@ def generate_launch_description():
     ld.add_action(robot_state_publisher_node)
     ld.add_action(gz_bimage_bridge_node)
 
-    ld.add_action(gps_waypoint_publisher_node)
-    ld.add_action(pointcloud_downscaler_node)
-    ld.add_action(back_pointcloud_downscaler_node)
-    ld.add_action(m_horizontal_line_detect_node)
-    ld.add_action(intersection_straight_node)
-    ld.add_action(intersection_left_node)
-
-    ld.add_action(goal_publisher_node)
-    ld.add_action(costmap_publisher_node)
-    ld.add_action(path_publisher_node)
-    ld.add_action(curve_fit_node)
-    ld.add_action(controller_node)
-    
 
     return ld
 

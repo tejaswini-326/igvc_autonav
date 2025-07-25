@@ -247,11 +247,11 @@ class CostmapNode(Node):
 
 		# rear_mask_layer = np.zeros_like(self.white_map, dtype=np.uint8)
 		# rear_mask_layer[:, :math.ceil(1.15*(self.width // 2))] = 250
-		#roi_layer = self.draw_v_lines()
+		# v_layer = self.draw_v_lines()
 		# ---------- fuse + distance penalty + publish ----------------------
 		combined = np.maximum.reduce([self.white_map,
 									self.yellow_map,
-									self.object_map]) # 
+									self.object_map]) # v_layer
 
 		penalty  = self._distance_penalty(combined, thresh=200,radius_m=1.5, steepness=1.0)
 
