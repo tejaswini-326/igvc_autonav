@@ -124,7 +124,7 @@ class LaneFollowerNode(Node):
             if cluster_xy is not None and len(cluster_xy) > 0:
                 x_vals = cluster_xy[:, 0]
                 x_min, x_max = np.min(x_vals), np.max(x_vals)
-                x_line = np.linspace(x_min, x_max, 50)
+                x_line = np.linspace(x_min, 10, 50)
 
                 distances = np.linalg.norm(cluster_xy, axis=1)
                 closest_index = np.argmin(distances)
