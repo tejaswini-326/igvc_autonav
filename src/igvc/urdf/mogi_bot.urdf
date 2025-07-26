@@ -356,14 +356,14 @@
     </inertial>
 
     <collision name='collision'>
-      <origin xyz="0 0 0" rpy="0 0 0" />
+      <origin xyz="0.0 0 0" rpy="0 .25 0" />
       <geometry>
         <box size=".075 .25 .075" />
       </geometry>
     </collision>
 
     <visual name='cam_visual'>
-      <origin xyz="0 0 0" rpy="0 .25 0" />
+      <origin xyz="0.0 0 0" rpy="0 .25 0" />
       <geometry>
         <box size=".075 .25 .075" />
       </geometry>
