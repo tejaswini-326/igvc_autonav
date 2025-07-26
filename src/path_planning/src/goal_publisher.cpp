@@ -1,5 +1,5 @@
 // #define LANE_DEBUG
-// #define RVIZ_DISTANCE_DEBUG
+//#define RVIZ_DISTANCE_DEBUG
 
 constexpr double MINIMUM_TIME_BEFORE_SWITCHING_LANES_AGAIN = 5.0;
 

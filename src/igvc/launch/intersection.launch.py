@@ -53,7 +53,7 @@ def generate_launch_description():
     )
     yaw_arg = DeclareLaunchArgument(
         'yaw',
-        default_value='-0.2',
+        default_value='0.0',
         description='Initial yaw (rotation around Z) for robot spawn'
     )
     sim_time_arg = DeclareLaunchArgument(

@@ -41,7 +41,7 @@ class Controller(Node):
         self.last_log_time = 0.0
         self.log_interval = 0.5
 
-        self.active = True
+        self.active = False
         self.pose = None
         self.imu_yaw = None
         self.scanning = False
