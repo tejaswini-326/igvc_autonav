@@ -21,6 +21,7 @@ constexpr double REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE = 0.0;
 #include "std_msgs/msg/string.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "object_detection/msg/object_array.hpp"
+#include "tk_spline.h"
 
 #include <sstream>
 #include <iomanip>
@@ -31,6 +32,7 @@ constexpr double REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE = 0.0;
 #include <optional>
 #include <deque>
 #include <unordered_set>
+#include <Eigen/Dense>
 
 using std::placeholders::_1;
 using namespace std;
@@ -81,6 +83,8 @@ public:
         pothole_sub_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
             "/pothole_position", 10,
             std::bind(&GoalPublisher::pothole_callback, this, _1));
+        pub_marker_ = this->create_publisher<visualization_msgs::msg::Marker>("lane_marker", 10);
+
 
 #ifdef RVIZ_DISTANCE_DEBUG
         distance_viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/a_goalpub_debug_distances", 10);
@@ -93,6 +97,7 @@ public:
 private:
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr override_sub_;
     rclcpp::Subscription<object_detection::msg::ObjectArray>::SharedPtr object_data_sub_;
@@ -125,6 +130,66 @@ private:
     std::deque<visualization_msgs::msg::Marker> left_lane_history_;
     std::deque<visualization_msgs::msg::Marker> right_lane_history_;
     std::deque<visualization_msgs::msg::Marker> middle_lane_history_;
+
+    const std_msgs::msg::ColorRGBA RED_COLOR = []()
+    {
+        std_msgs::msg::ColorRGBA c;
+        c.r = 1.0f;
+        c.g = 0.0f;
+        c.b = 0.0f;
+        c.a = 1.0f;
+        return c;
+    }();
+
+    const std_msgs::msg::ColorRGBA GREEN_COLOR = []()
+    {
+        std_msgs::msg::ColorRGBA c;
+        c.r = 0.0f;
+        c.g = 1.0f;
+        c.b = 0.0f;
+        c.a = 1.0f;
+        return c;
+    }();
+
+    const std_msgs::msg::ColorRGBA BLUE_COLOR = []()
+    {
+        std_msgs::msg::ColorRGBA c;
+        c.r = 0.0f;
+        c.g = 0.0f;
+        c.b = 1.0f;
+        c.a = 1.0f;
+        return c;
+    }();
+
+    const std_msgs::msg::ColorRGBA LIGHT_RED_COLOR = []()
+    {
+        std_msgs::msg::ColorRGBA c;
+        c.r = 1.0f;
+        c.g = 0.5f;
+        c.b = 0.5f;
+        c.a = 0.8f;
+        return c;
+    }();
+
+    const std_msgs::msg::ColorRGBA LIGHT_GREEN_COLOR = []()
+    {
+        std_msgs::msg::ColorRGBA c;
+        c.r = 0.5f;
+        c.g = 1.0f;
+        c.b = 0.5f;
+        c.a = 0.8f;
+        return c;
+    }();
+
+    const std_msgs::msg::ColorRGBA LIGHT_BLUE_COLOR = []()
+    {
+        std_msgs::msg::ColorRGBA c;
+        c.r = 0.5f;
+        c.g = 0.5f;
+        c.b = 1.0f;
+        c.a = 0.8f;
+        return c;
+    }();
 
     void pothole_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg)
     {
@@ -385,6 +450,143 @@ private:
         debug_pub_->publish(MarkerArray);
     }
 
+    visualization_msgs::msg::Marker predict_marker(const std::deque<visualization_msgs::msg::Marker> &history, int lane)
+    {
+        std::vector<std::pair<double, double>> history_points;
+        visualization_msgs::msg::Marker fake_marker;
+        for (const auto &frame : history)
+        {
+            for (const auto &p : frame.points)
+                history_points.emplace_back(p.x, p.y);
+        }
+        int N = history_points.size();
+        if (N > 0) // arbitrary minimum for fitting
+        {
+            Eigen::MatrixXd A(N, 3);
+            Eigen::VectorXd Y(N);
+            for (int i = 0; i < N; ++i)
+            {
+                double x = history_points[i].first;
+                double y = history_points[i].second;
+                A(i, 0) = x * x;
+                A(i, 1) = x;
+                A(i, 2) = 1;
+                Y(i) = y;
+            }
+            Eigen::Vector3d coeffs = A.colPivHouseholderQr().solve(Y);
+            cout << "GETTING EIGEN\n";
+
+            fake_marker.header.frame_id = "odom";
+            fake_marker.header.stamp = this->get_clock()->now();
+            fake_marker.ns = "lane_curves";
+            fake_marker.id = lane;
+            fake_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+            fake_marker.action = visualization_msgs::msg::Marker::ADD;
+            fake_marker.scale.x = 0.1;
+            switch (lane)
+            {
+            case 0:
+                fake_marker.color.r = 0.6f;
+                fake_marker.color.g = 0.6f;
+                fake_marker.color.b = 1.0f;
+                fake_marker.color.a = 1.0f;
+                break;
+            case 1:
+                fake_marker.color.r = 0.6f;
+                fake_marker.color.g = 1.0f;
+                fake_marker.color.b = 0.6f;
+                fake_marker.color.a = 1.0f;
+                break;
+            case 2:
+                fake_marker.color.r = 1.0f;
+                fake_marker.color.g = 0.6f;
+                fake_marker.color.b = 0.6f;
+                fake_marker.color.a = 1.0f;
+                break;
+            default:
+                fake_marker.color.r = 1.0f;
+                fake_marker.color.g = 1.0f;
+                fake_marker.color.b = 1.0f;
+                fake_marker.color.a = 1.0f;
+                break;
+            }
+
+            for (double dx = 0.0; dx <= 10.0; dx += 0.2)
+            {
+                geometry_msgs::msg::Point p;
+                double x = robot_pose_.first + dx;
+                double y = coeffs[0] * x * x + coeffs[1] * x + coeffs[2];
+                p.x = x;
+                p.y = y;
+                p.z = 0.0;
+                fake_marker.points.push_back(p);
+            }
+        }
+        return fake_marker;
+    }
+
+    visualization_msgs::msg::Marker fit_cubic_spline_marker(const std::deque<visualization_msgs::msg::Marker> &history, int lane)
+    {
+        cout<<"PREDICTING\n";
+        std::vector<std::pair<double, double>> history_points;
+        for (const auto &frame : history)
+        {
+            for (const auto &p : frame.points)
+                history_points.emplace_back(p.x, p.y);
+        }
+        visualization_msgs::msg::Marker marker;
+        marker.header.frame_id = "odom";
+        marker.header.stamp = this->get_clock()->now();
+        marker.ns = "lane_curves";
+        marker.id = 0;
+        marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        marker.action = visualization_msgs::msg::Marker::ADD;
+        marker.scale.x = 0.1;
+        switch (lane)
+        {
+        case 0:
+            marker.color = LIGHT_RED_COLOR;
+            break;
+        case 1:
+            marker.color = LIGHT_GREEN_COLOR;
+            break;
+        case 2:
+            marker.color = LIGHT_BLUE_COLOR;
+            break;
+        default:
+            marker.color.r = 1.0f;
+            marker.color.g = 1.0f;
+            marker.color.b = 1.0f;
+            marker.color.a = 1.0f;
+            break;
+        }
+
+        if (history_points.size() < 3)
+            return marker;
+
+        std::vector<double> xs, ys;
+        for (const auto &pt : history_points)
+        {
+            xs.push_back(pt.first);
+            ys.push_back(pt.second);
+        }
+
+        tk::spline s;
+        s.set_points(xs, ys); // Natural cubic spline
+
+        double step = 0.1;
+        for (double x = xs.front(); x <= xs.back(); x += step)
+        {
+            geometry_msgs::msg::Point p;
+            p.x = x;
+            p.y = s(x);
+            p.z = 0.0;
+            marker.points.push_back(p);
+        }
+
+        return marker;
+    }
+
     void marker_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
     {
         geometry_msgs::msg::TransformStamped transformStamped;
@@ -427,9 +629,14 @@ private:
 #ifdef LANE_DEBUG
                             cout << "LEFT LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            olp_ = get_last_point(left_lane_history_[0].points,
-                                                  REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE,
-                                                  REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
+                            // No need to push anything into history here
+                            // Just use history to generate visualization
+                            auto spline_marker = fit_cubic_spline_marker(left_lane_history_, marker.id);
+                            pub_marker_->publish(spline_marker);  // Publish spline if you want to visualize it
+
+                            olp_ = get_last_point(left_lane_history_[0].points);
+                            while (left_lane_history_.size() > LANE_HISTORY_BUFFER_SIZE)
+                                left_lane_history_.pop_back();
                         }
                     }
                     else
@@ -456,9 +663,10 @@ private:
 #ifdef LANE_DEBUG
                             cout << "MID LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            omp_ = get_last_point(middle_lane_history_[0].points,
-                                                  REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE,
-                                                  REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
+                            // middle_lane_history_.push_front(fit_cubic_spline_marker(middle_lane_history_[0].points, "camera_link", LIGHT_GREEN_COLOR, 1));
+                            omp_ = get_last_point(middle_lane_history_[0].points);
+                            while (middle_lane_history_.size() > LANE_HISTORY_BUFFER_SIZE)
+                                middle_lane_history_.pop_back();
                         }
                     }
                     else
@@ -485,9 +693,10 @@ private:
 #ifdef LANE_DEBUG
                             cout << "RIGHT LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            orp_ = get_last_point(right_lane_history_[0].points,
-                                                  REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE,
-                                                  REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
+                            // right_lane_history_.push_front(fit_cubic_spline_marker(right_lane_history_[0].points, "camera_link", LIGHT_RED_COLOR, 2));
+                            orp_ = get_last_point(right_lane_history_[0].points);
+                            while (right_lane_history_.size() > LANE_HISTORY_BUFFER_SIZE)
+                                right_lane_history_.pop_back();
                         }
                     }
                     else
