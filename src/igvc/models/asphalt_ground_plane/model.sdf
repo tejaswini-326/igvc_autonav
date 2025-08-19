@@ -35,10 +35,14 @@
               <mu>100</mu>
               <mu2>50</mu2>
             </ode>
-            <torsional><ode/></torsional>
+            <torsional>
+              <ode />
+            </torsional>
           </friction>
-          <contact><ode/></contact>
-          <bounce/>
+          <contact>
+            <ode />
+          </contact>
+          <bounce />
         </surface>
       </collision>
 
@@ -56,7 +60,7 @@
           <specular>1 1 1 1</specular>
           <pbr>
             <metal>
-              <albedo_map>file://media/materials/textures/asphalt.png</albedo_map>
+              <albedo_map>file://media/materials/textures/better_lanes.png</albedo_map>
             </metal>
           </pbr>
         </material>
