@@ -423,9 +423,9 @@ private:
 #ifdef LANE_DEBUG
                             cout << "LEFT LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            olp_ = get_last_point(left_lane_history_[0].points, 
-                                REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE, 
-                                REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
+                            olp_ = get_last_point(left_lane_history_[0].points,
+                                                  REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE,
+                                                  REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
                         }
                     }
                     else
@@ -452,9 +452,9 @@ private:
 #ifdef LANE_DEBUG
                             cout << "MID LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            omp_ = get_last_point(middle_lane_history_[0].points, 
-                                REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE, 
-                                REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
+                            omp_ = get_last_point(middle_lane_history_[0].points,
+                                                  REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE,
+                                                  REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
                         }
                     }
                     else
@@ -481,9 +481,9 @@ private:
 #ifdef LANE_DEBUG
                             cout << "RIGHT LANE HAS NO GOOD POINT. SO POINT TAKEN FROM HISTORY\n";
 #endif
-                            orp_ = get_last_point(right_lane_history_[0].points, 
-                                REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE, 
-                                REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
+                            orp_ = get_last_point(right_lane_history_[0].points,
+                                                  REDUCED_MAX_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE,
+                                                  REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE);
                         }
                     }
                     else
