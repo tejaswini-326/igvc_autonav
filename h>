@@ -1,0 +1,162 @@
+[33m5dc4a34[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m added ekf
+[33m2c1e4a0[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33m9ef5231[m added lidar
+[33md27c38c[m yes Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m0ac8b2b[m longer lanes for aesthetics XD
+[33me3311d8[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33m2c5c8b6[m some minor changes
+[33ma62f2e8[m added the fancy ray thing to entice the juniors lololol
+[33mdd68a97[m idkopsd
+[33m5a32405[m idkopsd
+[33m34a4310[m Fully merged potholes
+[33mc51bcca[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m5f24577[m deleted old asphalts
+[33m8f9baf9[m small error fix
+[33m934ef10[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m88872e1[m world with vegetation, camera stutter fixed
+[33m673247f[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33m80f17bb[m modified path_planner
+[33m4613b5c[m integrated the pothole thingy
+[33ma7f5698[m integrated the pothole thingy
+[33m74bf7ba[m integrated the pothole thingy
+[33m2d70d05[m improved goal_node
+[33mcd3ca27[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33m7d242a7[m fixed goal_pub bug
+[33m0936934[m added no path fallback and reset
+[33m13ea682[m conflicts
+[33m4b5eb71[m adding no path fallback
+[33m7873702[m Changed readme
+[33mc4c22d8[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m2777388[m fixed wild oscillation
+[33m261ef51[m Update README.md
+[33m5d6f262[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33md2c9f9e[m object detection slight moved from pillow to cv for slight speed up
+[33mc65601c[m e
+[33me4145d1[m added some old code that got removed
+[33m02eaaf8[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m1ca240f[m fixed issues, tuned parameters
+[33m8721e97[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33mf4da250[m v now moves dynamically with bot
+[33m57c675a[m pushed my version of controller and the normal controller
+[33m72a8be0[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33mfa921e6[m finshed single lane tangent code
+[33mb1dee47[m finshed single lane tangent code
+[33m066c51d[m Update sanika_goal_publisher.cpp
+[33m60bd39d[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33md3a0cce[m controller params changed
+[33m7596666[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m992efcf[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33me01b13b[m idk_why_i_commited
+[33md21a592[m Fixed tf and diffdrive mismatch
+[33m5b1b26a[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33mb652136[m added roi lines, changed params
+[33mb8864ac[m added a rear mask layer
+[33meea4bde[m bug fixes ig
+[33m7ba21bd[m increased speed, obstacle lane switch debug
+[33m0af0aa0[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m0a8e9de[m lane switch fix
+[33m8690afc[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33m5bccdcc[m added fallback on A*
+[33m88f8cda[m Better colourfilter, object lane change
+[33mb92b5a6[m refinements to intersection and goal point fallback
+[33m12889ba[m changed costmap, fixed bug
+[33m6db3ed7[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim merge
+[33m8ded407[m changed yellow to marker
+[33m09e5492[m Update lane_curvefitting.py
+[33m9dd42b2[m JOEJDOEJDO
+[33m96c5d87[m builds
+[33m07aac51[m merging
+[33m8f03921[m reading object arrays
+[33m6c937d9[m goal pub fix
+[33m57b1c08[m merge
+[33mb00b8a8[m detect
+[33mae6544c[m Integration
+[33m43eb586[m goal_pub_node improved
+[33m230012f[m merged
+[33m16442fb[m horizontal_line integ and controller override
+[33m3c0d36e[m goal_node improved
+[33mb2770ad[m min things for goal_publisher node added
+[33m6a0b766[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33mec97e91[m dsfadsfa
+[33m7d82c40[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33m09797ee[m goal_publisher improved
+[33m4465528[m SDfdsfdsgsad
+[33mf90cf4e[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m1eb0cb9[m adffSA
+[33mc153f4f[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33md63a59e[m added goal_publisher and path_planner to launch file
+[33m9fbf11f[m goal_publisher improved
+[33me8f00e2[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33md223bc7[m Corner based horizontal line detection
+[33me4ef4f9[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33m28d1e82[m goal calculation improved
+[33me1dffe3[m Delete src/movement/movement/trapezium.py
+[33me2e000c[m merge
+[33m10d8463[m sdadgas
+[33mb1d365e[m gpinc
+[33mb3e51e3[m gpinc
+[33meebd203[m Linear speed in controller uniform
+[33m47e90a5[m dfasf
+[33m396b909[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m90aa9c2[m asgdsg
+[33mc3c69cb[m controller works fine only
+[33m5e87dcc[m Merge
+[33m5c3991b[m better costmap, better python astar
+[33m11f574b[m Update README.md
+[33m08d202f[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33m106fbce[m hjksd
+[33me5c3a7b[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m1190ab8[m adkjbdskajgb
+[33mcb52cc6[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim merging
+[33me520880[m better object data node
+[33m4decc96[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33m273a65a[m A* in c++ added
+[33m10a64ae[m djfkjsg
+[33md746299[m qrgklmvdf
+[33mf7c526f[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m40e48b3[m clustered colours and cuda for yolo
+[33md9886f3[m safkjbasdghjbasg
+[33m7d5636a[m askfjbabsdkjasdbgkjsa
+[33me267d44[m A* improved
+[33m9f6eb59[m A* improved
+[33m3e79b8a[m mistnankfme
+[33m52c5e66[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim hello
+[33m04162cd[m added distance threshold to goal publisher
+[33m74b235f[m dagkjhghgsa
+[33m3be658b[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim new shreyas code
+[33m43899ab[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m4841784[m dgsdgsdg
+[33m0436979[m Update lane_curvefitting.py
+[33mdf493d4[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim new path planning
+[33m4ee3578[m Merge branch 'main' of github.com:Team-Abhiyaan/igvc-sim
+[33mb1a0163[m fixed A*
+[33mf728845[m fixed A*
+[33me4f73e5[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33md3967eb[m hjbfsjkbgsad
+[33m983f32e[m jekjnkjsbns
+[33m00a607d[m pulled a*
+[33mf21f258[m added A* path planning
+[33m763e129[m added A* path planning
+[33mc755bb1[m optimis
+[33m9af7cc4[m faster costmap merge
+[33mf910c91[m Made costmap faster
+[33mc7b0e26[m costmap
+[33m5c682d8[m turned object data into an array
+[33m943769c[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33me555267[m minor changes to ray_cast
+[33m793cdaf[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m64d5755[m intersection left fix
+[33m09b1194[m Updated pothole
+[33m3c01827[m merged something
+[33m6d80ed8[m intersecition changes
+[33m6999696[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim changes
+[33mbae0473[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m1cb73e8[m fixed bugs and optimised
+[33mb11448e[m hehehehehehehe
+[33m99fca40[m Got backcamers downscaling and pullout to use the downcaled values and use yaw for the pullout (no hardcoding)
+[33mc5cd1b2[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33m8039e56[m parking pulllin improved
+[33mcabdf28[m contrller
+[33mf53af34[m Merge branch 'main' of https://github.com/Team-Abhiyaan/igvc-sim
+[33ma2aa12e[m parking yellow world file change
+[33m614b457[m Merge branch 'main' of https://github.com/Team-Abhiyaan/i
