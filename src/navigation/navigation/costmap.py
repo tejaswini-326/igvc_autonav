@@ -80,7 +80,6 @@ class CostmapNode(Node):
 		self.white_map  = self._empty.copy()
 		self.yellow_map = self._empty.copy()
 		self.object_map = self._empty.copy()
-		self.lidar_map = self._empty.copy()
 		self.imu_yaw = None
 		self.yaw_buffer = deque(maxlen=6)
 		self.last_object_msg_time = None
@@ -90,7 +89,6 @@ class CostmapNode(Node):
 		self.create_subscription(PointCloud2, '/object_pc',self._object_cb, qos)
 		self.create_subscription(PointCloud2, '/white_lane_points',self._white_cb,  qos)
 		self.create_subscription(MarkerArray, '/lane_fitted_yellow',self._yellow_cb, qos)
-		self.create_subscription(PointCloud2, '/lidar_pc2', self._lidar_cb, qos)
 		self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', qos)
 		self.create_subscription(Odometry, '/odom', self.odom_callback, qos)
 
@@ -132,11 +130,7 @@ class CostmapNode(Node):
 		else:
 			self._yellow_pc = None
 			self._new_yellow = False
-	def _lidar_cb(self, msg):
-		self._lidar_pc = msg
-		self._new_lidar = True
 
-	
 
 	def odom_callback(self, msg):
 		self.pose = msg.pose.pose
@@ -236,10 +230,6 @@ class CostmapNode(Node):
 		if self._new_yellow and self._yellow_pc is not None:
 			self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 200, 'yellow')
 			self._new_yellow = False
-		if self._new_lidar and self._lidar_pc is not None:
-			self.lidar_map[:] = self._make_layer(self._lidar_pc, 255, 'lidar')
-			self._new_lidar = False
-
 
 		now = self.get_clock().now()
 
@@ -261,8 +251,7 @@ class CostmapNode(Node):
 		# ---------- fuse + distance penalty + publish ----------------------
 		combined = np.maximum.reduce([self.white_map,
 									self.yellow_map,
-									self.object_map,
-									self.lidar_map]) # v_layer
+									self.object_map]) # v_layer
 
 		penalty  = self._distance_penalty(combined, thresh=200,radius_m=1.5, steepness=1.0)
 
