@@ -361,7 +361,7 @@ def generate_launch_description():
     ld.add_action(costmap_publisher_node)
     ld.add_action(path_publisher_node)
     ld.add_action(curve_fit_node)
-    # ld.add_action(controller_node)
+    ld.add_action(controller_node)
     ld.add_action(pothole_node)
 
     
