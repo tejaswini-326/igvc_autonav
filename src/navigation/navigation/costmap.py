@@ -99,6 +99,8 @@ class CostmapNode(Node):
 		# --------------------------- state --------------------------------
 		self._object_pc = self._white_pc = self._yellow_pc = None
 		self._new_object = self._new_white = self._new_yellow = False
+		self._lidar_pc   = None
+		self._new_lidar  = False
 		self._T_odom_cam = np.eye(4, dtype=np.float32)
 		self.origin_x = self.origin_y = 0.0
 		self.pose = None
