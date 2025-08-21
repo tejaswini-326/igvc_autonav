@@ -1,0 +1,353 @@
+<sdf version='1.10'>
+  <world name='IGVC_AutoNav'>
+    <plugin name='gz::sim::systems::Physics' filename='gz-sim-physics-system'/>
+    <plugin name='gz::sim::systems::UserCommands' filename='gz-sim-user-commands-system'/>
+    <plugin name='gz::sim::systems::SceneBroadcaster' filename='gz-sim-scene-broadcaster-system'/>
+    <plugin name='gz::sim::systems::Contact' filename='gz-sim-contact-system'/>
+    <plugin name='gz::sim::systems::NavSat' filename='gz-sim-navsat-system'/>
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>47.478949999999998</latitude_deg>
+      <longitude_deg>19.057784999999999</longitude_deg>
+      <elevation>0</elevation>
+      <heading_deg>0</heading_deg>
+    </spherical_coordinates>
+    <plugin name='gz::sim::systems::Sensors' filename='gz-sim-sensors-system'>
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin name='gz::sim::systems::Imu' filename='gz-sim-imu-system'/>
+    <gravity>0 0 -9.8000000000000007</gravity>
+    <magnetic_field>6.0000000000000002e-06 2.3e-05 -4.1999999999999998e-05</magnetic_field>
+    <atmosphere type='adiabatic'/>
+    <physics type='ode'>
+      <max_step_size>0.0050000000000000001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>200</real_time_update_rate>
+    </physics>
+    <scene>
+      <ambient>0.400000006 0.400000006 0.400000006 1</ambient>
+      <background>0.699999988 0.699999988 0.699999988 1</background>
+      <shadows>true</shadows>
+      <sky/>
+    </scene>
+    <include>
+      <uri>model://asphalt_ground_plane</uri>
+      <name>ground_plane</name>
+      <pose>0 0 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://construction_barrel</uri>
+      <name>barrel_0</name>
+      <pose>7.611189842224138 15.794006347656266 -5.3720675642434473e-07 1.8533782597860874e-08 -1.8531535137210729e-08 -2.4750622280809371e-16</pose>
+    </include>
+    <include>
+      <uri>model://construction_barrel</uri>
+      <name>barrel_1</name>
+      <pose>-29.858600616455078 -13.509450912475586 -2.2791221146595261e-09 5.510217356583608e-10 -9.5115254055252554e-10 6.4027794640892625e-19</pose>
+    </include>
+    <include>
+      <uri>model://construction_cone</uri>
+      <name>cone_0</name>
+      <pose>-26.91740036005222 -20.469928741369255 -4.0172658227613948e-08 -5.4295152939256816e-08 8.7012346121606882e-09 -8.9330146472902824e-11</pose>
+    </include>
+    <include>
+      <uri>model://construction_barrel</uri>
+      <name>barrel_0_1</name>
+      <pose>-7.5870299339294434 -17.802133560180664 -1.789429640563014e-09 5.5102140129661022e-10 -9.511506637637053e-10 4.0598857486268442e-19</pose>
+    </include>
+    <include>
+      <uri>model://stop_sign</uri>
+      <name>stop_sign_1_1</name>
+      <pose>2.7205390034804 -34.496704753379028 -7.9751801594708354e-07 -4.1315644116683199e-08 -4.8576457021770554e-08 -1.630170074011593</pose>
+    </include>
+    <include>
+      <uri>model://stop_sign</uri>
+      <name>stop_sign_1_1_1_2</name>
+      <pose>-15.402521144945425 -34.116809629301102 -7.8171067644958258e-07 -4.2379308880895231e-08 -4.76105292768464e-08 -1.6301700740115908</pose>
+    </include>
+    <include>
+      <uri>model://stop_sign</uri>
+      <name>stop_sign_1_2</name>
+      <pose>-12.896847874937761 -22.405149997907493 -1.0461331939047393e-07 -7.5184406076921137e-08 -1.2061725713206601e-08 -3.1217099991917867</pose>
+    </include>
+    <include>
+      <uri>model://stop_sign</uri>
+      <name>stop_sign_1_3</name>
+      <pose>-2.2660982137622794 -25.391612032307442 -1.0061532796497663e-07 -3.2267874464102985e-08 -3.3008811239539552e-08 1.6538399873777057</pose>
+    </include>
+    <include>
+      <uri>model://igvc_sign</uri>
+      <name>stop_sign_1_4</name>
+      <pose>17.815939568411061 -24.998566859988209 -1.006153279650148e-07 -3.2267874468452903e-08 -3.3008811242618358e-08 1.6538399873777057</pose>
+    </include>
+    <include>
+      <uri>model://soup_sign</uri>
+      <name>stop_sign_1_5</name>
+      <pose>-4.0292250331974033 29.246181524389144 -1.0061532796504602e-07 -3.2267874465684667e-08 -3.3008811241312881e-08 1.6538399873777057</pose>
+    </include>
+    <include>
+      <uri>model://stop_sign</uri>
+      <name>stop_sign_1_1_1_2_1</name>
+      <pose>-16.680713271719089 21.607640661489729 -7.7392493264664182e-07 -4.290312168888909e-08 -4.7134754542430462e-08 -1.6301700740115908</pose>
+    </include>
+    <include>
+      <uri>model://stop_sign</uri>
+      <name>stop_sign_1_6</name>
+      <pose>-6.1296715409465241 18.596165898117622 -9.8675298035356714e-08 -1.1569961190684133e-08 1.182163726237883e-08 0.0097550994370016048</pose>
+    </include>
+    <include>
+      <uri>model://stop_sign</uri>
+      <name>stop_sign_1_2_1</name>
+      <pose>6.4191485066659109 -20.571136488851977 -1.0359861264097938e-07 -7.5381106226213905e-08 -1.194117247471422e-08 -3.1217099991917876</pose>
+    </include>
+    <include>
+      <uri>model://tire</uri>
+      <name>tire</name>
+      <pose>10.748766899108887 2.0664100646972661 -6.7873946818508557e-07 9.3324512562276141e-09 -9.3301197878759012e-09 -1.1950600192618393e-16</pose>
+    </include>
+    <include>
+      <uri>model://rescue_randy</uri>
+      <name>rescue_randy</name>
+      <pose>14.093550415001301 -4.4038416450247144 -0.00043562154344808278 0.0028950908354765355 4.8229223396563524e-08 0.00050433664863640455</pose>
+    </include>
+    <include>
+      <uri>model://person_standing</uri>
+      <name>person_standing</name>
+      <pose>14.301021644713543 -5.9543032687207722 0.0035543300154295561 -0.15662539276917803 0.0070807365429862599 1.1746122828479759</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1</name>
+      <pose>-22.407356261286875 18.69428158773195 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1</name>
+      <pose>-17.148956752338975 11.337840877920158 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1</name>
+      <pose>-23.615442030808808 5.1214903019994047 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1</name>
+      <pose>-16.91970175090681 -1.8411891217664502 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1</name>
+      <pose>-22.961482827210638 -8.5399093071362415 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1</name>
+      <pose>-16.441098499970483 -15.335125123680758 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_1</name>
+      <pose>-22.409542443601701 -22.644509027577875 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_2</name>
+      <pose>-32.08071753221077 0.19305663299774167 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_2_1</name>
+      <pose>-32.956975310184703 7.1091999235182781 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_2_1_1</name>
+      <pose>-32.836173958013383 13.56655783232852 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_2_2</name>
+      <pose>-32.065776322888318 -4.9177834749582798 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_2_2_1</name>
+      <pose>-32.027583043783302 -10.811140406444281 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_2_2_1_1</name>
+      <pose>-31.751430507993437 -17.032209959090817 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_2_2_1_1_1</name>
+      <pose>-31.756922114373154 -22.231590192787415 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_8</uri>
+      <name>Tree 8_1</name>
+      <pose>30.1157997034868 -30.697615094812249 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_8</uri>
+      <name>Tree 8_1_1</name>
+      <pose>-30.376100580727616 -31.085175006674806 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_8</uri>
+      <name>Tree 8_1_1_1</name>
+      <pose>-30.069909612010278 30.886218829535792 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_8</uri>
+      <name>Tree 8_1_2</name>
+      <pose>29.838959050399723 29.559483655400967 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_1_1</name>
+      <pose>-27.813883251772953 -32.201299702926327 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_1_1_1</name>
+      <pose>-30.742835545146875 -28.971272250502818 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_1</uri>
+      <name>Tree 1_1_1</name>
+      <pose>0.28467708474683895 -21.977439901261594 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_1</uri>
+      <name>Tree 1_1_1_1</name>
+      <pose>19.467040084942976 -21.340575230124269 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_2</name>
+      <pose>-3.7551432367922404 -21.695606983237791 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_2_1</name>
+      <pose>-1.2241242125416845 -24.193891165534801 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_2_1_1</name>
+      <pose>3.7688519658577455 -22.081189274242348 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_2_1_1_1</name>
+      <pose>16.50153078558586 -21.968323859930017 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_2_1_1_1_1</name>
+      <pose>21.829377607804467 -22.54652389029043 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_1</uri>
+      <name>Tree 1_1_1_2</name>
+      <pose>-0.63791381596771846 18.786095822306262 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_2_2</name>
+      <pose>-3.8050181004593746 18.738541728600211 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_2_2_1</name>
+      <pose>-0.5067739289705564 21.226941565968779 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://bush_2</uri>
+      <name>Bush 2_1_1_1_1_1_1_2_2_1_1</name>
+      <pose>3.3468612934787765 18.729585863396252 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_2</uri>
+      <name>Tree 2_1</name>
+      <pose>-0.42194793967181932 -2.7799642854675461 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_1_1_2</name>
+      <pose>-18.734884614847516 -15.874997929925431 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_1_1_3</name>
+      <pose>-19.040693473775907 -9.1822739633252723 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_1_2</name>
+      <pose>-19.325069465325932 -2.2858878395830211 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_1_3</name>
+      <pose>-19.556860684226358 4.5056121413109338 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_7</uri>
+      <name>Tree 7_1_1_2</name>
+      <pose>-19.730425438914274 11.231621676230745 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_1</uri>
+      <name>Tree 1_1_1_3</name>
+      <pose>-19.022219717590062 -22.711770404489226 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <include>
+      <uri>model://tree_1</uri>
+      <name>Tree 1_1_1_2_1</name>
+      <pose>-19.857674068698227 18.015193396610854 0.0033510799985378981 1.5707901049174398 0 0</pose>
+    </include>
+    <light name='sun' type='directional'>
+      <pose>0 0 10 0 0 0</pose>
+      <cast_shadows>true</cast_shadows>
+      <intensity>1</intensity>
+      <direction>-0.5 0.10000000000000001 -0.90000000000000002</direction>
+      <diffuse>0.800000012 0.800000012 0.800000012 1</diffuse>
+      <specular>0.200000003 0.200000003 0.200000003 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <linear>0.01</linear>
+        <constant>0.90000000000000002</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <spot>
+        <inner_angle>0</inner_angle>
+        <outer_angle>0</outer_angle>
+        <falloff>0</falloff>
+      </spot>
+    </light>
+    <light name='ambient' type='point'>
+      <pose>0 0 10 0 0 0</pose>
+      <cast_shadows>false</cast_shadows>
+      <intensity>1</intensity>
+      <direction>0 0 -1</direction>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.300000012 0.300000012 0.300000012 1</specular>
+      <attenuation>
+        <range>20</range>
+        <linear>0.01</linear>
+        <constant>0.80000000000000004</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <spot>
+        <inner_angle>0</inner_angle>
+        <outer_angle>0</outer_angle>
+        <falloff>0</falloff>
+      </spot>
+    </light>
+  </world>
+</sdf>

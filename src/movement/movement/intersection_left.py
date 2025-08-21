@@ -29,7 +29,7 @@ MIN_NUMBER_OF_FILTERED_COLOURED_POINTS_REQUIRED = 60
 
 # Movement Related
 LINEAR_SPEED                                    = 1.5                # m/s   (forward)
-LEFT_TURN_ANGULAR_SPEED                         = 0.22               # rad/s (+ve = CCW = left)
+LEFT_TURN_ANGULAR_SPEED                         = 0.2               # rad/s (+ve = CCW = left)
 
 # Intersection Turning Related
 ANGLE_TOLERANCE                                 = radians(30)        # ± deg window around 90° – θ
@@ -37,7 +37,7 @@ INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (3) ** 2           # metres
 TURN_ANGLE                                      = radians(80.0)      # 90 will overturn if the bot started out a bit turning to the left
 
 # Completion Threshold - After this distance this node will handover control to main lane follower
-TARGET_LEFT_DISPLACEMENT = 9
+TARGET_LEFT_DISPLACEMENT = 11
 # ──────────────────────────────────────────────────────────────────────────────
 
 

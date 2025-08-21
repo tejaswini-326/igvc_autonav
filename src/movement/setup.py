@@ -34,6 +34,7 @@ setup(
             'parking_pullout = movement.parking_pullout:main',   
             'parking_pullin = movement.parking_pullin:main',
             'parallel_parking = movement.parallel_parking:main',
+            'pothole = movement.pothole:main', 
         ],
     },
 )

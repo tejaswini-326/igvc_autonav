@@ -35,10 +35,10 @@ LEFT_TURN_ANGULAR_SPEED                         = 0.22               # rad/s (+v
 
 # Intersection Turning Related
 ANGLE_TOLERANCE                                 = radians(20)        # ± deg window around 90° – θ
-INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (3)**2             # metres 
+INITIAL_INTERSECTION_FORWARD_MOVEMENT_SQUARED   = (12.5)**2             # metres 
 
 # Completion Threshold - After this distance this node will handover control to main lane follower
-TARGET_FORWARD_DISPLACEMENT = 15
+TARGET_FORWARD_DISPLACEMENT = 16
 # ──────────────────────────────────────────────────────────────────────────────
 
 

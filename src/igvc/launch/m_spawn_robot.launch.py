@@ -23,7 +23,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------------
     rviz_launch_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='false',
+        default_value='true',
         description='Whether to start RViz'
     )
     rviz_config_arg = DeclareLaunchArgument(
@@ -43,17 +43,17 @@ def generate_launch_description():
     )
     x_arg = DeclareLaunchArgument(
         'x',
-        default_value='-30.10',
+        default_value='11.15',
         description='Initial X coordinate for robot spawn'
     )
     y_arg = DeclareLaunchArgument(
         'y',
-        default_value='-2.0',
+        default_value='-15.275',
         description='Initial Y coordinate for robot spawn'
     )
     yaw_arg = DeclareLaunchArgument(
         'yaw',
-        default_value='-1.5707',
+        default_value='1.3707',
         description='Initial yaw (rotation around Z) for robot spawn'
     )
     sim_time_arg = DeclareLaunchArgument(
@@ -101,22 +101,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    pointcloud_downscaler_node = Node(
-        package='movement',
-        executable='pointcloud_downscaler',
-        name='PointCloudDownscaler',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
-    back_pointcloud_downscaler_node = Node(
-        package='movement',
-        executable='back_pointcloud_downscaler',
-        name='BackPointCloudDownscaler',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
     # ------------------------------------------------------------------------
@@ -146,16 +130,18 @@ def generate_launch_description():
             "/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist",
             "/odom@nav_msgs/msg/Odometry@gz.msgs.Odometry",
             "/joint_states@sensor_msgs/msg/JointState@gz.msgs.Model",
+
             "/camera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo",
             "/imu@sensor_msgs/msg/Imu@gz.msgs.IMU",
             "/navsat@sensor_msgs/msg/NavSatFix@gz.msgs.NavSat",
             "/scan@sensor_msgs/msg/LaserScan@gz.msgs.LaserScan",
-            "/scan/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
             "/camera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image",
             "/camera/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
             "/bcamera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo",
             "/bcamera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image",
             "/bcamera/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
+            "/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
+            "/tf_static@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
         ],
         output="screen",
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
@@ -171,7 +157,7 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'camera.image.compressed.jpeg_quality': 75
+            #'camera.image.compressed.jpeg_quality': 75
         }],
     )
 
@@ -194,7 +180,7 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'camera.image.compressed.jpeg_quality': 75
+            #'camera.image.compressed.jpeg_quality': 75
         }],
     )   
 
@@ -206,6 +192,8 @@ def generate_launch_description():
         arguments=['bcamera/camera_info', 'bcamera/image/camera_info'],
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
+
+
 
     # ------------------------------------------------------------------------
     # EKF node for sensor fusion (robot_localization)
@@ -281,7 +269,7 @@ def generate_launch_description():
 
     ld.add_action(robot_state_publisher_node)
     ld.add_action(gz_bimage_bridge_node)
-    ld.add_action(pointcloud_downscaler_node)
-    ld.add_action(back_pointcloud_downscaler_node)
+
 
     return ld
+
