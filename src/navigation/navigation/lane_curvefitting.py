@@ -17,6 +17,9 @@ import time
 import ctypes
 
 
+VERBOSE_UNNESSARY_THINGS = False
+
+
 MIN_CLUSTERING_DISTANCE = 0.6
 MIN_CLUSTERING_POINTS = 20
 
@@ -62,6 +65,7 @@ class LaneFollowerNode(Node):
         marker_array = MarkerArray()
         white_markers = []
         yellow_closest = 0
+        yellow_marker_array = MarkerArray()
 
 
         for i, (label, coeffs, color_type, cluster_xy) in enumerate(cluster_curves):
@@ -108,8 +112,8 @@ class LaneFollowerNode(Node):
                 curve_marker.id = 1
                 marker_array.markers.append(curve_marker)
                 yellow_closest= closest_y
+                yellow_marker_array.markers.append(curve_marker)
                 
-
         for point_y, marker in white_markers:
             if yellow_closest > point_y:
                 marker.id = 2
@@ -123,9 +127,10 @@ class LaneFollowerNode(Node):
                 marker.color.b = 1.0
             marker_array.markers.append(marker)
 
-        print("length of marker array: ")
-        print(len(marker_array.markers))
+        if VERBOSE_UNNESSARY_THINGS: print("length of marker array: ")
+        if VERBOSE_UNNESSARY_THINGS: print(len(marker_array.markers))
         self.markers_pub.publish(marker_array)
+        self.yellow_curve_pub.publish(yellow_marker_array)
 
         
     def white_pointcloud_callback(self, msg):
@@ -389,7 +394,7 @@ class LaneFollowerNode(Node):
             coeffs_yellow = np.polyfit(x_vals_y, y_vals_y, deg=2)
             cluster_curves.append(('yellow_global', coeffs_yellow, 'yellow', clustered_yellow_points[:, :2]))
         else:
-            self.get_logger().info(f"Not enough yellow points for curve fitting and no of points are: {len(clustered_yellow_points)}")
+            if VERBOSE_UNNESSARY_THINGS: self.get_logger().info(f"Not enough yellow points for curve fitting and no of points are: {len(clustered_yellow_points)}")
 
 
         # === Final Lane Visualization ===
