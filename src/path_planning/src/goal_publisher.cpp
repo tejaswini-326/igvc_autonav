@@ -32,7 +32,6 @@ constexpr double REDUCED_MIN_DISTANCE_TO_LOOK_FOR_POINTS_IN_LANE = 0.0;
 #include <deque>
 #include <unordered_set>
 
-
 using std::placeholders::_1;
 using namespace std;
 typedef geometry_msgs::msg::Point pt;
