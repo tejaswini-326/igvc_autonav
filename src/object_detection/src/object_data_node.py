@@ -26,8 +26,11 @@ class ObjectDataNode(Node):
     def __init__(self):
         super().__init__('object_data_node')
 
-        self.image_sub = self.create_subscription(Image, '/camera/image', self.image_callback, 10)
-        self.depth_sub = self.create_subscription(Image, '/camera/depth_image', self.depth_callback, 10)
+        # self.image_sub = self.create_subscription(Image, '/camera/image', self.image_callback, 10)
+        # self.depth_sub = self.create_subscription(Image, '/camera/depth_image', self.depth_callback, 10)
+
+        self.image_sub = self.create_subscription(Image, '/zed/zed_node/rgb_raw/image_raw_color', self.image_callback, 10)
+        self.depth_sub = self.create_subscription(Image, '/zed/zed_node/depth/depth_registered', self.depth_callback, 10)
 
         self.object_pub = self.create_publisher(ObjectArray, 'object_data', 10)
         self.pc_pub = self.create_publisher(PointCloud2, 'object_pc', 10)

@@ -153,7 +153,7 @@ def fast_xyz_white_yellow(msg, log):
 class PointCloudDownscaler(Node):
     def __init__(self):
         super().__init__("pointcloud_downscaler")
-        self.create_subscription(PointCloud2, "/camera/points", self.pointcloud_cb, 10)
+        self.create_subscription(PointCloud2, "/zed/zed_node/rgb_raw/image_raw_color", self.pointcloud_cb, 10)
         self.white_publisher = self.create_publisher(PointCloud2, "/igvc/white_points", 10)
         self.yellow_publisher = self.create_publisher(PointCloud2, "/igvc/yellow_points", 10)
         self.notblack_publisher = self.create_publisher(PointCloud2, "/igvc/notblack_points", 10)
