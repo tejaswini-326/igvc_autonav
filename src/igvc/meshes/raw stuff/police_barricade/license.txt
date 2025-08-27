@@ -1,0 +1,11 @@
+Model Information:
+* title:	police barricade
+* source:	https://sketchfab.com/3d-models/police-barricade-f60416535d9b489bb439659bf9111b3b
+* author:	its.me.Saumya (https://sketchfab.com/saumya31)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "police barricade" (https://sketchfab.com/3d-models/police-barricade-f60416535d9b489bb439659bf9111b3b) by its.me.Saumya (https://sketchfab.com/saumya31) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

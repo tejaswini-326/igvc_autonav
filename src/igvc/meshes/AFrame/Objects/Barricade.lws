@@ -1,0 +1,506 @@
+LWSC
+3
+
+FirstFrame 1
+LastFrame 100
+FrameStep 1
+PreviewFirstFrame 0
+PreviewLastFrame 100
+PreviewFrameStep 1
+CurrentFrame 98
+FramesPerSecond 30
+
+LoadObjectLayer 1 C:InkBottle/Objects/Floor.lwo
+ShowObject 6 7
+ObjectMotion
+NumChannels 9
+Channel 0
+{ Envelope
+  2
+  Key -0.030000007 0 0 0 0 0 0 0 0
+  Key -0.030000007 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 1
+{ Envelope
+  2
+  Key -0.35387403 0 0 0 0 0 0 0 0
+  Key -0.35387403 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 2
+{ Envelope
+  2
+  Key 2.5899994 0 0 0 0 0 0 0 0
+  Key 2.5899994 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 3
+{ Envelope
+  2
+  Key 0 0 0 0 0 0 0 0 0
+  Key 0 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 4
+{ Envelope
+  2
+  Key 0 0 0 0 0 0 0 0 0
+  Key 0 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 5
+{ Envelope
+  2
+  Key 0 0 0 0 0 0 0 0 0
+  Key 0 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 6
+{ Envelope
+  2
+  Key 1.2519995 0 0 0 0 0 0 0 0
+  Key 1.2519995 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 7
+{ Envelope
+  2
+  Key 1 0 0 0 0 0 0 0 0
+  Key 1 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 8
+{ Envelope
+  2
+  Key 1.6439996 0 0 0 0 0 0 0 0
+  Key 1.6439996 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+
+ShadowOptions 7
+
+LoadObjectLayer 1 C:Traffic/SmallAframe5.lwo
+ShowObject 6 3
+ObjectMotion
+NumChannels 9
+Channel 0
+{ Envelope
+  3
+  Key -0.46238205 0 0 0 0 0 0 0 0
+  Key -0.46238205 3.2666667 0 0 0 0 0 0 0
+  Key -0.46238205 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 1
+{ Envelope
+  3
+  Key 0.54151434 0 0 0 0 0 0 0.022377137 0
+  Key 0.56389338 3.2666667 0 0 0 0 0.26289937 0.005365293 0
+  Key 0.80977899 3.3333333 0 0 0 0 0.24486534 0 0
+  Behaviors 1 1
+}
+Channel 2
+{ Envelope
+  3
+  Key -1.7407769 0 0 0 0 0 0 0.21074016 0
+  Key -1.5300188 3.2666667 0 0 0 0 0 0 0
+  Key -1.7407769 3.3333333 0 0 0 0 -0.20988357 0 0
+  Behaviors 1 1
+}
+Channel 3
+{ Envelope
+  3
+  Key -8.7488165 0 0 0 0 0 0 -6.2879004 0
+  Key -8.7488165 3.2666667 0 0 0 0 -0.52861118 -0.010787982 0
+  Key -9.2882156 3.3333333 0 0 0 0 -6.2879004 0 0
+  Behaviors 1 1
+}
+Channel 4
+{ Envelope
+  3
+  Key 0 0 0 0 0 0 0 0 0
+  Key 0 3.2666667 0 0 0 0 0 0 0
+  Key 0 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 5
+{ Envelope
+  3
+  Key 0 0 0 0 0 0 0 0 0
+  Key 0 3.2666667 0 0 0 0 0 0 0
+  Key 0 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 6
+{ Envelope
+  3
+  Key 2.2300007 0 0 0 0 0 0 0 0
+  Key 2.2300007 3.2666667 0 0 0 0 0 0 0
+  Key 2.2300007 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 7
+{ Envelope
+  3
+  Key 2.2300007 0 0 0 0 0 0 0 0
+  Key 2.2300007 3.2666667 0 0 0 0 0 0 0
+  Key 2.2300007 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 8
+{ Envelope
+  3
+  Key 2.2300007 0 0 0 0 0 0 0 0
+  Key 2.2300007 3.2666667 0 0 0 0 0 0 0
+  Key 2.2300007 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+
+ShadowOptions 7
+
+AmbientColor 1 1 1
+AmbientIntensity 0.05
+
+AddLight
+LightName Light
+ShowLight 1 5
+LightMotion
+NumChannels 9
+Channel 0
+{ Envelope
+  1
+  Key 1.4608654 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 1
+{ Envelope
+  1
+  Key 2.7499993 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 2
+{ Envelope
+  1
+  Key -1.4643162 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 3
+{ Envelope
+  1
+  Key -1.7418396 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 4
+{ Envelope
+  1
+  Key 0.69464052 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 5
+{ Envelope
+  1
+  Key 0 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 6
+{ Envelope
+  1
+  Key 1 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 7
+{ Envelope
+  1
+  Key 1 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 8
+{ Envelope
+  1
+  Key 1 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+
+LightColor 1 1 1
+LightIntensity (envelope)
+{ Envelope
+  1
+  Key 0.40742594 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+AffectCaustics 0
+LightType 2
+LightConeAngle 30
+LightEdgeAngle 5
+ShadowType 0
+
+AddLight
+LightName Light
+ShowLight 1 5
+LightMotion
+NumChannels 9
+Channel 0
+{ Envelope
+  1
+  Key -0.6243099 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 1
+{ Envelope
+  1
+  Key 2.5684698 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 2
+{ Envelope
+  1
+  Key -5.3883376 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 3
+{ Envelope
+  1
+  Key 0.013962629 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 4
+{ Envelope
+  1
+  Key 0.43807754 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 5
+{ Envelope
+  1
+  Key 0 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 6
+{ Envelope
+  1
+  Key 1 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 7
+{ Envelope
+  1
+  Key 1 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 8
+{ Envelope
+  1
+  Key 1 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+
+LightColor 1 1 1
+LightIntensity 0.5
+LightType 2
+LightConeAngle 30
+LightEdgeAngle 5
+ShadowType 0
+
+AddLight
+LightName Light
+ShowLight 1 5
+LightMotion
+NumChannels 9
+Channel 0
+{ Envelope
+  1
+  Key -4.4692988 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 1
+{ Envelope
+  1
+  Key 3.2304897 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 2
+{ Envelope
+  1
+  Key -3.0541301 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 3
+{ Envelope
+  1
+  Key 1.2182399 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 4
+{ Envelope
+  1
+  Key 0.4712393 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 5
+{ Envelope
+  1
+  Key 0 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 6
+{ Envelope
+  1
+  Key 1 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 7
+{ Envelope
+  1
+  Key 1 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 8
+{ Envelope
+  1
+  Key 1 0 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+
+LightColor 1 1 1
+LightIntensity 1
+LightType 2
+LightConeAngle 30
+LightEdgeAngle 5
+ShadowType 2
+ShadowColor 0 0 0
+ShadowMapSize 3475
+UseConeAngle 1
+ShadowFuzziness 21
+
+AddCamera
+CameraName Camera
+ShowCamera 1 7
+CameraMotion
+NumChannels 6
+Channel 0
+{ Envelope
+  3
+  Key -1.3617513 0 0 0 0 0 0 0 0
+  Key -1.3617513 3.2666667 0 0 0 0 -0.27817249 -0.0056769894 0
+  Key -1.6456008 3.3333333 0 0 0 0 -0.28267169 0 0
+  Behaviors 1 1
+}
+Channel 1
+{ Envelope
+  3
+  Key 2.2565162 0 0 0 0 0 0 0 0
+  Key 2.2565162 3.2666667 0 0 0 0 1.0511881 0.021452818 0
+  Key 3.3291571 3.3333333 0 0 0 0 1.0681901 0 0
+  Behaviors 1 1
+}
+Channel 2
+{ Envelope
+  3
+  Key -7.7704296 0 0 0 0 0 0 0 0
+  Key -7.7704296 3.2666667 0 0 0 0 -2.2502244 -0.045922946 0
+  Key -10.066577 3.3333333 0 0 0 0 -2.2866197 0 0
+  Behaviors 1 1
+}
+Channel 3
+{ Envelope
+  3
+  Key 0.14835304 0 0 0 0 0 0 0 0
+  Key 0.14835304 3.2666667 0 0 0 0 0 0 0
+  Key 0.14835304 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 4
+{ Envelope
+  3
+  Key 0.26703596 0 0 0 0 0 0 0 0
+  Key 0.26703596 3.2666667 0 0 0 0 0 0 0
+  Key 0.26703596 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+Channel 5
+{ Envelope
+  3
+  Key -0.0017453339 0 0 0 0 0 0 0 0
+  Key -0.0017453339 3.2666667 0 0 0 0 0 0 0
+  Key -0.0017453339 3.3333333 0 0 0 0 0 0 0
+  Behaviors 1 1
+}
+
+ZoomFactor (envelope)
+{ Envelope
+  3
+  Key 5.5987344 0 0 0 0 0 0 -0.053199779 0
+  Key 5.5454903 0.33333334 0 0 0 0 -0.028246244 -0.039544743 0
+  Key 5.5309434 0.80000001 0 0 0 0 -0.014538217 0 0
+  Behaviors 1 1
+}
+ResolutionMultiplier .25
+FrameSize 400 400
+PixelAspect 1
+MaskPosition 0 0 640 480
+MotionBlur 0
+FieldRendering 0
+
+ApertureHeight 0.015
+Antialiasing 2
+EnhancedAA 1
+AdaptiveSampling 1
+AdaptiveThreshold 0.115
+
+SolidBackdrop 1
+BackdropColor 0.5019608 0.5019608 1
+ZenithColor 0 0.1568628 0.3137255
+SkyColor 0.4705882 0.7058824 0.9411765
+GroundColor 0.1960784 0.1568628 0.1176471
+NadirColor 0.3921569 0.3137255 0.2352941
+FogType 0
+DitherIntensity 1
+AnimatedDither 0
+
+RenderMode 2
+RayTraceEffects 15
+RayRecursionLimit 16
+RayTraceOptimization 1
+DataOverlayLabel  
+SaveAnimationName C:\WashPost\real.mov
+AnimationSaver QuickTime(.mov)
+1
+0
+1e0000
+0
+72617720
+0
+20
+3ff
+20
+EndPlugin
+SaveRGB 0
+SaveAlpha 0
+
+ViewConfiguration 0
+DefineView 0
+ViewType 9
+CenterItem 1
+ViewAimpoint -3.216692 0.3200002 -2.815684
+ViewZoomFactor 1.82119
+
+GridNumber 40
+GridSize 0.838
+CameraViewBG 0
+ShowMotionPath 1
+ShowFogRadius 0
+ShowFogEffect 1
+ShowSafeAreas 0
+ShowFieldChart 0
+OverlayColor 7
+
+CurrentObject 1
+CurrentLight 2
+CurrentCamera 0
+GraphEditorData
+{ GraphEd_Favorites
+}
+{ GE_Expression_Lib
+  1
+}

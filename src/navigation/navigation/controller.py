@@ -41,7 +41,7 @@ class Controller(Node):
         self.last_log_time = 0.0
         self.log_interval = 0.5
 
-        self.active = False
+        self.active = True
         self.pose = None
         self.imu_yaw = None
         self.scanning = False
@@ -106,8 +106,8 @@ class Controller(Node):
             self.scan_start_time = self.get_clock().now().nanoseconds
 
     def odom_callback(self, msg):
-        if not self.active:
-            return
+        #if not self.active:
+            #return
         self.pose = msg.pose.pose
         q = msg.pose.pose.orientation
         _, _, yaw = tf_transformations.euler_from_quaternion((q.x, q.y, q.z, q.w))
@@ -149,7 +149,8 @@ class Controller(Node):
                 self.get_logger().info("No path received. Starting scan.")
                 self.scan()
  
-        if VERBOSE_UNECESSARY_THINGS: self.get_logger().info(f"Received path with {len(self.path)} valid points.")
+        if VERBOSE_UNECESSARY_THINGS:
+            self.get_logger().info(f"Received path with {len(self.path)} valid points.")
 
     def adaptive_lookahead(self, base_distance=MAXLOOKAHEAD_DISTANCE):
         if not self.active:
@@ -333,7 +334,8 @@ class Controller(Node):
         self.prev_angular_z = twist.angular.z
         twist.angular.z = float(np.clip(twist.angular.z, -1.0, 1.0))
         self.cmd_pub.publish(twist)
-        if VERBOSE_UNECESSARY_THINGS: self.get_logger().info(f"Publishing Twist: linear={twist.linear.x:.2f}, angular={twist.angular.z:.2f}")
+        if VERBOSE_UNECESSARY_THINGS:
+            self.get_logger().info(f"Publishing Twist: linear={twist.linear.x:.2f}, angular={twist.angular.z:.2f}")
       
 
 
