@@ -46,7 +46,7 @@
         <projection_type>perspective</projection_type>
       </camera>
     </gui>
-    <model name='asphalt_ground_plane'>
+    <model name='autonav_ground_plane'>
       <static>true</static>
       <link name='link'>
         <collision name='collision'>

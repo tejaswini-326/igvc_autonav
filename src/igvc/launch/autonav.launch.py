@@ -33,7 +33,7 @@ def generate_launch_description():
     )
     world_arg = DeclareLaunchArgument(
         'world',
-        default_value='autonav_v4_working.world',
+        default_value='asphalt.world',
         description='Name of the Ignition world file to load'
     )
     model_arg = DeclareLaunchArgument(
@@ -238,7 +238,7 @@ def generate_launch_description():
             "/bcamera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image",
             "/bcamera/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
             "/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
-            "/tf_static@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
+            #"/tf_static@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
         ],
         output="screen",
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
