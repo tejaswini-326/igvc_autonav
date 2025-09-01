@@ -34,6 +34,8 @@ FANCY_HISTORY_COSTMAP = False
 
 OBJECT_HOLD_SEC = 1/15 # Just slightly more than the 20 Hz we receive objects at
 
+BOT_WIDTH = 2.2
+
 
 def transform_to_matrix(tf_msg) -> np.ndarray:
 	"""geometry_msgs/TransformStamped → 4×4 float32 homogeneous matrix"""
@@ -308,11 +310,12 @@ class CostmapNode(Node):
 
 			# --------- crop robot‑centred window back out --------------
 			combined_raw = self.g_map[sj0:sj1, si0:si1].copy()
-	
 
-		penalty  = self._distance_penalty(combined_raw, thresh=200,radius_m=1.5, steepness=1.0)
-
-		final    = np.maximum(combined_raw, penalty)      # 0-100 uint8
+		#self.get_logger().info("1")
+		sealed = self.seal_narrow_passages(combined_raw, thresh=200, bot_width_m=BOT_WIDTH, resolution_m_per_cell=self.resolution)
+		#self.get_logger().info("end")
+		penalty  = self._distance_penalty(sealed, thresh=200, radius_m=1.5, steepness=1)
+		final    = np.maximum(np.maximum(combined_raw, sealed), penalty)      # 0-100 uint8
 		self._publish_costmap(final, self.get_clock().now().to_msg())
 
 
@@ -392,9 +395,9 @@ class CostmapNode(Node):
 		return layer.copy()
 
 	def _distance_penalty(self, grid: np.ndarray,
-						thresh: int = 200,
-						radius_m: float = 1.5,
-						steepness: float = 1) -> np.ndarray:
+						thresh: int,
+						radius_m: float,
+						steepness: float) -> np.ndarray:
 		"""
 		Turn a binary 'obstacle mask' (anything ≥ `thresh`) into a smooth
 		clearance penalty 0‥100 using an Euclidean distance transform.
@@ -416,6 +419,37 @@ class CostmapNode(Node):
 		# 4) non-linear mapping and scale to 0-100 int8
 		penalty    = (closeness ** steepness) * 200.0
 		return penalty.astype(np.uint8)
+	
+	def seal_narrow_passages(self,
+						  	grid: np.ndarray,
+							thresh: int,
+							bot_width_m: float,
+							resolution_m_per_cell: float) -> np.ndarray:
+		"""
+		Returns a copy of `grid` where all free cells with clearance < bot_width/2
+		are marked as obstacles (closing gaps narrower than the robot).
+		"""
+
+		# 1) Binary obstacle mask from your intensity map
+		occ = (grid >= thresh).astype(np.uint8)           # 1 = obstacle, 0 = free
+
+		# 2) Distance transform on *free* space (invert mask for OpenCV)
+		#    Note: cv2.distanceTransform expects 8-bit single-channel image with 0=background, nonzero=foreground.
+		free_uchar = ((1 - occ) * 255).astype(np.uint8)   # 255 = free, 0 = obstacle
+		dist_cells = cv2.distanceTransform(free_uchar, cv2.DIST_L2, 5).astype(np.float32)
+
+		# 3) Convert to metres and find cells with clearance < robot_radius
+		robot_radius_m = bot_width_m / 2.0
+		dist_m = dist_cells * resolution_m_per_cell
+
+		# Cells too close to any obstacle for the robot to pass
+		too_narrow = dist_m < robot_radius_m
+
+		# 4) Promote those cells to obstacles in a copy of the original grid
+		sealed = grid.copy()
+		#sealed[too_narrow] = max(thresh, sealed.dtype.type(255)) if np.issubdtype(sealed.dtype, np.integer) else 1.0
+		sealed[too_narrow] = 230
+		return sealed
 
 	# -------------------------- grid publisher ---------------------------
 	@staticmethod
