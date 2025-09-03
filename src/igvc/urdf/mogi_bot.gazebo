@@ -77,7 +77,7 @@
       <gz_frame_id>camera_link</gz_frame_id>
     </sensor>
   </gazebo>
-  
+
 
   <gazebo reference="bcamera_link">
     <sensor name="b_rgbd_camera" type="rgbd_camera">
@@ -136,7 +136,7 @@
       <gz_frame_id>navsat_link</gz_frame_id>
     </sensor>
   </gazebo>
-  
+
   <gazebo reference="scan_link">
     <sensor name="gpu_lidar" type="gpu_lidar">
       <update_rate>20</update_rate>
@@ -146,7 +146,8 @@
         <scan>
           <horizontal>
             <samples>720</samples>
-            <!--(max_angle-min_angle)/samples * resolution -->
+            <!--(max_angle-min_angle)/samples
+            * resolution -->
             <resolution>1</resolution>
             <min_angle>-3.14156</min_angle>
             <max_angle>3.14156</max_angle>
@@ -164,9 +165,9 @@
           <resolution>0.01</resolution>
         </range>
         <noise>
-            <type>gaussian</type>
-            <mean>0.0</mean>
-            <stddev>0.01</stddev>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
         </noise>
         <frame_id>scan_link</frame_id>
       </lidar>

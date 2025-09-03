@@ -36,7 +36,7 @@ OBJECT_HOLD_SEC = 1/15 # Just slightly more than the 20 Hz we receive objects at
 WHITE_HOLD_SEC  = 0.1   # tune these
 YELLOW_HOLD_SEC = 0.1
 
-BOT_WIDTH = 2.2
+BOT_WIDTH = 2
 
 
 def transform_to_matrix(tf_msg) -> np.ndarray:
