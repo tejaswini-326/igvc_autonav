@@ -33,6 +33,8 @@ VERBOSE_UNECESSARY_THINGS = False
 FANCY_HISTORY_COSTMAP = False
 
 OBJECT_HOLD_SEC = 1/15 # Just slightly more than the 20 Hz we receive objects at
+WHITE_HOLD_SEC  = 0.1   # tune these
+YELLOW_HOLD_SEC = 0.1
 
 BOT_WIDTH = 2.2
 
@@ -87,6 +89,8 @@ class CostmapNode(Node):
 		self.imu_yaw = None
 		self.yaw_buffer = deque(maxlen=6)
 		self.last_object_msg_time = None
+		self._white_last_update  = None
+		self._yellow_last_update = None
 
 		# --------------------------- I/O ----------------------------------
 		qos = 20
@@ -133,7 +137,9 @@ class CostmapNode(Node):
 	def _object_cb(self, msg):
 		self._object_pc, self._new_object = msg, True
 		self._object_last_update = self.get_clock().now()
-	def _white_cb(self,  msg):  self._white_pc,  self._new_white  = msg, True
+	def _white_cb(self,  msg):  
+		self._white_pc,  self._new_white  = msg, True
+		self._white_last_update = self.get_clock().now()
 	def _yellow_cb(self, msg: MarkerArray):
 		points = []
 		for marker in msg.markers:
@@ -142,6 +148,7 @@ class CostmapNode(Node):
 		if points:
 			self._yellow_pc = np.array(points, dtype=np.float32)
 			self._new_yellow = True
+			self._yellow_last_update = self.get_clock().now()
 		else:
 			self._yellow_pc = None
 			self._new_yellow = False
@@ -253,6 +260,31 @@ class CostmapNode(Node):
 			self._new_lidar = False
 
 		now = self.get_clock().now()
+
+		if self._white_pc is not None:
+			age = (now - self._white_last_update).nanoseconds * 1e-9 if self._white_last_update else float('inf')
+			if self._new_white:
+				self.white_map[:] = self._make_layer(self._white_pc, 250, 'white')
+				self._new_white = False
+			elif age > WHITE_HOLD_SEC:
+				self.white_map.fill(0)
+				self._white_pc = None
+				self._white_last_update = None
+		else:
+			self.white_map.fill(0)
+
+		# Yellow layer
+		if self._yellow_pc is not None:
+			age = (now - self._yellow_last_update).nanoseconds * 1e-9 if self._yellow_last_update else float('inf')
+			if self._new_yellow:
+				self.yellow_map[:] = self._make_layer_numpy(self._yellow_pc, 200, 'yellow')
+				self._new_yellow = False
+			elif age > YELLOW_HOLD_SEC:
+				self.yellow_map.fill(0)
+				self._yellow_pc = None
+				self._yellow_last_update = None
+		else:
+			self.yellow_map.fill(0)
 
 		if self._object_pc is not None:
 			age = (now - self._object_last_update).nanoseconds * 1e-9 if self._object_last_update else float('inf')
