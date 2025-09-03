@@ -96,6 +96,7 @@ class CostmapNode(Node):
 		qos = 20
 		self.create_subscription(PointCloud2, '/object_pc',self._object_cb, qos)
 		self.create_subscription(PointCloud2, '/white_lane_points',self._white_cb,  qos)
+		self.create_subscription(MarkerArray, '/lane_fitted_yellow',self._yellow_cb, qos)
 		self.create_subscription(PointCloud2, '/lidar_pc2', self._lidar_cb, qos)
 		self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', qos)
 		self.create_subscription(Odometry, '/odom', self.odom_callback, qos)
@@ -136,8 +137,21 @@ class CostmapNode(Node):
 	def _object_cb(self, msg):
 		self._object_pc, self._new_object = msg, True
 		self._object_last_update = self.get_clock().now()
-	def _white_cb(self,  msg):  self._white_pc,  self._new_white  = msg, True
-	
+	def _white_cb(self,  msg):  
+		self._white_pc,  self._new_white  = msg, True
+		self._white_last_update = self.get_clock().now()
+	def _yellow_cb(self, msg: MarkerArray):
+		points = []
+		for marker in msg.markers:
+			for p in marker.points:
+				points.append([p.x, p.y, p.z])
+		if points:
+			self._yellow_pc = np.array(points, dtype=np.float32)
+			self._new_yellow = True
+			self._yellow_last_update = self.get_clock().now()
+		else:
+			self._yellow_pc = None
+			self._new_yellow = False
 	def _lidar_cb(self, msg):
 		self._lidar_pc = msg
 		self._new_lidar = True
