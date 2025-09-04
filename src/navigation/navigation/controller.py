@@ -6,7 +6,7 @@ from nav_msgs.msg import Odometry
 import math
 from geometry_msgs.msg import Twist, Point, PointStamped
 import tf_transformations
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32
 from visualization_msgs.msg import Marker, MarkerArray
 from builtin_interfaces.msg import Duration
 from sensor_msgs.msg import Imu
@@ -52,6 +52,7 @@ class Controller(Node):
 
         self.cmd_pub = self.create_publisher(Twist, '/cmd_velbgdhgdhd', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/path_markers', 10)
+        self.heading_pub = self.create_publisher(Float32, '/heading_angle', 10)
         
         self.control_timer = self.create_timer(0.05, self.control_loop)
         self.marker_timer = self.create_timer(0.05, self.publish_marker_timer)
@@ -265,6 +266,8 @@ class Controller(Node):
         angle = math.atan2(yr, xr)
         if abs(math.degrees(angle)) < .5:
             angle = 0.0
+        
+        self.heading_pub.publish(angle)
 
         if lookahead_dist < 0.1:
             curvature = 0.0
@@ -392,7 +395,6 @@ class Controller(Node):
         lookahead_marker = make_lookahead_marker(self.current_lookahead, 2, "lookahead_point")
         if lookahead_marker:
             markers.append(lookahead_marker)
-
         self.marker_pub.publish(MarkerArray(markers=markers))
 
     def transform_to_odom(self, x, y, z, frame_id='base_link'):
