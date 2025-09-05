@@ -149,27 +149,10 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-
-    goal_publisher_node = Node(
-        package='movement',
-        executable='goal_publisher',
-        name='goal_publisher',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-        output='screen'
-    )
-
     costmap_publisher_node = Node(
         package='navigation',
         executable='costmap',
         name='costmap_publisher',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-        output='screen'
-    )
-
-    path_publisher_node = Node(
-        package='path_planning',
-        executable='path_planner',
-        name='path_planner',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
         output='screen'
     )
@@ -181,21 +164,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
         output='screen'
     )
-    controller_node = Node(
-        package='navigation',
-        executable='controller',
-        name='controller',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-        output='screen'
-    )
-
-    pothole_node = Node(
-        package='movement',  
-        executable='pothole',  
-        name='pothole_detector_node',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
 
     lidar_node = Node(
         package='navigation',  
@@ -205,7 +173,13 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
    
-
+    raycast_node = Node(
+        package='movement',  
+        executable='raycast',  
+        name='raycast',
+        output='screen',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
     # ------------------------------------------------------------------------
@@ -365,13 +339,10 @@ def generate_launch_description():
     ld.add_action(intersection_straight_node)
     ld.add_action(intersection_left_node)
 
-    ld.add_action(goal_publisher_node)
     ld.add_action(costmap_publisher_node)
-    ld.add_action(path_publisher_node)
     ld.add_action(curve_fit_node)
-    ld.add_action(controller_node)
-    ld.add_action(pothole_node)
     ld.add_action(lidar_node)
+    ld.add_action(raycast_node)
 
     
 

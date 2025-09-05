@@ -422,6 +422,19 @@ Visualization Manager:
         Value: /debug_points
       Value: true
 
+    # ── Raycast cost visualization ─────────────────────────────────────────────
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Raycast Costs
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /raycast_costs
+      Value: true
+
+
       
   Enabled: true
   Global Options:
