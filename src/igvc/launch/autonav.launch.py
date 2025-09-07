@@ -189,14 +189,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    pothole_node = Node(
-        package='movement',  
-        executable='pothole',  
-        name='pothole_detector_node',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
     lidar_node = Node(
         package='navigation',  
         executable='lidar',  
@@ -370,7 +362,6 @@ def generate_launch_description():
     ld.add_action(path_publisher_node)
     ld.add_action(curve_fit_node)
     ld.add_action(controller_node)
-    ld.add_action(pothole_node)
     ld.add_action(lidar_node)
 
     

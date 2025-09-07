@@ -51,7 +51,7 @@
         <horizontal_fov>1.765994316</horizontal_fov>
         <image>
           <width>600</width>
-          <height>600s</height>
+          <height>600</height>
         </image>
         <clip>
           <near>0.1</near>
