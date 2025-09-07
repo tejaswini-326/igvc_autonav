@@ -24,11 +24,13 @@ def calculate_distance_and_bearing(latitude, longitude, waypt_lat, waypt_lon):
     dlat = waypt_lat - latitude
     dlon = waypt_lon - longitude
     northing = dlat * m_per_deg_lat
-    easting = dlon * m_per_deg_lon
+    easting  = dlon * m_per_deg_lon
 
     distance = math.hypot(easting, northing)
-    bearing = math.atan2(easting, northing)
+    # ENU: angle from +X (East) CCW to +Y (North)
+    bearing  = math.atan2(northing, easting)
     return distance, bearing
+
 
 
 class GPSNextWaypointPublisherNode(Node):
@@ -50,14 +52,12 @@ class GPSNextWaypointPublisherNode(Node):
 
         # Static list of waypoints: [latitude, longitude]
         self.waypoints = [
-            [47.47878384569001, 19.057413221283262], # Before first left turn
-            [47.47867547320186, 19.057500743159018], # Just before first intersection
-            [47.47866538581544, 19.05778581548513], # Straight ahead of first intersection
-            [47.47881633796393, 19.057923110187613], # To the left of second intersection
-            [47.47918321226283, 19.057765083543092]  # Just before third intersection
+            [47.47927341782438, 19.057658340347178], # little ahead
+            [47.479265885071094, 19.057819240025868], # lot ahead
+            [47.47914137816071, 19.05807806011922], # lot ahead to the right in the open
         ]
 
-        self.create_timer(0.1, self.publish_next_waypoint)
+        self.create_timer(0.05, self.publish_next_waypoint)
 
     def navsat_callback(self, msg: NavSatFix):
         self.latitude = msg.latitude
@@ -86,7 +86,7 @@ class GPSNextWaypointPublisherNode(Node):
 
         # This bearing re-adjustment converts the angle of the navsat systemt to our gazebo system
         # Might need to be changed for the real bot
-        bearing = normalise_angle(-bearing + pi)
+        #bearing = normalise_angle(-bearing + pi)
         heading_error = normalise_angle(bearing - self.yaw)
 
         msg = Float64MultiArray()
