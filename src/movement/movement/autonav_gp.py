@@ -4,18 +4,21 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import OccupancyGrid, Odometry
 from sensor_msgs.msg import PointCloud2
+from visualization_msgs.msg import Marker
 import numpy as np
 import sensor_msgs_py.point_cloud2 as pc2
 from sklearn.cluster import DBSCAN
 
 LOOK_AHEAD_DISTANCE = 8.0
+LANE_WIDTH = 3.0   # fixed lane width
+
 class GoalPublisher(Node):
     def __init__(self):
         super().__init__('goal_publisher')
 
         # Parameters
         self.lookahead_distance = LOOK_AHEAD_DISTANCE   
-        self.lane_width = None          # updated when both lanes visible
+        self.lane_width = LANE_WIDTH
         self.goal_tolerance = 0.5       # meters
 
         # State
@@ -23,14 +26,19 @@ class GoalPublisher(Node):
         self.robot_pose = None
         self.costmap = None
         self.white_points = None
+        self.last_marker = None   # <-- store last search area marker
 
         # Subscribers
         self.create_subscription(OccupancyGrid, '/costmap', self.costmap_cb, 10)
         self.create_subscription(PointCloud2, '/white_lane_points', self.white_points_cb, 10)
         self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
 
-        # Publisher
+        # Publishers
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_point', 10)
+        self.marker_pub = self.create_publisher(Marker, '/search_area_marker', 10)
+
+        # Timer to republish last marker at 1 Hz
+        self.create_timer(1.0, self.republish_marker)
 
     # -------------------
     # Callbacks
@@ -38,7 +46,6 @@ class GoalPublisher(Node):
     def odom_cb(self, msg: Odometry):
         self.robot_pose = msg.pose.pose
 
-        # Only compute next goal if current goal is None or reached
         if self.current_goal is None:
             self.compute_next_goal()
         else:
@@ -52,10 +59,13 @@ class GoalPublisher(Node):
         self.costmap = msg
 
     def white_points_cb(self, msg: PointCloud2):
-        # Store latest lane points
         self.white_points = np.array([[p[0], p[1]] for p in pc2.read_points(msg, skip_nans=True)])
-        # Do NOT recompute goal here — it will be triggered only when odom says goal is reached
 
+    def republish_marker(self):
+        """Keep publishing the last marker so it stays visible in RViz"""
+        if self.last_marker is not None:
+            self.last_marker.header.stamp = self.get_clock().now().to_msg()
+            self.marker_pub.publish(self.last_marker)
 
     # -------------------
     # Core function
@@ -66,7 +76,6 @@ class GoalPublisher(Node):
 
         lookahead_x = self.robot_pose.position.x + self.lookahead_distance
 
-        # --- cluster all points ---
         if len(self.white_points) < 3:
             self.get_logger().warn("Not enough points for clustering!")
             return
@@ -75,31 +84,23 @@ class GoalPublisher(Node):
         labels = clustering.labels_
         unique_labels = set(labels)
         if -1 in unique_labels:
-            unique_labels.remove(-1)  # remove noise
+            unique_labels.remove(-1)
 
         if len(unique_labels) == 0:
             self.get_logger().warn("No clusters found!")
             return
         elif len(unique_labels) == 1:
-            # Only one lane visible → infer the other
             cluster_pts = self.white_points[labels == list(unique_labels)[0]]
             idx = np.argmin(np.abs(cluster_pts[:, 0] - lookahead_x))
             lane_pt = cluster_pts[idx]
 
             if self.robot_pose.position.y < lane_pt[1]:
                 left_pt = lane_pt
-                if self.lane_width is None:
-                    self.get_logger().warn("Lane width unknown, cannot infer right lane")
-                    return
                 right_pt = (left_pt[0], left_pt[1] + self.lane_width)
             else:
                 right_pt = lane_pt
-                if self.lane_width is None:
-                    self.get_logger().warn("Lane width unknown, cannot infer left lane")
-                    return
                 left_pt = (right_pt[0], right_pt[1] - self.lane_width)
         else:
-            # Two or more clusters → pick two main clusters by size
             cluster_sizes = [(label, np.sum(labels == label)) for label in unique_labels]
             cluster_sizes.sort(key=lambda x: x[1], reverse=True)
             main_labels = [cluster_sizes[0][0], cluster_sizes[1][0]]
@@ -115,14 +116,9 @@ class GoalPublisher(Node):
             else:
                 left_pt, right_pt = pt1, pt0
 
-            # update lane width
-            self.lane_width = np.hypot(left_pt[0] - right_pt[0], left_pt[1] - right_pt[1])
-
-        # midpoint
         mid_x = (left_pt[0] + right_pt[0]) / 2.0
         mid_y = (left_pt[1] + right_pt[1]) / 2.0
 
-        # --- search rectangle in costmap ---
         res = self.costmap.info.resolution
         origin = self.costmap.info.origin.position
         w = self.costmap.info.width
@@ -138,24 +134,51 @@ class GoalPublisher(Node):
         gy_min = max(0, int((min_y - origin.y) / res))
         gy_max = min(h - 1, int((max_y - origin.y) / res))
 
-        # collect free cells
+        # -------------------
+        # Create and store search area marker
+        # -------------------
+        marker = Marker()
+        marker.header.frame_id = "odom"
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.ns = "search_area"
+        marker.id = 0
+        marker.type = Marker.CUBE
+        marker.action = Marker.ADD
+        marker.pose.position.x = (min_x + max_x) / 2.0
+        marker.pose.position.y = (min_y + max_y) / 2.0
+        marker.pose.position.z = 0.0
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = (max_x - min_x)
+        marker.scale.y = (max_y - min_y)
+        marker.scale.z = 0.05
+        marker.color.r = 0.0
+        marker.color.g = 0.0
+        marker.color.b = 1.0
+        marker.color.a = 0.3
+        self.marker_pub.publish(marker)
+        self.last_marker = marker  # <-- save for republishing
+
+        # collect candidate cells (exclude unknown -1)
         candidates = []
         for gx in range(gx_min, gx_max + 1):
             for gy in range(gy_min, gy_max + 1):
                 idx = gy * w + gx
-                if self.costmap.data[idx] == 0:
+                val = self.costmap.data[idx]
+                if val >= 0:  # skip unknown
                     wx = gx * res + origin.x + res / 2.0
                     wy = gy * res + origin.y + res / 2.0
-                    candidates.append((wx, wy))
+                    candidates.append((wx, wy, val))
 
         if not candidates:
-            self.get_logger().warn("No free cells in search area!")
+            self.get_logger().warn("No valid cells in search area!")
             return
 
-        # choose closest to midpoint
-        goal_x, goal_y = min(candidates, key=lambda p: np.hypot(p[0] - mid_x, p[1] - mid_y))
+        # choose point with lowest cost, break ties by closeness to midpoint
+        goal_x, goal_y, _ = min(
+            candidates,
+            key=lambda p: (p[2], np.hypot(p[0] - mid_x, p[1] - mid_y))
+        )
 
-        # publish
         goal = PoseStamped()
         goal.header.frame_id = "odom"
         goal.header.stamp = self.get_clock().now().to_msg()
@@ -168,9 +191,6 @@ class GoalPublisher(Node):
         self.get_logger().info(f"New goal at ({goal_x:.2f}, {goal_y:.2f})")
 
 
-# -------------------
-# Main
-# -------------------
 def main(args=None):
     rclpy.init(args=args)
     node = GoalPublisher()

@@ -51,7 +51,7 @@ class Controller(Node):
         self.create_subscription(String, '/intersection', self.intersection_cb, 10) 
 
 
-        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel_no', 10)
+        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/path_markers', 10)
         
         self.control_timer = self.create_timer(0.05, self.control_loop)
