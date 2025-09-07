@@ -117,14 +117,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    m_horizontal_line_detect_node = Node(
-        package='movement',
-        executable='m_horizontal_line_detect',
-        name='M_HorizontalLineDetect',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
     gps_waypoint_publisher_node = Node(
         package='movement',
         executable='gps_waypoint_publisher',
@@ -133,21 +125,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    intersection_straight_node = Node(
-        package='movement',
-        executable='intersection_straight',
-        name='IntersectionStraightDriver',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
-    intersection_left_node = Node(
-        package='movement',
-        executable='intersection_left',
-        name='IntersectionLeftTurnDriver',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
 
 
     goal_publisher_node = Node(
@@ -353,9 +330,7 @@ def generate_launch_description():
     ld.add_action(gps_waypoint_publisher_node)
     ld.add_action(pointcloud_downscaler_node)
     ld.add_action(back_pointcloud_downscaler_node)
-    ld.add_action(m_horizontal_line_detect_node)
-    ld.add_action(intersection_straight_node)
-    ld.add_action(intersection_left_node)
+
 
     ld.add_action(goal_publisher_node)
     ld.add_action(costmap_publisher_node)

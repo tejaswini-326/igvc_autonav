@@ -8,16 +8,25 @@ from visualization_msgs.msg import Marker
 import numpy as np
 import sensor_msgs_py.point_cloud2 as pc2
 from sklearn.cluster import DBSCAN
-
-LOOK_AHEAD_DISTANCE = 8.0
+import math
+import time
+LOOK_AHEAD_DISTANCE = 5.0
 LANE_WIDTH = 3.0   # fixed lane width
+
+# tuning: occupancy threshold in OccupancyGrid (0..100). Anything >= this is considered occupied.
+OCCUPIED_THRESHOLD = 60
+
+# Robot physical size (used to check clearance) - meters
+ROBOT_WIDTH_M = 2.2
+ROBOT_RADIUS_M = ROBOT_WIDTH_M / 2.0
+
 
 class GoalPublisher(Node):
     def __init__(self):
         super().__init__('goal_publisher')
-
+        time.sleep(1.0)
         # Parameters
-        self.lookahead_distance = LOOK_AHEAD_DISTANCE   
+        self.lookahead_distance = LOOK_AHEAD_DISTANCE
         self.lane_width = LANE_WIDTH
         self.goal_tolerance = 0.5       # meters
 
@@ -71,6 +80,7 @@ class GoalPublisher(Node):
     # Core function
     # -------------------
     def compute_next_goal(self):
+        # basic guards
         if self.robot_pose is None or self.white_points is None or self.costmap is None:
             return
 
@@ -80,6 +90,7 @@ class GoalPublisher(Node):
             self.get_logger().warn("Not enough points for clustering!")
             return
 
+        # cluster lane points
         clustering = DBSCAN(eps=0.5, min_samples=3).fit(self.white_points)
         labels = clustering.labels_
         unique_labels = set(labels)
@@ -119,11 +130,13 @@ class GoalPublisher(Node):
         mid_x = (left_pt[0] + right_pt[0]) / 2.0
         mid_y = (left_pt[1] + right_pt[1]) / 2.0
 
+        # costmap metadata
         res = self.costmap.info.resolution
         origin = self.costmap.info.origin.position
         w = self.costmap.info.width
         h = self.costmap.info.height
 
+        # search window around lane (small padding)
         min_x = min(left_pt[0], right_pt[0]) - 0.5
         max_x = max(left_pt[0], right_pt[0]) + 0.5
         min_y = min(left_pt[1], right_pt[1]) - 0.5
@@ -135,7 +148,7 @@ class GoalPublisher(Node):
         gy_max = min(h - 1, int((max_y - origin.y) / res))
 
         # -------------------
-        # Create and store search area marker
+        # Create and store search area marker (for RViz)
         # -------------------
         marker = Marker()
         marker.header.frame_id = "odom"
@@ -148,36 +161,72 @@ class GoalPublisher(Node):
         marker.pose.position.y = (min_y + max_y) / 2.0
         marker.pose.position.z = 0.0
         marker.pose.orientation.w = 1.0
-        marker.scale.x = (max_x - min_x)
-        marker.scale.y = (max_y - min_y)
+        marker.scale.x = max(0.01, (max_x - min_x))
+        marker.scale.y = max(0.01, (max_y - min_y))
         marker.scale.z = 0.05
+        # color: bluish if we have a search area
         marker.color.r = 0.0
-        marker.color.g = 0.0
-        marker.color.b = 1.0
-        marker.color.a = 0.3
+        marker.color.g = 0.2
+        marker.color.b = 0.8
+        marker.color.a = 0.25
         self.marker_pub.publish(marker)
         self.last_marker = marker  # <-- save for republishing
 
-        # collect candidate cells (exclude unknown -1)
-        candidates = []
+        # convert costmap data into 2D numpy array [height, width]
+        data = np.array(self.costmap.data, dtype=int).reshape((h, w))
+        # treat unknown cells (-1) as very high cost so they're excluded
+        data_mod = data.copy()
+        data_mod[data_mod < 0] = 120  # > OCCUPIED_THRESHOLD
+
+        # radius in cells to check for clearance
+        clearance_cells = int(math.ceil(ROBOT_RADIUS_M / res))
+
+        # Collect candidate cells from search window, but filter using a local neighborhood test
+        best = None
+        best_score = float('inf')
+        candidate_count = 0
+
         for gx in range(gx_min, gx_max + 1):
             for gy in range(gy_min, gy_max + 1):
-                idx = gy * w + gx
-                val = self.costmap.data[idx]
-                if val >= 0:  # skip unknown
-                    wx = gx * res + origin.x + res / 2.0
-                    wy = gy * res + origin.y + res / 2.0
-                    candidates.append((wx, wy, val))
+                # costmap row-major: index = gy * w + gx (consistent with your original code)
+                val = int(data[gy, gx])
 
-        if not candidates:
-            self.get_logger().warn("No valid cells in search area!")
+                # ignore unknown (val < 0) or clearly occupied cells by quick check
+                if val < 0 or val >= OCCUPIED_THRESHOLD:
+                    continue
+
+                # neighborhood slice with bounds-checking
+                x0 = max(0, gx - clearance_cells)
+                x1 = min(w - 1, gx + clearance_cells)
+                y0 = max(0, gy - clearance_cells)
+                y1 = min(h - 1, gy + clearance_cells)
+
+                local = data_mod[y0:y1+1, x0:x1+1]
+
+                # If any local cell is occupied (>= OCCUPIED_THRESHOLD) -> not safe
+                if np.any(local >= OCCUPIED_THRESHOLD):
+                    continue
+
+                # compute local_mean (lower is better), and distance to midpoint (lower better)
+                local_mean = float(local.mean())
+                wx = gx * res + origin.x + res / 2.0
+                wy = gy * res + origin.y + res / 2.0
+                dist_mid = math.hypot(wx - mid_x, wy - mid_y)
+
+                # scoring: primarily local_mean, tie-broken by proximity to midpoint
+                # weights tuned to favor very free local neighborhoods
+                score = local_mean + (5.0 * dist_mid)  # adjust multiplier if you want different bias
+
+                candidate_count += 1
+                if score < best_score:
+                    best_score = score
+                    best = (wx, wy, local_mean, dist_mid, gx, gy)
+
+        if best is None:
+            self.get_logger().warn("No suitable unoccupied cell found in search area!")
             return
 
-        # choose point with lowest cost, break ties by closeness to midpoint
-        goal_x, goal_y, _ = min(
-            candidates,
-            key=lambda p: (p[2], np.hypot(p[0] - mid_x, p[1] - mid_y))
-        )
+        goal_x, goal_y, local_mean, dist_mid, best_gx, best_gy = best
 
         goal = PoseStamped()
         goal.header.frame_id = "odom"
@@ -188,7 +237,9 @@ class GoalPublisher(Node):
 
         self.goal_pub.publish(goal)
         self.current_goal = goal
-        self.get_logger().info(f"New goal at ({goal_x:.2f}, {goal_y:.2f})")
+        self.get_logger().info(
+            f"New goal at ({goal_x:.2f}, {goal_y:.2f})  local_mean={local_mean:.1f} dist_mid={dist_mid:.2f} candidates={candidate_count}"
+        )
 
 
 def main(args=None):
