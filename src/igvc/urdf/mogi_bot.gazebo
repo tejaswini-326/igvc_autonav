@@ -71,7 +71,7 @@
         <stddev>0.007</stddev>
       </noise>
       <always_on>1</always_on>
-      <update_rate>20</update_rate>
+      <update_rate>30</update_rate>
       <visualize>true</visualize>
       <topic>camera</topic>
       <gz_frame_id>camera_link</gz_frame_id>
