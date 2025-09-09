@@ -434,7 +434,52 @@ Visualization Manager:
         Value: /raycast_costs
       Value: true
 
+    # ── Search area marker (visualization_msgs/Marker) ─────────────────────────
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Search Area
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /search_area_marker
+      Value: true
+    # ── Debug left lane point (visualization_msgs/Marker) ──────────────────────
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Debug Left Pt
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug_left_pt
+      Value: true
 
+    # ── Debug right lane point (visualization_msgs/Marker) ─────────────────────
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Debug Right Pt
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug_right_pt
+      Value: true
+      
+    # ── Lane cluster visualization (MarkerArray) ────────────────────────────────
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Lane Clusters
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lane_clusters
+      Value: true
       
   Enabled: true
   Global Options:
