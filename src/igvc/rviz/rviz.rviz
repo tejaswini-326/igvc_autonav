@@ -422,12 +422,25 @@ Visualization Manager:
         Value: /debug_points
       Value: true
 
+    # ── Raycast cost visualization ─────────────────────────────────────────────
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Raycast Costs
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /raycast_costs
+      Value: true
+
+
       
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
     Fixed Frame: odom
-    Frame Rate: 30
+    Frame Rate: 60
   Name: root
   Tools:
     - Class: rviz_default_plugins/Interact

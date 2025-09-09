@@ -33,7 +33,7 @@ def generate_launch_description():
     )
     world_arg = DeclareLaunchArgument(
         'world',
-        default_value='autonav_v4_working.world',
+        default_value='concrete.world',
         description='Name of the Ignition world file to load'
     )
     model_arg = DeclareLaunchArgument(
@@ -43,17 +43,17 @@ def generate_launch_description():
     )
     x_arg = DeclareLaunchArgument(
         'x',
-        default_value='-30.10',
+        default_value='-24.580000',
         description='Initial X coordinate for robot spawn'
     )
     y_arg = DeclareLaunchArgument(
         'y',
-        default_value='-2.0',
+        default_value='26.260000',
         description='Initial Y coordinate for robot spawn'
     )
     yaw_arg = DeclareLaunchArgument(
         'yaw',
-        default_value='-1.5707',
+        default_value='0.0',
         description='Initial yaw (rotation around Z) for robot spawn'
     )
     sim_time_arg = DeclareLaunchArgument(
@@ -117,14 +117,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    m_horizontal_line_detect_node = Node(
-        package='movement',
-        executable='m_horizontal_line_detect',
-        name='M_HorizontalLineDetect',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
     gps_waypoint_publisher_node = Node(
         package='movement',
         executable='gps_waypoint_publisher',
@@ -133,25 +125,10 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    intersection_straight_node = Node(
-        package='movement',
-        executable='intersection_straight',
-        name='IntersectionStraightDriver',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
-
-    intersection_left_node = Node(
-        package='movement',
-        executable='intersection_left',
-        name='IntersectionLeftTurnDriver',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-    )
 
 
     goal_publisher_node = Node(
-        package='path_planning',
+        package='movement',
         executable='goal_publisher',
         name='goal_publisher',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
@@ -187,14 +164,6 @@ def generate_launch_description():
         name='controller',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
         output='screen'
-    )
-
-    pothole_node = Node(
-        package='movement',  
-        executable='pothole',  
-        name='pothole_detector_node',
-        output='screen',
-        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
     lidar_node = Node(
@@ -361,16 +330,13 @@ def generate_launch_description():
     ld.add_action(gps_waypoint_publisher_node)
     ld.add_action(pointcloud_downscaler_node)
     ld.add_action(back_pointcloud_downscaler_node)
-    ld.add_action(m_horizontal_line_detect_node)
-    ld.add_action(intersection_straight_node)
-    ld.add_action(intersection_left_node)
+
 
     ld.add_action(goal_publisher_node)
     ld.add_action(costmap_publisher_node)
     ld.add_action(path_publisher_node)
     ld.add_action(curve_fit_node)
     ld.add_action(controller_node)
-    ld.add_action(pothole_node)
     ld.add_action(lidar_node)
 
     

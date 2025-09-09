@@ -6,6 +6,7 @@ import struct
 import numpy as np
 from sklearn.cluster import DBSCAN
 import math
+from builtin_interfaces.msg import Time
 from sklearn.decomposition import PCA
 from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker, MarkerArray
@@ -18,8 +19,6 @@ import ctypes
 
 
 VERBOSE_UNNESSARY_THINGS = False
-
-
 MIN_CLUSTERING_DISTANCE = 0.6
 MIN_CLUSTERING_POINTS = 20
 MAX_YELLOW_CLUSTERING_POINTS = 100_000
@@ -87,7 +86,7 @@ class LaneFollowerNode(Node):
         
         self.white_pub = self.create_publisher(PointCloud2, "/white_lane_points", 10)
         self.yellow_pub = self.create_publisher(PointCloud2, "/yellow_lane_points", 10)    
-        self.timer_period = 0.033  # 30 Hz
+        self.timer_period = 0.033 # 30 Hz
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
 
         self.yellow_points_history = []
@@ -114,7 +113,7 @@ class LaneFollowerNode(Node):
         for i, (label, coeffs, color_type, cluster_xy) in enumerate(cluster_curves):
             curve_marker = Marker()
             curve_marker.header.frame_id = msg.header.frame_id
-            curve_marker.header.stamp = self.get_clock().now().to_msg()
+            curve_marker.header.stamp = Time(sec=0, nanosec=0) #the lanes were flickering in my laptop due to some lag in the transforms being published.. if that is not the case in your laptop, you can change it back to what it was before
             curve_marker.ns = "lane_curves"
             curve_marker.type = Marker.LINE_STRIP
             curve_marker.action = Marker.ADD

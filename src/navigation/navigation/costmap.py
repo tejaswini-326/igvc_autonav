@@ -96,7 +96,6 @@ class CostmapNode(Node):
 		qos = 20
 		self.create_subscription(PointCloud2, '/object_pc',self._object_cb, qos)
 		self.create_subscription(PointCloud2, '/white_lane_points',self._white_cb,  qos)
-		self.create_subscription(MarkerArray, '/lane_fitted_yellow',self._yellow_cb, qos)
 		self.create_subscription(PointCloud2, '/lidar_pc2', self._lidar_cb, qos)
 		self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', qos)
 		self.create_subscription(Odometry, '/odom', self.odom_callback, qos)
@@ -140,18 +139,7 @@ class CostmapNode(Node):
 	def _white_cb(self,  msg):  
 		self._white_pc,  self._new_white  = msg, True
 		self._white_last_update = self.get_clock().now()
-	def _yellow_cb(self, msg: MarkerArray):
-		points = []
-		for marker in msg.markers:
-			for p in marker.points:
-				points.append([p.x, p.y, p.z])
-		if points:
-			self._yellow_pc = np.array(points, dtype=np.float32)
-			self._new_yellow = True
-			self._yellow_last_update = self.get_clock().now()
-		else:
-			self._yellow_pc = None
-			self._new_yellow = False
+	
 	def _lidar_cb(self, msg):
 		self._lidar_pc = msg
 		self._new_lidar = True
@@ -467,7 +455,7 @@ class CostmapNode(Node):
 
 		# 2) Distance transform on *free* space (invert mask for OpenCV)
 		#    Note: cv2.distanceTransform expects 8-bit single-channel image with 0=background, nonzero=foreground.
-		free_uchar = ((1 - occ) * 255).astype(np.uint8)   # 255 = free, 0 = obstacle
+		free_uchar = ((1 - occ) * 200).astype(np.uint8)   # 255 = free, 0 = obstacle
 		dist_cells = cv2.distanceTransform(free_uchar, cv2.DIST_L2, 5).astype(np.float32)
 
 		# 3) Convert to metres and find cells with clearance < robot_radius
