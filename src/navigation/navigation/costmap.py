@@ -38,7 +38,7 @@ YELLOW_HOLD_SEC = 0.1
 
 MY_HZ = 30
 
-BOT_WIDTH = 1.7
+BOT_WIDTH = 1.6
 
 
 def transform_to_matrix(tf_msg) -> np.ndarray:
