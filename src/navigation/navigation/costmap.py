@@ -36,7 +36,9 @@ OBJECT_HOLD_SEC = 1/15 # Just slightly more than the 20 Hz we receive objects at
 WHITE_HOLD_SEC  = 0.1   # tune these
 YELLOW_HOLD_SEC = 0.1
 
-BOT_WIDTH = 2.2
+MY_HZ = 30
+
+BOT_WIDTH = 1.7
 
 
 def transform_to_matrix(tf_msg) -> np.ndarray:
@@ -121,7 +123,7 @@ class CostmapNode(Node):
 			self.g_origin_x   = self.g_origin_y = 0.0
 
 		# ---------------------------- timer -------------------------------
-		self.create_timer(0.05, self._timer_cb)   # 10 Hz
+		self.create_timer(1/MY_HZ, self._timer_cb)   # 10 Hz
 
 
 		# --------------------- logger level tweak -------------------------
