@@ -26,6 +26,7 @@ setup(
         # 'path_planner= navigation.path_planning:main', 
         'curve_fit= navigation.lane_curvefitting:main', 
         'controller = navigation.controller:main',
+        'm_controller = navigation.m_controller:main',
         'downsampling = navigation.downsampling:main',
         'back_downsampling = navigation.back_downsampling:main',
         'lidar = navigation.lidar_pc2:main',

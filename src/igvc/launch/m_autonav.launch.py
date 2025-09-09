@@ -23,7 +23,7 @@ def generate_launch_description():
     # ------------------------------------------------------------------------
     rviz_launch_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='false',
+        default_value='true',
         description='Whether to start RViz'
     )
     rviz_config_arg = DeclareLaunchArgument(
@@ -33,7 +33,7 @@ def generate_launch_description():
     )
     world_arg = DeclareLaunchArgument(
         'world',
-        default_value='asphalt.world',
+        default_value='concrete.world',
         description='Name of the Ignition world file to load'
     )
     model_arg = DeclareLaunchArgument(
@@ -43,12 +43,12 @@ def generate_launch_description():
     )
     x_arg = DeclareLaunchArgument(
         'x',
-        default_value='-17.323',
+        default_value='-24.580000',
         description='Initial X coordinate for robot spawn'
     )
     y_arg = DeclareLaunchArgument(
         'y',
-        default_value='-32.183',
+        default_value='26.260000',
         description='Initial Y coordinate for robot spawn'
     )
     yaw_arg = DeclareLaunchArgument(
@@ -101,18 +101,18 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    intersection_straight_node = Node(
+    pointcloud_downscaler_node = Node(
         package='movement',
-        executable='intersection_straight',
-        name='IntersectionStraightDriver',
+        executable='pointcloud_downscaler',
+        name='PointCloudDownscaler',
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    intersection_left_node = Node(
+    back_pointcloud_downscaler_node = Node(
         package='movement',
-        executable='intersection_left',
-        name='IntersectionLeftTurnDriver',
+        executable='back_pointcloud_downscaler',
+        name='BackPointCloudDownscaler',
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
@@ -125,14 +125,62 @@ def generate_launch_description():
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
-    pointcloud_downscaler_node = Node(
+
+
+    goal_publisher_node = Node(
         package='movement',
-        executable='pointcloud_downscaler',
-        name='PointCloudDownscaler',
+        executable='goal_publisher',
+        name='goal_publisher',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+        output='screen'
+    )
+
+    costmap_publisher_node = Node(
+        package='navigation',
+        executable='costmap',
+        name='costmap_publisher',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+        output='screen'
+    )
+
+    path_publisher_node = Node(
+        package='path_planning',
+        executable='path_planner',
+        name='path_planner',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+        output='screen'
+    )
+
+    curve_fit_node = Node(
+        package='navigation',
+        executable='curve_fit',
+        name='lane_fit',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+        output='screen'
+    )
+    controller_node = Node(
+        package='navigation',
+        executable='controller',
+        name='controller',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+        output='screen'
+    )
+    m_controller_node = Node(
+        package='navigation',
+        executable='m_controller',
+        name='m_controller',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+        output='screen'
+    )
+
+    lidar_node = Node(
+        package='navigation',  
+        executable='lidar',  
+        name='scan_to_pointcloud',
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
-
+   
 
     # ------------------------------------------------------------------------
     # Spawn the robot into Gazebo via the /world/.../create service
@@ -151,9 +199,6 @@ def generate_launch_description():
         output="screen",
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
-    
-
-
 
     # ------------------------------------------------------------------------
     # Bridge common topics between ROS 2 and Gazebo
@@ -173,11 +218,16 @@ def generate_launch_description():
             "/scan/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
             "/camera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image",
             "/camera/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
+            "/bcamera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo",
+            "/bcamera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image",
+            "/bcamera/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked",
+            "/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
+            #"/tf_static@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
         ],
         output="screen",
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
-    
+
     # ------------------------------------------------------------------------
     # Image bridge for camera with compressed transport
     # ------------------------------------------------------------------------
@@ -188,9 +238,9 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'camera.image.compressed.jpeg_quality': 75
+            #'camera.image.compressed.jpeg_quality': 75
         }],
-    )
+    )   
 
     # ------------------------------------------------------------------------
     # Relay camera_info under the proper topic namespace
@@ -200,9 +250,31 @@ def generate_launch_description():
         executable='relay',
         name='relay_camera_info',
         output='screen',
-        arguments=['camera/camera_info', 'camera/image/camera_info'],
+        arguments=['camera/camera_info'],
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
+
+    gz_bimage_bridge_node = Node(
+        package="ros_gz_image",
+        executable="image_bridge",
+        arguments=["/bcamera/image"],
+        output="screen",
+        parameters=[{
+            'use_sim_time': LaunchConfiguration('use_sim_time'),
+            #'camera.image.compressed.jpeg_quality': 75
+        }],
+    )   
+
+    relay_bcamera_info_node = Node(
+        package='topic_tools',
+        executable='relay',
+        name='relay_bcamera_info',
+        output='screen',
+        arguments=['bcamera/camera_info', 'bcamera/image/camera_info'],
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+    )
+
+
 
     # ------------------------------------------------------------------------
     # EKF node for sensor fusion (robot_localization)
@@ -219,24 +291,6 @@ def generate_launch_description():
     )
 
     # ------------------------------------------------------------------------
-    # Trajectory server nodes (custom mogi_trajectory_server package)
-    # ------------------------------------------------------------------------
-    # trajectory_odom_topic_node = Node(
-    #     package='mogi_trajectory_server',
-    #     executable='mogi_trajectory_server_topic_based',
-    #     name='mogi_trajectory_server_odom_topic',
-    #     parameters=[
-    #         {'trajectory_topic': 'trajectory_raw'},
-    #         {'odometry_topic': 'odom'}
-    #     ],
-    # )
-    # trajectory_node = Node(
-    #     package='mogi_trajectory_server',
-    #     executable='mogi_trajectory_server',
-    #     name='mogi_trajectory_server'
-    # )
-
-    # ------------------------------------------------------------------------
     # Robot State Publisher (publishes TF from the robot_description)
     # ------------------------------------------------------------------------
     robot_state_publisher_node = Node(
@@ -245,10 +299,9 @@ def generate_launch_description():
         name='robot_state_publisher',
         output='screen',
         parameters=[{
-            'robot_description': Command(['xacro', ' ', urdf_file_path]),
+            'robot_description': Command(['xacro ', urdf_file_path]),
             'use_sim_time': LaunchConfiguration('use_sim_time')
         }],
-        remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static')],
     )
 
 
@@ -271,16 +324,25 @@ def generate_launch_description():
     ld.add_action(world_launch)
     ld.add_action(rviz_node)
     ld.add_action(spawn_urdf_node)
+
     ld.add_action(gz_bridge_node)
     ld.add_action(gz_image_bridge_node)
+    ld.add_action(gz_bimage_bridge_node)
     ld.add_action(relay_camera_info_node)
+    ld.add_action(relay_bcamera_info_node)
+
     ld.add_action(ekf_node)
     ld.add_action(robot_state_publisher_node)
     
-    ld.add_action(intersection_straight_node)
-    ld.add_action(intersection_left_node)
     ld.add_action(gps_waypoint_publisher_node)
     ld.add_action(pointcloud_downscaler_node)
+    ld.add_action(back_pointcloud_downscaler_node)
+    ld.add_action(m_controller_node)
 
+
+    ld.add_action(costmap_publisher_node)
+    ld.add_action(curve_fit_node)
+    ld.add_action(lidar_node)
 
     return ld
+
