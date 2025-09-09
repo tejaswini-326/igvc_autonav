@@ -50,7 +50,7 @@ class Controller(Node):
         self.create_subscription(Path, '/sm_planned_path', self.path_callback, 10)
         self.create_subscription(String, '/intersection', self.intersection_cb, 10) 
 
-        self.cmd_pub = self.create_publisher(Twist, '/cmd_velbgdhgdhd', 10)
+        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/path_markers', 10)
         self.heading_pub = self.create_publisher(Float32, '/heading_angle', 10)
         
@@ -267,7 +267,7 @@ class Controller(Node):
         if abs(math.degrees(angle)) < .5:
             angle = 0.0
         
-        self.heading_pub.publish(angle)
+        self.heading_pub.publish(Float32(data=self.imu_yaw))
 
         if lookahead_dist < 0.1:
             curvature = 0.0

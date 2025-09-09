@@ -1,6 +1,6 @@
-//#define DEBUG
+// #define DEBUG
 
-constexpr int X_OF_STARTING_POSITION_IN_PATH = 155;
+constexpr int X_OF_STARTING_POSITION_IN_PATH = 160;
 constexpr int Y_OF_STARTING_POSITION_IN_PATH = 150;
 
 constexpr double MAX_TIME_FOR_PATH_PLANNING = 0.3;
@@ -45,7 +45,7 @@ public:
             "/costmap", 10, std::bind(&AStarPlanner::costmap_callback, this, _1));
 
         goal_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
-            "/goal_point", 10, std::bind(&AStarPlanner::goal_callback, this, _1));
+            "/new_goal", 10, std::bind(&AStarPlanner::goal_callback, this, _1));
 
 #ifdef DEBUG
         raw_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/raw_planned_path", 10);
@@ -63,13 +63,12 @@ private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
-    
+
 #ifdef DEBUG
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr raw_path_pub_;
 #endif
 
     nav_msgs::msg::Path::SharedPtr old_path_;
-
 
     std::pair<int, int> world_to_map(double wx, double wy)
     {
@@ -166,7 +165,8 @@ private:
         {
             auto end_time = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> elapsed = end_time - start_time;
-            if(elapsed.count() > MAX_TIME_FOR_PATH_PLANNING && old_path_!= nullptr) return *old_path_;
+            if (elapsed.count() > MAX_TIME_FOR_PATH_PLANNING && old_path_ != nullptr)
+                return *old_path_;
             AStarNode *current = open.top();
             open.pop();
 
