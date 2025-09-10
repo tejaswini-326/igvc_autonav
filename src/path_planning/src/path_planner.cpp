@@ -1,12 +1,12 @@
 #define DEBUG
 
-constexpr int X_OF_STARTING_POSITION_IN_PATH = 160;
+constexpr int X_OF_STARTING_POSITION_IN_PATH = 150;
 constexpr int Y_OF_STARTING_POSITION_IN_PATH = 150;
 
 constexpr double MAX_TIME_FOR_PATH_PLANNING = 0.3;
 
-constexpr int MAX_COST = 75;
-constexpr double COST_RATIO = 100.0; // Used to scale down the raw cost by dividing it
+constexpr int MAX_COST = 100;
+constexpr double COST_RATIO = 15; // Used to scale down the raw cost by dividing it
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"

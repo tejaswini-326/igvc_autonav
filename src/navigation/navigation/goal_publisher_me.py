@@ -21,16 +21,18 @@ class ContourPublisher(Node):
 
         # Parameters (can be changed with ros2 param set)
         self.declare_parameter("publish_contours", True)
-        self.declare_parameter("publish_contours_every_n", 5)
+        self.declare_parameter("publish_contours_every_n", 1)
         self.declare_parameter("contour_downsample_max_points", 400)
         self.declare_parameter("ignore_outermost_contour", True)
-        self.declare_parameter("cone_angle_deg", 35.0)
+        self.declare_parameter("cone_angle_deg", 30.0)
         self.declare_parameter("cone_radius_pixels", 60)
         self.declare_parameter("publish_cone", True)
         self.declare_parameter("publish_goal_when_missing", True)
-        self.declare_parameter("tilt_angle_deg", 20.0)  # how much to tilt from opposite direction
+        self.declare_parameter("tilt_angle_deg", 45.0)  # how much to tilt from forward direction
         self.declare_parameter("tilt_based_on_motion", True)  # pick tilt side based on odom velocity
         self.declare_parameter("tilt_speed_threshold", 0.05)  # m/s threshold to consider motion meaningful
+        self.declare_parameter("tilt_try_both", True)  # try opposite side if primary tilt yields no points
+        self.declare_parameter("debug", True)
 
         # read params into attributes
         self.publish_contours = self.get_parameter("publish_contours").get_parameter_value().bool_value
@@ -44,6 +46,8 @@ class ContourPublisher(Node):
         self.tilt_angle_deg = float(self.get_parameter("tilt_angle_deg").get_parameter_value().double_value)
         self.tilt_based_on_motion = self.get_parameter("tilt_based_on_motion").get_parameter_value().bool_value
         self.tilt_speed_threshold = float(self.get_parameter("tilt_speed_threshold").get_parameter_value().double_value)
+        self.tilt_try_both = self.get_parameter("tilt_try_both").get_parameter_value().bool_value
+        self.debug = self.get_parameter("debug").get_parameter_value().bool_value
 
         # Subscribe to costmap and heading sources
         self.sub = self.create_subscription(OccupancyGrid, "/costmap", self.callback, 10)
@@ -85,8 +89,8 @@ class ContourPublisher(Node):
         try:
             self.heading = float(msg.data)
             self.heading_time = self.get_clock().now()
-        except Exception:
-            pass
+        except Exception as e:
+            self.get_logger().warning(f"heading_cb exception: {e}")
 
     def odom_cb(self, msg: Odometry):
         try:
@@ -97,269 +101,307 @@ class ContourPublisher(Node):
             # store linear velocity (robot body frame expressed in odom frame)
             self.odom_vx = float(msg.twist.twist.linear.x)
             self.odom_vy = float(msg.twist.twist.linear.y)
-        except Exception:
-            pass
+        except Exception as e:
+            self.get_logger().warning(f"odom_cb exception: {e}")
 
     def callback(self, msg: OccupancyGrid):
-        # Increment callback counter (used for throttling visualizations)
-        self.cb_count += 1
+        try:
+            # Increment callback counter (used for throttling visualizations)
+            self.cb_count += 1
 
-        width, height = msg.info.width, msg.info.height
-        resolution = msg.info.resolution
-        origin_x, origin_y = msg.info.origin.position.x, msg.info.origin.position.y
+            width, height = msg.info.width, msg.info.height
+            resolution = msg.info.resolution
+            origin_x, origin_y = msg.info.origin.position.x, msg.info.origin.position.y
 
-        # Convert occupancy data into numpy image
-        img = np.array(msg.data, dtype=np.int16).reshape((height, width))
-        img[img < 0] = 0
-        img_u8 = img.astype(np.uint8)
+            # Convert occupancy data into numpy image
+            img = np.array(msg.data, dtype=np.int16).reshape((height, width))
+            img[img < 0] = 0
+            img_u8 = img.astype(np.uint8)
 
-        # Build corridor mask (tweak thresholds if needed)
-        mask1 = cv2.inRange(img_u8, 0, 20)
-        mask2 = cv2.inRange(img_u8, 75, 255)
-        corridor_mask = cv2.bitwise_or(mask1, mask2)
+            # Build corridor mask (tweak thresholds if needed)
+            mask1 = cv2.inRange(img_u8, 0, 30)
+            mask2 = cv2.inRange(img_u8, 75, 255)
+            corridor_mask = cv2.bitwise_or(mask1, mask2)
 
-        # find contours (OpenCV version differences handled)
-        contours_result = cv2.findContours(corridor_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        if len(contours_result) == 3:
-            _, contours, hierarchy = contours_result
-        else:
-            contours, hierarchy = contours_result
+            # find contours (OpenCV version differences handled)
+            contours_result = cv2.findContours(corridor_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            if len(contours_result) == 3:
+                _, contours, hierarchy = contours_result
+            else:
+                contours, hierarchy = contours_result
 
-        if not contours:
-            self.get_logger().debug("No contours found in costmap.")
-            # no contours: still republish last goal if allowed
-            if self.last_goal_world is not None and self.publish_goal_when_missing:
-                self._publish_goal_marker_and_pose(msg.header.frame_id, self.last_goal_world, used_heading=None)
-            return
+            if not contours:
+                if self.debug:
+                    self.get_logger().debug("No contours found in costmap.")
+                # no contours: still republish last goal if allowed
+                if self.last_goal_world is not None and self.publish_goal_when_missing:
+                    self._publish_goal_marker_and_pose(msg.header.frame_id, self.last_goal_world, used_heading=None)
+                return
 
-        # Optionally ignore the outermost (largest area) contour which often represents a border/capsule
-        if self.ignore_outermost_contour and len(contours) > 1:
-            areas = [cv2.contourArea(c) for c in contours]
-            max_idx = int(np.argmax(areas))
-            contours_filtered = [c for i, c in enumerate(contours) if i != max_idx]
-            contours = contours_filtered
+            # Optionally ignore the outermost (largest area) contour which often represents a border/capsule
+            if self.ignore_outermost_contour and len(contours) > 1:
+                areas = []
+                for c in contours:
+                    try:
+                        areas.append(float(cv2.contourArea(c)))
+                    except Exception:
+                        areas.append(0.0)
 
-        # Publish simplified contours (throttled) if enabled
-        if self.publish_contours and (self.cb_count % max(1, self.publish_contours_every_n) == 0):
-            # Delete prior contour namespace markers once per visualization update
-            del_m = Marker()
-            del_m.ns = "contours"
-            del_m.action = Marker.DELETEALL
-            del_m.header.frame_id = msg.header.frame_id
-            del_m.header.stamp = self.get_clock().now().to_msg()
-            self.marker_pub.publish(del_m)
+                if all(a == 0.0 for a in areas):
+                    # all areas zero (likely open contours) -> use contour length
+                    lengths = [len(c) for c in contours]
+                    max_idx = int(np.argmax(lengths))
+                else:
+                    max_idx = int(np.argmax(areas))
 
-            for idx, cnt in enumerate(contours):
-                # Reduce vertex count with approxPolyDP (epsilon proportional to perimeter)
-                peri = cv2.arcLength(cnt, True)
-                epsilon = max(1.0, 0.003 * peri)
-                approx = cv2.approxPolyDP(cnt, epsilon, True)
+                contours = [c for i, c in enumerate(contours) if i != max_idx]
 
-                # Further downsample if too many points
-                pts = approx.reshape(-1, 2)
-                max_pts = max(4, self.contour_downsample_max_points)
-                if pts.shape[0] > max_pts:
-                    stride = int(np.ceil(pts.shape[0] / float(max_pts)))
-                    pts = pts[::stride]
+            # Publish simplified contours (throttled) if enabled
+            if self.publish_contours and (self.cb_count % max(1, self.publish_contours_every_n) == 0):
+                # Delete prior contour namespace markers once per visualization update
+                del_m = Marker()
+                del_m.ns = "contours"
+                del_m.action = Marker.DELETEALL
+                del_m.header.frame_id = msg.header.frame_id
+                del_m.header.stamp = self.get_clock().now().to_msg()
+                self.marker_pub.publish(del_m)
 
-                marker = Marker()
-                marker.header.frame_id = msg.header.frame_id
-                marker.header.stamp = self.get_clock().now().to_msg()
-                marker.ns = "contours"
-                marker.id = idx
-                marker.type = Marker.LINE_STRIP
-                marker.action = Marker.ADD
-                marker.scale.x = 0.02
-                marker.color.r = 0.0
-                marker.color.g = 1.0
-                marker.color.b = 0.0
-                marker.color.a = 1.0
+                for idx, cnt in enumerate(contours):
+                    # Reduce vertex count with approxPolyDP (epsilon proportional to perimeter)
+                    peri = cv2.arcLength(cnt, True)
+                    epsilon = max(1.0, 0.003 * peri)
+                    approx = cv2.approxPolyDP(cnt, epsilon, True)
 
-                for x, y in pts:
-                    p = Point()
-                    p.x = origin_x + float(x) * resolution
-                    p.y = origin_y + float(y) * resolution
-                    p.z = 0.05
-                    marker.points.append(p)
+                    # Further downsample if too many points
+                    pts = approx.reshape(-1, 2)
+                    max_pts = max(4, self.contour_downsample_max_points)
+                    if pts.shape[0] > max_pts:
+                        stride = int(np.ceil(pts.shape[0] / float(max_pts)))
+                        pts = pts[::stride]
 
-                self.marker_pub.publish(marker)
+                    marker = Marker()
+                    marker.header.frame_id = msg.header.frame_id
+                    marker.header.stamp = self.get_clock().now().to_msg()
+                    marker.ns = "contours"
+                    marker.id = idx
+                    marker.type = Marker.LINE_STRIP
+                    marker.action = Marker.ADD
+                    marker.scale.x = 0.02
+                    marker.color.r = 0.0
+                    marker.color.g = 1.0
+                    marker.color.b = 0.0
+                    marker.color.a = 1.0
 
-        # compute robot pixel center (assumes costmap centered on robot)
-        bot_px = width // 2
-        bot_py = height // 2
-        self.bot_x = bot_px
-        self.bot_y = bot_py
+                    for x, y in pts:
+                        p = Point()
+                        p.x = origin_x + float(x) * resolution
+                        p.y = origin_y + float(y) * resolution
+                        p.z = 0.05
+                        marker.points.append(p)
 
-        bot_world_x = origin_x + float(bot_px) * resolution
-        bot_world_y = origin_y + float(bot_py) * resolution
+                    self.marker_pub.publish(marker)
 
-        # Choose heading source with freshness
-        now = self.get_clock().now()
-        chosen_src = "none"
-        chosen_heading = None
-        freshness_s = 0.5
+            # compute robot pixel center (assumes costmap centered on robot)
+            bot_px = width // 2
+            bot_py = height // 2
+            self.bot_x = bot_px
+            self.bot_y = bot_py
 
-        if self.heading_time is not None:
-            age = (now - self.heading_time).nanoseconds * 1e-9
-            if age <= freshness_s:
-                chosen_heading = float(self.heading)
-                chosen_src = "/heading_angle"
+            bot_world_x = origin_x + float(bot_px) * resolution
+            bot_world_y = origin_y + float(bot_py) * resolution
 
-        if chosen_heading is None and self.odom_time is not None:
-            ageo = (now - self.odom_time).nanoseconds * 1e-9
-            if ageo <= freshness_s:
-                chosen_heading = float(self.odom_heading)
-                chosen_src = "/odom"
+            # Choose heading source with freshness
+            now = self.get_clock().now()
+            chosen_src = "none"
+            chosen_heading = None
+            freshness_s = 0.5
 
-        if chosen_heading is None:
-            chosen_heading = float(self.heading if self.heading_time is not None else self.odom_heading)
-            chosen_src = "last_known"
+            if self.heading_time is not None:
+                age = (now - self.heading_time).nanoseconds * 1e-9
+                if age <= freshness_s:
+                    chosen_heading = float(self.heading)
+                    chosen_src = "/heading_angle"
 
-        self.get_logger().debug(f"Heading chosen from {chosen_src}: {chosen_heading:.3f} rad")
+            if chosen_heading is None and self.odom_time is not None:
+                ageo = (now - self.odom_time).nanoseconds * 1e-9
+                if ageo <= freshness_s:
+                    chosen_heading = float(self.odom_heading)
+                    chosen_src = "/odom"
 
-        # --- find points inside the cone using WORLD coordinates (vectorized per contour) ---
-        inside_points = self.points_in_cone_world_vectorized(
-            contours, origin_x, origin_y, resolution, bot_world_x, bot_world_y, chosen_heading
-        )
+            if chosen_heading is None:
+                chosen_heading = float(self.heading if self.heading_time is not None else self.odom_heading)
+                chosen_src = "last_known"
 
-        used_heading_for_vis = float(chosen_heading)  # what we'll visualize (may change if we tilt)
+            if self.debug:
+                self.get_logger().debug(f"Heading chosen from {chosen_src}: {chosen_heading:.3f} rad")
 
-        # if only one contour visible in cone (we're looking at a blob) -> attempt tilted search behind robot
-        if len(inside_points) == 1:
-            self.get_logger().info("Single contour in forward cone: attempting tilted search behind robot.")
-            # compute headings to try: directly opposite, opposite + tilt, opposite - tilt
-            tilt_rad = math.radians(self.tilt_angle_deg)
-            forward = chosen_heading
-            opposite = forward + math.pi
+            # --- find points inside the cone using WORLD coordinates (vectorized per contour) ---
+            inside_points = self.points_in_cone_world_vectorized(
+                contours, origin_x, origin_y, resolution, bot_world_x, bot_world_y, chosen_heading
+            )
 
-            # normalize helper
-            def _norm(a):
-                return math.atan2(math.sin(a), math.cos(a))
+            used_heading_for_vis = float(chosen_heading)  # what we'll visualize (may change if we tilt)
 
-            left = _norm(forward + tilt_rad)
-            right = _norm(forward - tilt_rad)
-            opp = _norm(opposite)
+            # if only one contour visible in cone -> tilt the cone to the side opposite motion
+                       # if only one contour visible in cone -> tilt the cone based on robot velocity (use lateral drift)
+            if len(inside_points) == 1:
+                tilt_rad = math.radians(self.tilt_angle_deg)
+                forward = float(chosen_heading)
 
-            # Decide order based on motion
-            if self.odom_time is not None and (now - self.odom_time).nanoseconds * 1e-9 < 0.5:
+                # odom linear velocity (in odom frame)
                 vx, vy = self.odom_vx, self.odom_vy
                 speed = math.hypot(vx, vy)
-                if speed > self.tilt_speed_threshold:
-                    movement_angle = math.atan2(vy, vx)
-                    angle_diff = math.atan2(math.sin(movement_angle - forward),
-                                            math.cos(movement_angle - forward))
-                    if angle_diff > 0:
-                        # moving left of heading → look right first
-                        candidates = [right, left, opp]
+
+                # Project velocity onto robot's left vector to get lateral drift (m/s).
+                # left_vec = [-sin(forward), cos(forward)]
+                lateral = -math.sin(forward) * vx + math.cos(forward) * vy
+
+                if self.debug:
+                    self.get_logger().info(
+                        f"Tilt decision (velocity-based): speed={speed:.3f} m/s, lateral={lateral:.4f} m/s, vx={vx:.4f}, vy={vy:.4f}"
+                    )
+
+                # Decide tilt side using lateral drift: tilt opposite the drift
+                if self.tilt_based_on_motion and abs(lateral) > self.tilt_speed_threshold:
+                    if lateral > 0:
+                        # drifting left -> tilt right (decrease heading)
+                        tilted_heading = self._norm(forward + tilt_rad)
+                        reason = "drift_left -> tilt_right"
                     else:
-                        # moving right of heading → look left first
-                        candidates = [left, right, opp]
+                        # drifting right -> tilt left (increase heading)
+                        tilted_heading = self._norm(forward - tilt_rad)
+                        reason = "drift_right -> tilt_left"
                 else:
-                    # not moving → default order
-                    candidates = [left, right, opp]
-            else:
-                # no odom info → default order
-                candidates = [left, right, opp]
+                    # fallback when nearly stationary or tilt_by_motion disabled -> default left tilt
+                    tilted_heading = self._norm(forward + tilt_rad)
+                    reason = "fallback_left"
 
+                if self.debug:
+                    self.get_logger().info(
+                        f"Applying tilt ({reason}): forward={math.degrees(forward):.1f}°, tilt={self.tilt_angle_deg}° -> try {math.degrees(tilted_heading):.1f}°"
+                    )
 
-            found = None
-            for th in candidates:
+                # Force visualization to show the tilt immediately
+                used_heading_for_vis = tilted_heading
+
+                # Try points with the chosen tilt heading
                 try_points = self.points_in_cone_world_vectorized(
-                    contours, origin_x, origin_y, resolution, bot_world_x, bot_world_y, th
+                    contours, origin_x, origin_y, resolution, bot_world_x, bot_world_y, tilted_heading
                 )
-                # want at least two separate contours visible when searching backward
-                if len(try_points) >= 2:
-                    found = (try_points, th)
-                    break
 
-            if found is not None:
-                inside_points, used_heading_for_vis = found[0], found[1]
-                self.get_logger().info(f"Tilted search successful using heading {used_heading_for_vis:.2f} rad")
-            else:
-                self.get_logger().info("Tilted search failed to find >=2 contours; re-publishing last goal if available.")
+                # Optionally try the opposite tilt once if primary produced no points
+                if self.tilt_try_both and not try_points:
+                    alt_heading = self._norm(forward - tilt_rad) if tilted_heading == self._norm(forward + tilt_rad) else self._norm(forward + tilt_rad)
+                    if self.debug:
+                        self.get_logger().info(f"Primary tilt had no points; trying alternate tilt {math.degrees(alt_heading):.1f}°")
+                    try_points = self.points_in_cone_world_vectorized(
+                        contours, origin_x, origin_y, resolution, bot_world_x, bot_world_y, alt_heading
+                    )
+                    if try_points:
+                        used_heading_for_vis = alt_heading
+                        if self.debug:
+                            self.get_logger().info(f"Alternate tilt succeeded at {math.degrees(alt_heading):.1f}°")
+
+                # Accept results or fallback
+                if try_points:
+                    inside_points = try_points
+                    if self.debug:
+                        self.get_logger().info(
+                            f"Tilted cone applied; contours_in_cone={len(inside_points)}; visual_heading={math.degrees(used_heading_for_vis):.1f}°"
+                        )
+                else:
+                    if self.debug:
+                        self.get_logger().info("Tilted searches failed; re-publishing last goal (if available).")
+                    if self.last_goal_world is not None and self.publish_goal_when_missing:
+                        self._publish_goal_marker_and_pose(msg.header.frame_id, self.last_goal_world, used_heading=forward)
+                    return
+
+
+            if not inside_points:
+                if self.debug:
+                    self.get_logger().info("No contour points inside cone.")
+                # republish last goal if available and requested
                 if self.last_goal_world is not None and self.publish_goal_when_missing:
                     self._publish_goal_marker_and_pose(msg.header.frame_id, self.last_goal_world, used_heading=used_heading_for_vis)
                 return
 
-        if not inside_points:
-            self.get_logger().info("No contour points inside cone.")
-            # republish last goal if available and requested
-            if self.last_goal_world is not None and self.publish_goal_when_missing:
-                self._publish_goal_marker_and_pose(msg.header.frame_id, self.last_goal_world, used_heading=used_heading_for_vis)
-            return
+            result = self.find_goal_from_contours(inside_points)
+            if result is None:
+                if self.debug:
+                    self.get_logger().info("Only one contour visible in cone (obstacle) or no valid pairs. Re-publishing last goal if available.")
+                if self.last_goal_world is not None and self.publish_goal_when_missing:
+                    self._publish_goal_marker_and_pose(msg.header.frame_id, self.last_goal_world, used_heading=used_heading_for_vis)
+                return
 
-        result = self.find_goal_from_contours(inside_points)
-        if result is None:
-            self.get_logger().info("Only one contour visible in cone (obstacle) or no valid pairs. Re-publishing last goal if available.")
-            if self.last_goal_world is not None and self.publish_goal_when_missing:
-                self._publish_goal_marker_and_pose(msg.header.frame_id, self.last_goal_world, used_heading=used_heading_for_vis)
-            return
+            goal_pixel, closest_pair, min_dist = result
 
-        goal_pixel, closest_pair, min_dist = result
+            goal_world_x = origin_x + float(goal_pixel[0]) * resolution
+            goal_world_y = origin_y + float(goal_pixel[1]) * resolution
 
-        goal_world_x = origin_x + float(goal_pixel[0]) * resolution
-        goal_world_y = origin_y + float(goal_pixel[1]) * resolution
+            # store last goal
+            self.last_goal_pixel = goal_pixel
+            self.last_goal_world = (goal_world_x, goal_world_y)
+            self.last_goal_time = self.get_clock().now()
 
-        # store last goal
-        self.last_goal_pixel = goal_pixel
-        self.last_goal_world = (goal_world_x, goal_world_y)
-        self.last_goal_time = self.get_clock().now()
+            # Publish goal marker and PoseStamped (include heading in pose orientation)
+            self._publish_goal_marker_and_pose(msg.header.frame_id, self.last_goal_world, used_heading=used_heading_for_vis)
 
-        # Publish goal marker and PoseStamped
-        self._publish_goal_marker_and_pose(msg.header.frame_id, self.last_goal_world, used_heading=used_heading_for_vis)
+            # publish closest pair small markers (always publish these for debugging)
+            (pA, pB) = closest_pair
+            for i, p_pixel in enumerate((pA, pB)):
+                p_world_x = origin_x + float(p_pixel[0]) * resolution
+                p_world_y = origin_y + float(p_pixel[1]) * resolution
+                pm = Marker()
+                pm.header.frame_id = msg.header.frame_id
+                pm.header.stamp = self.get_clock().now().to_msg()
+                pm.ns = "closest_pair"
+                pm.id = 1000 + i
+                pm.type = Marker.SPHERE
+                pm.action = Marker.ADD
+                pm.scale.x = pm.scale.y = pm.scale.z = 0.06
+                pm.color.r = 1.0
+                pm.color.g = 1.0
+                pm.color.b = 0.0
+                pm.color.a = 1.0
+                pm.pose.position.x = p_world_x
+                pm.pose.position.y = p_world_y
+                pm.pose.position.z = 0.08
+                pm.pose.orientation.w = 1.0
+                self.marker_pub.publish(pm)
 
-        # publish closest pair small markers (always publish these for debugging)
-        (pA, pB) = closest_pair
-        for i, p_pixel in enumerate((pA, pB)):
-            p_world_x = origin_x + float(p_pixel[0]) * resolution
-            p_world_y = origin_y + float(p_pixel[1]) * resolution
-            pm = Marker()
-            pm.header.frame_id = msg.header.frame_id
-            pm.header.stamp = self.get_clock().now().to_msg()
-            pm.ns = "closest_pair"
-            pm.id = 1000 + i
-            pm.type = Marker.SPHERE
-            pm.action = Marker.ADD
-            pm.scale.x = pm.scale.y = pm.scale.z = 0.06
-            pm.color.r = 1.0
-            pm.color.g = 1.0
-            pm.color.b = 0.0
-            pm.color.a = 1.0
-            pm.pose.position.x = p_world_x
-            pm.pose.position.y = p_world_y
-            pm.pose.position.z = 0.08
-            pm.pose.orientation.w = 1.0
-            self.marker_pub.publish(pm)
+            # cone visualization (optional—cheap). visualize using the heading actually used to find the goal
+            if self.publish_cone:
+                cone_marker = Marker()
+                cone_marker.header.frame_id = msg.header.frame_id
+                cone_marker.header.stamp = self.get_clock().now().to_msg()
+                cone_marker.ns = "cone"
+                cone_marker.id = 1
+                cone_marker.type = Marker.LINE_STRIP
+                cone_marker.action = Marker.ADD
+                cone_marker.scale.x = 0.2
+                cone_marker.color.r = 1.0
+                cone_marker.color.g = 0.0
+                cone_marker.color.b = 0.0
+                cone_marker.color.a = 1.0
 
-        # cone visualization (optional—cheap). visualize using the heading actually used to find the goal
-        if self.publish_cone:
-            cone_marker = Marker()
-            cone_marker.header.frame_id = msg.header.frame_id
-            cone_marker.header.stamp = self.get_clock().now().to_msg()
-            cone_marker.ns = "cone"
-            cone_marker.id = 1
-            cone_marker.type = Marker.LINE_STRIP
-            cone_marker.action = Marker.ADD
-            cone_marker.scale.x = 0.2
-            cone_marker.color.r = 1.0
-            cone_marker.color.g = 0.0
-            cone_marker.color.b = 0.0
-            cone_marker.color.a = 1.0
+                cone_radius_m = self.cone_radius * resolution
+                half_angle = np.deg2rad(self.cone_angle / 2.0)
 
-            cone_radius_m = self.cone_radius * resolution
-            half_angle = np.deg2rad(self.cone_angle / 2.0)
+                cone_marker.points.append(Point(x=bot_world_x, y=bot_world_y, z=0.05))
+                robot_heading = float(used_heading_for_vis)
+                for angle_offset in np.linspace(-half_angle, half_angle, 15):
+                    angle = robot_heading + angle_offset
+                    x = bot_world_x + cone_radius_m * np.cos(angle)
+                    y = bot_world_y + cone_radius_m * np.sin(angle)
+                    cone_marker.points.append(Point(x=x, y=y, z=0.05))
+                cone_marker.points.append(Point(x=bot_world_x, y=bot_world_y, z=0.05))
+                self.marker_pub.publish(cone_marker)
 
-            cone_marker.points.append(Point(x=bot_world_x, y=bot_world_y, z=0.05))
-            robot_heading = float(used_heading_for_vis)
-            for angle_offset in np.linspace(-half_angle, half_angle, 15):
-                angle = robot_heading + angle_offset
-                x = bot_world_x + cone_radius_m * np.cos(angle)
-                y = bot_world_y + cone_radius_m * np.sin(angle)
-                cone_marker.points.append(Point(x=x, y=y, z=0.05))
-            cone_marker.points.append(Point(x=bot_world_x, y=bot_world_y, z=0.05))
-            self.marker_pub.publish(cone_marker)
+            if self.debug:
+                self.get_logger().info(f"Published gap goal at pixel {goal_pixel}, map ({goal_world_x:.2f}, {goal_world_y:.2f}), gap {min_dist:.2f}")
 
-        self.get_logger().info(f"Published gap goal at pixel {goal_pixel}, map ({goal_world_x:.2f}, {goal_world_y:.2f}), gap {min_dist:.2f}")
+        except Exception as e:
+            self.get_logger().error(f"Exception in callback: {e}")
 
     def _publish_goal_marker_and_pose(self, frame_id: str, world_xy: tuple, used_heading=None):
         gx, gy = world_xy
@@ -389,8 +431,16 @@ class ContourPublisher(Node):
         pose_msg.pose.position.x = gx
         pose_msg.pose.position.y = gy
         pose_msg.pose.position.z = 0.0
-        # keep orientation simple: identity (w=1). If you want a heading in the pose, set pose.orientation accordingly.
-        pose_msg.pose.orientation.w = 1.0
+        # if used_heading provided, encode it into the pose orientation
+        if used_heading is not None:
+            q = tf_transformations.quaternion_from_euler(0.0, 0.0, float(used_heading))
+            pose_msg.pose.orientation.x = q[0]
+            pose_msg.pose.orientation.y = q[1]
+            pose_msg.pose.orientation.z = q[2]
+            pose_msg.pose.orientation.w = q[3]
+        else:
+            pose_msg.pose.orientation.w = 1.0
+
         self.goal_pub.publish(pose_msg)
 
         # optional: visualize the heading used to pick this goal as a small arrow or by republishing the cone (done elsewhere)

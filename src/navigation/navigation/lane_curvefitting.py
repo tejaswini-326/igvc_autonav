@@ -23,6 +23,7 @@ MIN_CLUSTERING_DISTANCE = 0.6
 MIN_CLUSTERING_POINTS = 20
 MAX_YELLOW_CLUSTERING_POINTS = 100_000
 
+MY_HZ = 30
 
 
 
@@ -86,8 +87,7 @@ class LaneFollowerNode(Node):
         
         self.white_pub = self.create_publisher(PointCloud2, "/white_lane_points", 10)
         self.yellow_pub = self.create_publisher(PointCloud2, "/yellow_lane_points", 10)    
-        self.timer_period = 0.033 # 30 Hz
-        self.timer = self.create_timer(self.timer_period, self.timer_callback)
+        self.timer = self.create_timer(1/MY_HZ, self.timer_callback)
 
         self.yellow_points_history = []
         self.history_length = 1  # Keep last 5 frames of yellow points

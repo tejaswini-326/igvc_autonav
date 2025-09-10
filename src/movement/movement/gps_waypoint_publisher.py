@@ -52,9 +52,9 @@ class GPSNextWaypointPublisherNode(Node):
 
         # Static list of waypoints: [latitude, longitude]
         self.waypoints = [
-            [47.47927341782438, 19.057658340347178], # little ahead
-            [47.479265885071094, 19.057819240025868], # lot ahead
-            [47.47914137816071, 19.05807806011922], # lot ahead to the right in the open
+            [47.479212400754726, 19.057647695700997], # little ahead
+            [47.479195826331804, 19.05780796816609], # lot ahead
+            [47.47920115870989, 19.05801472707751], # lot ahead to the right in the open
         ]
 
         self.create_timer(0.05, self.publish_next_waypoint)
