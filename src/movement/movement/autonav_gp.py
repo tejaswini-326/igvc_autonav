@@ -14,7 +14,7 @@ import tf2_ros
 import tf_transformations
 
 LOOK_AHEAD_DISTANCE = 5.0
-LANE_WIDTH = 3.0   # fixed lane width
+LANE_WIDTH = 5.0   # fixed lane width
 OCCUPIED_THRESHOLD = 60
 ROBOT_WIDTH_M = 2.2
 ROBOT_RADIUS_M = ROBOT_WIDTH_M / 2.0
@@ -109,6 +109,40 @@ class GoalPublisher(Node):
             self.cluster_pub.publish(self.last_cluster_markers)
 
     # -------------------
+    # Helpers for markers
+    # -------------------
+    def make_point_marker(self, x, y, ns, mid_id=0, r=1.0, g=0.0, b=0.0, scale=0.3):
+        m = Marker()
+        m.header.frame_id = "odom"
+        m.ns = ns
+        m.id = mid_id
+        m.type = Marker.SPHERE
+        m.action = Marker.ADD
+        m.pose.position.x = float(x)
+        m.pose.position.y = float(y)
+        m.pose.position.z = 0.0
+        m.pose.orientation.w = 1.0
+        m.scale.x = m.scale.y = m.scale.z = scale
+        m.color.r, m.color.g, m.color.b, m.color.a = r, g, b, 1.0
+        return m
+
+    def make_search_area_marker(self, left, right, ns="search_area", mid_id=0):
+        m = Marker()
+        m.header.frame_id = "odom"
+        m.ns = ns
+        m.id = mid_id
+        m.type = Marker.LINE_STRIP
+        m.action = Marker.ADD
+        m.scale.x = 0.1
+        m.color.r, m.color.g, m.color.b, m.color.a = 0.0, 1.0, 1.0, 1.0
+        p1 = Point()
+        p1.x, p1.y, p1.z = float(left[0]), float(left[1]), 0.0
+        p2 = Point()
+        p2.x, p2.y, p2.z = float(right[0]), float(right[1]), 0.0
+        m.points = [p1, p2]
+        return m
+
+    # -------------------
     # Core function
     # -------------------
     def compute_next_goal(self):
@@ -121,7 +155,7 @@ class GoalPublisher(Node):
             return
 
         # ------------------- DBSCAN clustering -------------------
-        clustering = DBSCAN(eps=0.5, min_samples=3).fit(self.white_points)
+        clustering = DBSCAN(eps=1.0, min_samples=2).fit(self.white_points) # initially eps=0.5 and min_samples=3
         labels = clustering.labels_
         unique_labels = set(labels)
         if -1 in unique_labels:
@@ -158,15 +192,105 @@ class GoalPublisher(Node):
             self.get_logger().warn("No clusters found!")
             return
         elif len(unique_labels) == 1:
-            cluster_pts = self.white_points[labels == list(unique_labels)[0]]
-            idx = np.argmin(np.abs(cluster_pts[:, 0] - lookahead_x))
-            lane_pt = cluster_pts[idx]
-            if self.robot_pose.position.y < lane_pt[1]:
+            # --- get cluster points as Nx2 float array ---
+            cluster_pts = np.array(self.white_points[labels == list(unique_labels)[0]], dtype=float)
+            if cluster_pts.shape[0] == 0:
+                self.get_logger().warn("Empty cluster!")
+                return
+
+            # --- robot pose and forward vector (yaw) ---
+            robot_xy = np.array([self.robot_pose.position.x, self.robot_pose.position.y], dtype=float)
+            q = self.robot_pose.orientation
+            _, _, yaw = tf_transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])
+            forward = np.array([math.cos(yaw), math.sin(yaw)], dtype=float)
+
+            # --- robust lookahead point in map frame ---
+            lookahead_pt = robot_xy + forward * self.lookahead_distance
+
+            # --- pick lane_pt = cluster point closest to the lookahead point ---
+            dists_to_lookahead = np.linalg.norm(cluster_pts - lookahead_pt, axis=1)
+            idx = int(np.argmin(dists_to_lookahead))
+            lane_pt = cluster_pts[idx].copy()
+
+            # --- compute local tangent via PCA on k nearest neighbors around lane_pt ---
+            dists_local = np.linalg.norm(cluster_pts - lane_pt, axis=1)
+            k = min(8, len(cluster_pts))   # tune k as needed
+            nn_idx = np.argsort(dists_local)[:k]
+            neighbors = cluster_pts[nn_idx]
+
+            if neighbors.shape[0] >= 2:
+                cov = np.cov(neighbors.T)
+                eigvals, eigvecs = np.linalg.eig(cov)
+                principal = eigvecs[:, np.argmax(eigvals)].real
+                tangent = principal / (np.linalg.norm(principal) + 1e-12)
+            else:
+                tangent = forward.copy()
+
+            # --- make tangent point roughly forward ---
+            if np.dot(tangent, forward) < 0:
+                tangent = -tangent
+
+            # --- perpendicular vector (left of tangent) ---
+            perp = np.array([-tangent[1], tangent[0]])
+
+            # --- which side is the detected line relative to robot? ---
+            vec_robot_to_lane = lane_pt - robot_xy
+            cross = tangent[0] * vec_robot_to_lane[1] - tangent[1] * vec_robot_to_lane[0]
+            if abs(cross) < 1e-6:
+                side = np.sign(np.dot(perp, vec_robot_to_lane))
+            else:
+                side = np.sign(cross)
+
+            # --- assign left/right and build missing boundary ---
+            if side >= 0:
                 left_pt = lane_pt
-                right_pt = (left_pt[0], left_pt[1] + self.lane_width)
+                right_pt = lane_pt - perp * self.lane_width
             else:
                 right_pt = lane_pt
-                left_pt = (right_pt[0], right_pt[1] - self.lane_width)
+                left_pt = lane_pt + perp * self.lane_width
+
+            # ------------------- Debug Markers for Tangent & Perpendicular -------------------
+            now = self.get_clock().now().to_msg()
+
+            # Tangent marker (green arrow)
+            tangent_marker = Marker()
+            tangent_marker.header.frame_id = "odom"
+            tangent_marker.header.stamp = now
+            tangent_marker.ns = "debug_tangent"
+            tangent_marker.id = 0
+            tangent_marker.type = Marker.ARROW
+            tangent_marker.action = Marker.ADD
+            tangent_marker.scale.x = 0.2  # shaft diameter
+            tangent_marker.scale.y = 0.4  # head diameter
+            tangent_marker.scale.z = 0.2  # head length
+            tangent_marker.color.r, tangent_marker.color.g, tangent_marker.color.b, tangent_marker.color.a = 0.0, 1.0, 0.0, 1.0
+            tangent_marker.points = [
+                Point(x=float(lane_pt[0]), y=float(lane_pt[1]), z=0.0),
+                Point(x=float(lane_pt[0] + tangent[0]*2.0), y=float(lane_pt[1] + tangent[1]*2.0), z=0.0)
+            ]
+
+            # Perpendicular marker (blue arrow)
+            perp_marker = Marker()
+            perp_marker.header.frame_id = "odom"
+            perp_marker.header.stamp = now
+            perp_marker.ns = "debug_perp"
+            perp_marker.id = 1
+            perp_marker.type = Marker.ARROW
+            perp_marker.action = Marker.ADD
+            perp_marker.scale.x = 0.2
+            perp_marker.scale.y = 0.4
+            perp_marker.scale.z = 0.2
+            perp_marker.color.r, perp_marker.color.g, perp_marker.color.b, perp_marker.color.a = 0.0, 0.0, 1.0, 1.0
+            perp_marker.points = [
+                Point(x=float(lane_pt[0]), y=float(lane_pt[1]), z=0.0),
+                Point(x=float(lane_pt[0] + perp[0]*2.0), y=float(lane_pt[1] + perp[1]*2.0), z=0.0)
+            ]
+
+            # Publish markers
+            self.marker_pub.publish(tangent_marker)
+            self.marker_pub.publish(perp_marker)
+
+
         else:
             cluster_sizes = [(label, np.sum(labels == label)) for label in unique_labels]
             cluster_sizes.sort(key=lambda x: x[1], reverse=True)
@@ -175,10 +299,29 @@ class GoalPublisher(Node):
             pts1 = self.white_points[labels == main_labels[1]]
             pt0 = pts0[np.argmin(np.abs(pts0[:, 0] - lookahead_x))]
             pt1 = pts1[np.argmin(np.abs(pts1[:, 0] - lookahead_x))]
+            pt0 = np.array(pt0, dtype=float)
+            pt1 = np.array(pt1, dtype=float)
             if pt0[1] < pt1[1]:
                 left_pt, right_pt = pt0, pt1
             else:
                 left_pt, right_pt = pt1, pt0
+
+        # ------------------- Publish visualization markers -------------------
+        now = self.get_clock().now().to_msg()
+        search_marker = self.make_search_area_marker(left_pt, right_pt)
+        search_marker.header.stamp = now
+        left_marker = self.make_point_marker(left_pt[0], left_pt[1], ns="debug_left_pt", r=1.0, g=0.0, b=0.0)
+        left_marker.header.stamp = now
+        right_marker = self.make_point_marker(right_pt[0], right_pt[1], ns="debug_right_pt", r=0.0, g=1.0, b=0.0)
+        right_marker.header.stamp = now
+
+        self.marker_pub.publish(search_marker)
+        self.left_pt_pub.publish(left_marker)
+        self.right_pt_pub.publish(right_marker)
+
+        self.last_marker = search_marker
+        self.last_left_marker = left_marker
+        self.last_right_marker = right_marker
 
         # ------------------- Costmap-aware goal selection -------------------
         num_samples = 20
@@ -194,6 +337,8 @@ class GoalPublisher(Node):
             mx, my = idx
             cost_idx = my * self.costmap.info.width + mx
             cost_val = self.costmap.data[cost_idx]
+            if cost_val < 0:
+                cost_val = 1000
             if cost_val < best_cost:
                 best_cost = cost_val
                 best_point = pt
