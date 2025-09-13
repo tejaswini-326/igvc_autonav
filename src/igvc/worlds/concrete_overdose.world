@@ -1,0 +1,748 @@
+<sdf version='1.10'>
+  <world name='IGVC_AutoNav'>
+    <plugin name='gz::sim::systems::Physics' filename='gz-sim-physics-system'/>
+    <plugin name='gz::sim::systems::UserCommands' filename='gz-sim-user-commands-system'/>
+    <plugin name='gz::sim::systems::SceneBroadcaster' filename='gz-sim-scene-broadcaster-system'/>
+    <plugin name='gz::sim::systems::Contact' filename='gz-sim-contact-system'/>
+    <plugin name='gz::sim::systems::NavSat' filename='gz-sim-navsat-system'/>
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>47.478949999999998</latitude_deg>
+      <longitude_deg>19.057784999999999</longitude_deg>
+      <elevation>0</elevation>
+      <heading_deg>0</heading_deg>
+    </spherical_coordinates>
+    <plugin name='gz::sim::systems::Sensors' filename='gz-sim-sensors-system'>
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin name='gz::sim::systems::Imu' filename='gz-sim-imu-system'/>
+    <gravity>0 0 -9.8000000000000007</gravity>
+    <magnetic_field>6.0000000000000002e-06 2.3e-05 -4.1999999999999998e-05</magnetic_field>
+    <atmosphere type='adiabatic'/>
+    <physics type='ode'>
+      <max_step_size>0.0050000000000000001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>200</real_time_update_rate>
+    </physics>
+    <scene>
+      <ambient>0.400000006 0.400000006 0.400000006 1</ambient>
+      <background>0.699999988 0.699999988 0.699999988 1</background>
+      <shadows>true</shadows>
+      <sky/>
+    </scene>
+    <include>
+      <uri>model://autonav_ground_plane</uri>
+      <name>ground_plane</name>
+      <pose>0 0 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://construction_barrel</uri>
+      <name>barrel_0</name>
+      <pose>-3.5102579593658252 7.2627902030945028 -8.5465008002532387e-07 2.7372664351793282e-08 -2.7370529416674478e-08 -4.5018441041201539e-16</pose>
+    </include>
+    <include>
+      <uri>model://construction_cone</uri>
+      <name>cone_0</name>
+      <pose>-3.7527151107788086 -3.5900800228118896 -8.2800597184590905e-07 -9.1097119851668724e-13 9.0471635344011221e-13 -5.6281912815409153e-21</pose>
+    </include>
+    <include>
+      <uri>model://stop_sign</uri>
+      <name>stop_sign_1_1_1_2_1</name>
+      <pose>-3.4273347854614054 9.4179954528808523 -2.254664043458048e-07 -1.0838940900050274e-06 -1.0572263439354426e-08 -1.6301700740121705</pose>
+    </include>
+    <include>
+      <uri>model://tire</uri>
+      <name>tire</name>
+      <pose>-3.5929501056671143 5.0306048393249512 -7.8488585586455883e-07 9.3324512562276157e-09 -9.3301197878758979e-09 -1.1950599944464209e-16</pose>
+    </include>
+    <include>
+      <uri>model://rescue_randy</uri>
+      <name>rescue_randy</name>
+      <pose>-4.631697378335013 -0.7997262873662796 -0.00043557579260314377 0.0028949014343929796 -2.420981881425823e-10 -0.025953587572252614</pose>
+    </include>
+    <include>
+      <uri>model://person_standing</uri>
+      <name>person_standing</name>
+      <pose>-4.8021354669664653 -1.9068350828413407 0.0033517389689684584 -0.10012896115767878 0.0045530344935672757 -5.8522921760402794e-05</pose>
+    </include>
+    <include>
+      <uri>model://ramp</uri>
+      <name>ramp</name>
+      <pose>22.289173126229461 -1.7593828439352759 0.12093663760776713 -0.00040758482245179125 1.881355875752599e-05 -0.00027779097985907217</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green</name>
+      <pose>7.9045200347900391 -0.6910560131072998 0.51783413801367673 5.4501572149432197e-17 1.4846969680053094e-16 1.1319617313756568e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red</name>
+      <pose>7.9519880556596245 0.71237888684080708 0.51783499926271015 1.9146895113915591e-08 -8.3646285680964565e-07 -3.1130589582128581e-10</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue</name>
+      <pose>7.883906364440918 -1.7733099460601807 0.51783484821094039 5.6542662918927423e-17 -1.2648211180928608e-17 3.2878127166098131e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white</name>
+      <pose>7.6080474853515625 -2.9339299201965332 0.5178340266332353 -1.0884714075803973e-16 -6.0923606987581782e-17 -1.1009702040034722e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_yellow</uri>
+      <name>barrel_yellow</name>
+      <pose>8.0864911818554255 5.8953790305244706e-08 0.51783499927080634 -3.9803826230120422e-10 8.6614360770378004e-07 -2.0372287042940445e-08</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_1_1</name>
+      <pose>-15.488190812153249 28.98845227458223 0.51783484937430047 2.6469549633506902e-17 1.6935767443451761e-16 4.3877481445022231e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_1</name>
+      <pose>-15.453693650233234 28.475813930075642 0.51783484937430047 3.4194451135022636e-17 -6.677049755806775e-17 -9.2315486362314134e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_2</name>
+      <pose>-10.008976388729545 26.727866245258202 0.51783484937430047 4.996370493052324e-17 1.8771011380811013e-16 -1.5213983739007738e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_2</name>
+      <pose>-10.014990794950684 27.262920619148893 0.51783484937430047 -7.4329369513584256e-18 -1.314602637755496e-16 -4.7659448484124759e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_2</name>
+      <pose>-10.127975236161745 27.821636974121034 0.51783484937430047 8.1438319916678704e-17 -2.6810266269146742e-17 2.6197783226529068e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_2</name>
+      <pose>-7.37641995222081 30.80256806565734 0.51783484937430047 -1.0879433239047783e-16 -4.4165179154749006e-18 -9.6698257002532774e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_yellow</uri>
+      <name>barrel_yellow_1</name>
+      <pose>-7.4669771570731376 27.931695500593694 0.51783484937430047 -2.8873871274940683e-17 -9.91989128897504e-17 -5.0504050569136492e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_3</name>
+      <pose>-7.4919378585986252 28.429467202487775 0.51783484937430047 -1.1859619940419871e-16 -6.5659651705627205e-17 -9.8940212171784674e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_3</name>
+      <pose>1.8812475376618067 28.881296809577414 0.51783484937430047 -1.1838229574732313e-19 -8.0399880118926717e-17 -1.0070896527414239e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_4</name>
+      <pose>1.789702633557372 28.324716629763884 0.51783484937430047 -1.3288260604482522e-16 -8.1395992241132787e-17 -1.1757473224255312e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_yellow</uri>
+      <name>barrel_yellow_2</name>
+      <pose>5.3592741032332363 26.861703425308278 0.51783484937430047 8.4923114799302943e-18 -8.0666209349344029e-17 -7.7286690782133378e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_3</name>
+      <pose>5.2657296668635674 27.416795858760544 0.51783484937430047 4.8784962657607828e-17 -2.4968736114313761e-18 2.7189703226307596e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_3</name>
+      <pose>-25.556525668305117 16.940541040125776 0.51783484937430047 3.7758769159368978e-17 1.1282280174191344e-16 2.7822494947109039e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_4</name>
+      <pose>-26.04345920466524 17.000907147320287 0.51783484937430047 3.3496944027112036e-17 -3.9696414353412015e-17 -7.890157201051356e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4</name>
+      <pose>-28.67925873807792 16.934691875648735 0.51783484937430047 8.0698712979732529e-17 -2.5898535697064082e-19 4.0165050739249636e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_5</name>
+      <pose>-26.067814814563913 13.369549408150338 0.51783484937430047 -1.2785079822168836e-16 -7.4774126377325443e-17 -9.0007653336749857e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_4</name>
+      <pose>-26.625692237642816 13.357648602477834 0.51783484937430047 5.7742948096028518e-17 7.6593666352020308e-17 1.4569979823388787e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_5</name>
+      <pose>-27.20851498275951 13.30408536823926 0.51783484937430047 2.4482686387191123e-17 -1.4255889019900917e-17 -6.6131370121669759e-19</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_6</name>
+      <pose>-25.224193547631685 9.1042400493614402 0.51783484937430047 -7.7772192721009223e-17 -8.4674077348453197e-17 -1.0545866231876893e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_5</name>
+      <pose>-27.855475827336114 8.9738529878827897 0.51783484937430047 5.3187656971717235e-17 -7.436867662415534e-17 -7.4171964713532376e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_yellow</uri>
+      <name>barrel_yellow_3</name>
+      <pose>-26.254278002759925 4.9040162812890564 0.51783484937430047 1.6344660593283138e-17 -8.0414393617631772e-17 -6.2951796100890886e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_6</name>
+      <pose>-27.882420676622051 3.0897250588429195 0.51783484937430047 8.0388126567055662e-17 -1.8166281718591425e-17 6.9859619124225591e-19</pose>
+    </include>
+    <include>
+      <uri>model://barrel_yellow</uri>
+      <name>barrel_yellow_4</name>
+      <pose>-26.87131102976743 0.23700118711770202 0.51783484937430047 3.3856866635725934e-17 -3.3931259321428129e-18 -6.5681464238095567e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_7</name>
+      <pose>-28.221606580919477 -2.8232942043228917 0.51783484937430047 -8.0278510197909243e-17 -3.0317376178581066e-17 -9.9864995205932766e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_5</name>
+      <pose>-25.647826172053435 -4.9643647365991086 0.51783484937430047 8.6649289176416142e-17 1.4938636367783985e-16 3.9324498800937296e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_6</name>
+      <pose>-27.56315194540203 -8.0715611466327886 0.51783484937430047 -1.1808915091426123e-17 -1.3266252029904966e-16 -7.6144290203340313e-18</pose>
+    </include>
+    <include>
+      <uri>model://construction_barrel</uri>
+      <name>barrel_0_1</name>
+      <pose>-25.250706609115223 -1.8436482135151229 -8.4829882389815484e-07 2.9527366372793095e-08 -2.9525297901130728e-08 -5.1145132313979954e-16</pose>
+    </include>
+    <include>
+      <uri>model://construction_cone</uri>
+      <name>cone_0_1</name>
+      <pose>-26.22503493059418 0.32403170651294122 -8.200605817018994e-07 -9.0267099025521936e-13 8.9641577364144017e-13 -5.6281848831389098e-21</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_8_1</name>
+      <pose>-25.172713769974248 -17.413864249884529 0.51783484937430047 8.0459557564256195e-17 -2.6852547838535028e-17 1.1889540611693704e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_6_1</name>
+      <pose>-24.571154852252711 -17.405801527208045 0.51783484937430047 -1.9686379606234851e-17 -1.1093628828081984e-16 -7.0111817448951803e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_6_1_1</name>
+      <pose>-25.732425505239149 -17.346344393532547 0.51783419644335671 -3.6424229875647786e-17 -8.8391247892339012e-17 -7.9194318936812201e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_6_1</name>
+      <pose>-28.678495720373331 -20.160042973346741 0.51783402663323341 5.4509572326028135e-17 1.4833357850074752e-16 1.135600332443593e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_8_1</name>
+      <pose>-28.048248473432256 -20.178473913610141 0.51783402663323341 -1.0876083568706824e-16 -6.1018618910399155e-17 -1.1020391961337546e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1</name>
+      <pose>-27.367939370193024 -20.043155904352503 0.51783484937430047 5.3355237464892042e-17 2.6789293898587536e-17 1.0578937965861616e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_8_2</name>
+      <pose>-26.646565180749235 -20.139862415168395 0.51783402663323341 -1.0879600642084922e-16 -6.0975539666349354e-17 -1.1042872588557516e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_6_2</name>
+      <pose>-26.348015083102208 -17.43436936375965 0.51783402663323341 5.4406298995477613e-17 1.4838034211722114e-16 1.1371791943407531e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_8_2</name>
+      <pose>-24.710234101877393 -12.398350170475117 0.51783499951602652 -3.4802382026915282e-07 1.891321612254133e-08 -9.7468389476602414e-06</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_8_3</name>
+      <pose>-25.206345452500624 -12.412243433637704 0.51783499916177556 1.2419370623517036e-06 -4.7069499227965078e-07 4.4309464536259608e-06</pose>
+    </include>
+    <include>
+      <uri>model://barrel_yellow</uri>
+      <name>barrel_yellow_5_1</name>
+      <pose>-25.7628436025966 -12.465779228440102 0.51783484937430047 3.2074458124284109e-18 -8.0291681288702132e-17 -4.4077719164624839e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_2</name>
+      <pose>-26.338357048101123 -12.455109407474344 0.51783499836627966 1.0669548353952856e-06 -5.8969244595110022e-07 0.0015838669142060832</pose>
+    </include>
+    <include>
+      <uri>model://barrel_yellow</uri>
+      <name>barrel_yellow_7_1</name>
+      <pose>-26.807578419166436 -14.749523396803601 0.51783497739477713 -1.1520475921971834e-07 4.6612054134677502e-08 3.4816469936106603e-05</pose>
+    </include>
+    <include>
+      <uri>model://barrel_yellow</uri>
+      <name>barrel_yellow_6_1</name>
+      <pose>-27.323584057237891 -14.758469320476262 0.51783499892691154 -3.99351459635067e-10 -7.6055681493928289e-07 -2.037245066202183e-08</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_6_3</name>
+      <pose>-27.833686127578606 -14.736666057250174 0.51783402663323341 5.4456448855076833e-17 1.4825907820200188e-16 1.140232312458664e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_1_2</name>
+      <pose>-28.349938711809695 -14.687270374445982 0.51783402663323341 5.4559119485743484e-17 1.4842094093666904e-16 1.1342576635086779e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_8_2_1</name>
+      <pose>-24.336643015900545 -23.610911708999218 0.51783402663323341 -1.0887054725603738e-16 -6.0861161865526981e-17 -1.1057316793739009e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1</name>
+      <pose>-24.992890094998376 -23.447790075307857 0.51783484937430047 2.6545471267696196e-17 3.1096953316735351e-17 1.621294384080546e-19</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_6_1_1</name>
+      <pose>-26.261464398402921 -23.4132375042931 0.51783402663323341 5.4648727825786518e-17 1.4827009094228242e-16 1.1381448244372752e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_green</uri>
+      <name>barrel_green_6_1_1_1</name>
+      <pose>-26.715660807046095 -28.415389144022193 0.51783402663323341 5.475724021531037e-17 1.482716586283535e-16 1.1344531316174749e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1</name>
+      <pose>-25.661035399885023 -27.47566773496451 0.51783484937430047 2.505275746674295e-17 9.5152285907482744e-18 1.7139473762252968e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_8_2_1_1</name>
+      <pose>-23.130709088624357 -25.856733695310449 0.51783402663323341 -1.0875157181652323e-16 -6.1070105944391592e-17 -1.1085186932141273e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_2</name>
+      <pose>-20.060186472243011 -27.381980340891943 0.51783484937430047 2.4852644104187707e-17 -2.6805621879423458e-17 -3.0703459677549226e-19</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1</name>
+      <pose>-20.264619864469129 -28.212313753161961 0.51783484937430047 8.0358890823345593e-17 6.7593647043832102e-18 3.3594388832250612e-19</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_8_2_1_1_1</name>
+      <pose>-15.736231253180632 -30.025935076995605 0.51783402663323341 -1.0881836848029619e-16 -6.1117956902752403e-17 -1.1048057878516072e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1</name>
+      <pose>-27.075296203778969 19.375512526619687 0.51783484828566551 8.0345124475305603e-17 -1.8591839252460025e-17 3.3977500339554814e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_4_1</name>
+      <pose>-27.595696124121705 19.403723113854362 0.51783484828566551 2.6796158463455376e-17 -4.9542875463766913e-17 -8.3951729842717705e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_4_1_1</name>
+      <pose>-27.070125727742631 19.949718112521794 0.51783402965617842 3.6253917130791558e-17 -4.9732807290646986e-17 -8.0681100715473845e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_red</uri>
+      <name>barrel_red_4_1_2</name>
+      <pose>-27.59595912765878 19.940306356909165 0.51783401723409739 2.6776823285509676e-17 -5.1854514130623576e-17 -8.4619047095876881e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1</name>
+      <pose>-28.164746861019353 19.990855581934191 0.51783484828566551 7.9768699505008862e-17 -3.5911745297548967e-17 2.8198528401471838e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_1</name>
+      <pose>-25.779422655616397 21.898672630649465 0.51783484828566551 5.2116455915608007e-17 -3.9895637684627886e-17 3.266562794944668e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_2</name>
+      <pose>-26.332673893511299 21.983563914586746 0.51783484828566551 7.276080778904883e-17 -8.0320012298147987e-17 -7.312218899466201e-19</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_3</name>
+      <pose>-26.911606261524653 22.072150763391008 0.51783484828566551 6.9133127418742747e-17 -8.2396405263797416e-17 1.2107404580581751e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_4</name>
+      <pose>-27.508251600231219 22.198136037996058 0.51783484828566551 8.0709124955643331e-17 -4.2876280330140585e-17 1.0652459780610473e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_5</name>
+      <pose>-27.955176079506373 22.68663113718398 0.51783484828566551 7.6817288058157625e-17 -7.059981754776003e-17 -7.1589113642926676e-19</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6</name>
+      <pose>-29.678255409195131 25.096483337328021 0.51783485647889871 7.2830258768353053e-17 -3.5910116187749943e-17 -9.6690616143501588e-20</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_1</name>
+      <pose>-26.327391241844818 24.29527154144678 0.51783401723409739 7.317919761579684e-17 -3.8162217955112556e-17 7.4278787902153861e-19</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_2</name>
+      <pose>-27.399828034266733 25.725229099412566 0.51783484828566551 8.0428683605344417e-17 -4.2336800053864647e-17 -8.3592890525012392e-19</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3</name>
+      <pose>-25.668338624967266 27.575098065469376 0.51783484828566551 6.6789079732847893e-17 -9.558617178286047e-17 -2.8380969839369514e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_1</name>
+      <pose>-23.328089529588379 28.436957002087077 0.51783401723409739 6.46443552902101e-17 -8.5950730543215376e-17 -2.1463740806699731e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_2</name>
+      <pose>-23.030303434124704 27.946207855720743 0.51783484828566551 9.1386829752706807e-17 -1.5356201948154726e-16 -5.6475616325157717e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3</name>
+      <pose>-22.635027183918385 27.419739133483979 0.51783484794965995 5.1836341034661293e-17 -9.9171180888365282e-17 -7.4231241657184039e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1</name>
+      <pose>-19.620512793592969 25.138937812586917 0.517834082743719 6.7894567740126112e-17 -7.8684613713202596e-17 -3.2199783355516555e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_1</name>
+      <pose>-19.632433385157498 25.740723636936828 0.51783401723409739 6.7930108988685503e-17 -7.8737983852732103e-17 -3.2091969747785243e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_2</name>
+      <pose>-19.622708206437395 26.374098058757912 0.51783401723409739 6.786028672019155e-17 -7.8811965564131994e-17 -3.1993878207440348e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_3</name>
+      <pose>-19.686323309466843 27.018097868334205 0.51783401723409739 6.7896659502370506e-17 -7.8593865792409059e-17 -3.2301003561578684e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_4</name>
+      <pose>-19.73604797897935 27.746526044452374 0.51783401723409739 6.7904762620806871e-17 -7.8632200651373623e-17 -3.2214005375625443e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1</name>
+      <pose>-17.287696266842726 29.438848740703374 0.51783401723409739 6.7918986914017405e-17 -7.8829568077165886e-17 -3.2217840699629175e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1</name>
+      <pose>-17.288449526435922 28.893720741879452 0.51783401723409739 6.795898972552441e-17 -7.8791511125613096e-17 -3.2294865163407041e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1</name>
+      <pose>-17.314539232890919 28.270830920535928 0.51783401723409739 6.7928981756606005e-17 -7.8807566210176933e-17 -3.2235503835835786e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_1</name>
+      <pose>-17.289451678824264 27.582290008933573 0.51783401723409739 6.7917952976091868e-17 -7.8768992552351785e-17 -3.2075313662465139e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_2</name>
+      <pose>-17.290319735254734 26.936241462225251 0.51783401723409739 6.8019169051462611e-17 -7.8864495702593374e-17 -3.2264767860995645e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3</name>
+      <pose>-17.018110751259275 26.326627865477999 0.51783401723409739 6.7988999719238639e-17 -7.8873530737026032e-17 -3.239725513469941e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_1</name>
+      <pose>-14.327893923444233 24.915140633803603 0.51783401723409739 6.7922723504552886e-17 -7.8886635430421813e-17 -3.2535982299319281e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_2</name>
+      <pose>-14.473085327461627 25.614636744000212 0.51783401723409739 6.8057190758112898e-17 -7.8862830618434924e-17 -3.2684584010311962e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_3</name>
+      <pose>-14.476248977545383 26.307719946322635 0.51783401723409739 6.80235655599539e-17 -7.8808119794834805e-17 -3.242697932078925e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4</name>
+      <pose>-14.475139793548898 26.900005293711157 0.51783401723409739 6.8055984018483434e-17 -7.8937545560580329e-17 -3.2425838180899492e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_1</name>
+      <pose>-13.342273040798865 29.732863534373681 0.51783401723409739 6.8118531974963878e-17 -7.8833657820700281e-17 -3.2530780816019903e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_2</name>
+      <pose>-12.762974123696234 28.171627531743731 0.51783401723409739 6.8059837419277967e-17 -7.9014800103844959e-17 -3.241565217627422e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_3</name>
+      <pose>-9.4489296689611653 30.076380890605449 0.51783401723409739 6.8058427295639484e-17 -7.8897676827247288e-17 -3.2449543665681911e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_4</name>
+      <pose>-10.365615240587076 28.455132931378603 0.51783401723409739 6.7963327271954355e-17 -7.8975606293593223e-17 -3.2272787405885244e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5</name>
+      <pose>-4.5857094243249534 27.994729485306227 0.51783401723409739 6.8130909457184176e-17 -7.8957521819419987e-17 -3.2463173944109283e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_1</name>
+      <pose>-4.8595526150016806 30.253188963297639 0.51783401723409739 6.8149377712381974e-17 -7.9001223477352677e-17 -3.2816931995406723e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_2</name>
+      <pose>-1.8125867681807777 28.910843726097756 0.51783401723409739 6.8133349424858485e-17 -7.8984166069620722e-17 -3.240308734208785e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3</name>
+      <pose>-1.8875451643938237 28.374677969864781 0.51783401723409739 6.8209778524080596e-17 -7.9100963445262113e-17 -3.2470722829054814e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_1</name>
+      <pose>-0.11967242421931168 26.527720249956499 0.51783401723409739 6.8196495227647921e-17 -7.9053335083159055e-17 -3.2282843885451301e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_2</name>
+      <pose>-0.080426495007208665 27.120777646804346 0.51783401723409739 6.824802832380871e-17 -7.9128287782101409e-17 -3.2732563801034729e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_3</name>
+      <pose>5.1581446544450698 28.004487767205131 0.51783401723409739 6.8220513253778544e-17 -7.9042817131674517e-17 -3.2364534077851851e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_4</name>
+      <pose>7.5672244234454125 30.429734990331561 0.51783401723409739 6.8093032285920971e-17 -7.9165391005593048e-17 -3.2317676249006084e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_5</name>
+      <pose>7.7560627109376732 29.900419949762924 0.51783401723409739 6.8233948594740704e-17 -7.9050421278753446e-17 -3.24919686735728e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_6</name>
+      <pose>10.143210165958337 27.625593197768477 0.51783401723409739 6.8186431866898996e-17 -7.917572425903368e-17 -3.265804713275134e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_7</name>
+      <pose>10.357826185768959 28.246998349809449 0.51783401723409739 6.8129870494812419e-17 -7.9225977534976199e-17 -3.2394636831776931e-18</pose>
+    </include>
+    <!-- <include> -->
+    <!--  <uri>model://barrel_blue</uri> -->
+    <!--  <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_8</name> -->
+    <!--  <pose>10.834402790351481 29.281303913675568 0.51783401723409739 6.8226970610484767e-17 -7.9141254344100033e-17 -3.2665786728559924e-18</pose> -->
+    <!--</include>-->
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_9</name>
+      <pose>12.777395481562763 30.084133173596175 0.51783401723409739 6.8181046720999032e-17 -7.9080009574995079e-17 -3.2412182406455299e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_10</name>
+      <pose>14.125448649642056 27.619177977141959 0.51783401723409739 6.8218445823584995e-17 -7.9086422422979464e-17 -3.2463480515738419e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_11</name>
+      <pose>17.702814027049246 28.995172664823237 0.51783401723409739 6.812230720275121e-17 -7.9163687841447266e-17 -3.2616712902446353e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_12</name>
+      <pose>15.574961795417218 29.14463213320586 0.51783401723409739 6.8149654836129033e-17 -7.9096007891887532e-17 -3.2370050417028803e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_13</name>
+      <pose>16.986393143584834 27.137758776933545 0.51783401723409739 6.8171471763347056e-17 -7.902136329567118e-17 -3.2576621017775379e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_14</name>
+      <pose>20.500696632951424 27.15897473762891 0.51783401723409739 6.8270785590021394e-17 -7.9180566250792012e-17 -3.2732750857049083e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_15</name>
+      <pose>19.641698374881933 29.112869062401654 0.51783401723409739 6.8155070868429528e-17 -7.9138076033482695e-17 -3.2652033181716724e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_16</name>
+      <pose>19.188447977920259 25.613754854602611 0.51783401723409739 6.8238983673528365e-17 -7.9055066110177065e-17 -3.2586585262429484e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_4_1_1_6_3_3_1_5_1_1_1_3_4_5_3_17</name>
+      <pose>24.17565433788991 26.360460269720107 0.51783401723409739 6.8371571039829363e-17 -7.9080391177369329e-17 -3.2436847593088484e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1_1</name>
+      <pose>-13.49474485954514 -27.700111007898247 0.51783484828566551 6.7204693205470375e-17 -1.8206839312765376e-18 4.4313811189786767e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_8_2_1_1_1_1</name>
+      <pose>-15.814681403668295 -29.127078354285548 0.51783401723409739 -1.0886567616275499e-16 -6.0965907884244291e-17 -1.1042152601193883e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_white</uri>
+      <name>barrel_white_8_2_1_1_1_2</name>
+      <pose>-13.321675453591846 -28.202038340762687 0.51783401723409739 -1.0895303833577679e-16 -6.0929051912018404e-17 -1.1046350582535837e-17</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1_1_1</name>
+      <pose>-3.4918114671631635 -28.948516822678069 0.51783484828566551 6.4944009488011554e-17 -5.5800752636679744e-17 9.7010823210555626e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1_1_2</name>
+      <pose>0.3261792169403428 -27.619685310843032 0.51783484828566551 4.2312791779987516e-17 -1.6027307754256193e-17 3.1213928131234997e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1_1_3</name>
+      <pose>-2.7084266255924865 -26.08621689449178 0.51783484828566551 5.2811881212820168e-17 3.8724757145883382e-17 1.1923619461120657e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1_1_4</name>
+      <pose>0.55906318810384192 -25.184669156811058 0.51783484828566551 4.6958113474236257e-17 -3.3119917115762307e-17 2.3420745056492816e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1_1_5</name>
+      <pose>-1.4564465954517027 -24.394306270921366 0.51783484828566551 8.0343787654159406e-17 1.7875883573965685e-17 4.8148004538280919e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1_1_6</name>
+      <pose>6.0326925252802557 -28.214564755389368 0.51783484828566551 5.6123310903703333e-17 2.6907112832968631e-17 2.3509095658477878e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1_1_7</name>
+      <pose>9.8240569719843247 -25.969117683031481 0.51783484828566551 5.5891304598733815e-17 -7.446407166061444e-18 5.4745644486739459e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1_1_8</name>
+      <pose>12.308584945525887 -28.851986612869972 0.51783484828566551 7.7950322912940697e-17 -1.7181876082167147e-17 4.9846222508861927e-18</pose>
+    </include>
+    <include>
+      <uri>model://barrel_blue</uri>
+      <name>barrel_blue_9_1_1_1_1_1_9</name>
+      <pose>20.95175007288816 -27.520825743686611 0.51783484828566551 8.0773524871136327e-17 1.2761670511712049e-17 3.3553382664000604e-18</pose>
+    </include>
+    <light name='sun' type='directional'>
+      <pose>0 0 10 0 0 0</pose>
+      <cast_shadows>true</cast_shadows>
+      <intensity>1</intensity>
+      <direction>-0.5 0.10000000000000001 -0.90000000000000002</direction>
+      <diffuse>0.800000012 0.800000012 0.800000012 1</diffuse>
+      <specular>0.200000003 0.200000003 0.200000003 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <linear>0.01</linear>
+        <constant>0.90000000000000002</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <spot>
+        <inner_angle>0</inner_angle>
+        <outer_angle>0</outer_angle>
+        <falloff>0</falloff>
+      </spot>
+    </light>
+    <light name='ambient' type='point'>
+      <pose>0 0 10 0 0 0</pose>
+      <cast_shadows>false</cast_shadows>
+      <intensity>1</intensity>
+      <direction>0 0 -1</direction>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.300000012 0.300000012 0.300000012 1</specular>
+      <attenuation>
+        <range>20</range>
+        <linear>0.01</linear>
+        <constant>0.80000000000000004</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <spot>
+        <inner_angle>0</inner_angle>
+        <outer_angle>0</outer_angle>
+        <falloff>0</falloff>
+      </spot>
+    </light>
+  </world>
+</sdf>

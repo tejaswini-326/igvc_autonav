@@ -38,7 +38,7 @@ YELLOW_HOLD_SEC = 0.1
 
 MY_HZ = 30
 
-BOT_WIDTH = 1.6
+BOT_WIDTH = 1.3
 
 
 def transform_to_matrix(tf_msg) -> np.ndarray:
@@ -76,9 +76,9 @@ class CostmapNode(Node):
 		super().__init__('costmap_node_fast_debug')
 
 		# ----------------------- map parameters ---------------------------
-		self.resolution = 0.067   # metres / cell
-		self.width      = 300
-		self.height     = 300
+		self.resolution = 0.01   # metres / cell
+		self.width      = 1000
+		self.height     = 1000
 		self.frame_id   = 'odom'
 
 		# --------------------- pre-allocated buffers ----------------------
@@ -97,7 +97,7 @@ class CostmapNode(Node):
 		# --------------------------- I/O ----------------------------------
 		qos = 20
 		self.create_subscription(PointCloud2, '/object_pc',self._object_cb, qos)
-		self.create_subscription(PointCloud2, '/white_lane_points',self._white_cb,  qos)
+		self.create_subscription(PointCloud2, '/igvc/white_points',self._white_cb,  qos)
 		self.create_subscription(PointCloud2, '/lidar_pc2', self._lidar_cb, qos)
 		self.costmap_pub = self.create_publisher(OccupancyGrid, '/costmap', qos)
 		self.create_subscription(Odometry, '/odom', self.odom_callback, qos)

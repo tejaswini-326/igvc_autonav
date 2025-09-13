@@ -108,6 +108,7 @@ class LaneFollowerNode(Node):
         white_markers = []
         yellow_closest = 0
         yellow_marker_array = MarkerArray()
+        white_marker_array = MarkerArray()
 
 
         for i, (label, coeffs, color_type, cluster_xy) in enumerate(cluster_curves):
@@ -168,9 +169,11 @@ class LaneFollowerNode(Node):
                 marker.color.g = 0.0
                 marker.color.b = 1.0
             marker_array.markers.append(marker)
+            white_marker_array.markers.append(marker)
 
         if VERBOSE_UNNESSARY_THINGS: print("length of marker array: ")
         if VERBOSE_UNNESSARY_THINGS: print(len(marker_array.markers))
+        self.white_curve_pub.publish(white_marker_array)
         self.markers_pub.publish(marker_array)
         self.yellow_curve_pub.publish(yellow_marker_array)
 

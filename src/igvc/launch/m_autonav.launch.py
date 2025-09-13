@@ -9,6 +9,18 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Comm
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
+# 0 = concrete.world
+# 1 = concrete_overdose.world
+LAUNCH_TYPE = 1
+
+if LAUNCH_TYPE == 0:
+    world_file = "concrete.world"
+    x_init, y_init, yaw_init = '-24.580000', '26.260000', '-1.8'
+elif LAUNCH_TYPE == 1:
+    world_file = 'concrete_overdose.world'
+    x_init, y_init, yaw_init = "22.210000", "19.332100", "1.573740"
+
+
 def generate_launch_description():
     # ------------------------------------------------------------------------
     # Locate your package and set up Gazebo resource paths
@@ -33,7 +45,7 @@ def generate_launch_description():
     )
     world_arg = DeclareLaunchArgument(
         'world',
-        default_value='concrete.world',
+        default_value=world_file,
         description='Name of the Ignition world file to load'
     )
     model_arg = DeclareLaunchArgument(
@@ -41,21 +53,61 @@ def generate_launch_description():
         default_value='mogi_bot.urdf',
         description='Name of the URDF (or Xacro) file to spawn'
     )
+
+
+
+
     x_arg = DeclareLaunchArgument(
         'x',
-        default_value='-24.580000',
+        default_value=x_init, 
         description='Initial X coordinate for robot spawn'
     )
     y_arg = DeclareLaunchArgument(
         'y',
-        default_value='26.260000',
+        default_value=y_init,
         description='Initial Y coordinate for robot spawn'
     )
     yaw_arg = DeclareLaunchArgument(
         'yaw',
-        default_value='0.0',
+        default_value=yaw_init,
         description='Initial yaw (rotation around Z) for robot spawn'
     )
+
+    # x_arg = DeclareLaunchArgument(
+    #     'x',
+    #     default_value='-26.217200',
+    #     description='Initial X coordinate for robot spawn'
+    # )
+    # y_arg = DeclareLaunchArgument(
+    #     'y',
+    #     default_value='-8.613460',
+    #     description='Initial Y coordinate for robot spawn'
+    # )
+    # yaw_arg = DeclareLaunchArgument(
+    #     'yaw',
+    #     default_value='-1.57',
+    #     description='Initial yaw (rotation around Z) for robot spawn'
+    # )
+
+
+
+    # x_arg = DeclareLaunchArgument(
+    #     'x',
+    #     default_value='-23.061300',
+    #     description='Initial X coordinate for robot spawn'
+    # )
+    # y_arg = DeclareLaunchArgument(
+    #     'y',
+    #     default_value='-27.155000',
+    #     description='Initial Y coordinate for robot spawn'
+    # )
+    # yaw_arg = DeclareLaunchArgument(
+    #     'yaw',
+    #     default_value='-0.400308',
+    #     description='Initial yaw (rotation around Z) for robot spawn'
+    # )
+
+
     sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
         default_value='True',
@@ -169,6 +221,14 @@ def generate_launch_description():
         package='navigation',
         executable='m_controller',
         name='m_controller',
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+        output='screen'
+    )
+
+    lane_direction_finder_node = Node(
+        package='navigation',
+        executable='lane_direction_finder',
+        name='lane_direction_finder',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
         output='screen'
     )
@@ -338,6 +398,7 @@ def generate_launch_description():
     ld.add_action(pointcloud_downscaler_node)
     ld.add_action(back_pointcloud_downscaler_node)
     ld.add_action(m_controller_node)
+    ld.add_action(lane_direction_finder_node)
 
 
     ld.add_action(costmap_publisher_node)
