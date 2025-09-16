@@ -29,7 +29,7 @@ LEFT_TURN_ANGULAR_SPEED                         = 0.5              # rad/s (+ve 
 
 ANGLE_TOLERANCE                                 = radians(25)        # ± deg window around 90° – θ
 
-DISTANCE_THRESHOLD_TO_TRIGGER_CORNER_AVOIDANCE_MECHANISM = 11
+
 
 MY_HZ = 60
 
@@ -39,10 +39,11 @@ EXPL_ROT_ANGLE = np.deg2rad(45.0)   # explore ±45°
 EXPL_YAW_TOL   = np.deg2rad(2.0)    # stop tolerance while rotating
 EXPL_SETTLE_TICKS = 2               # ticks to settle before sampling
 
-AFTER_CENTERING_CORNER_AVOIDANCE_THRESHOLD = 30  # px or convert from meters if you prefer
+DISTANCE_THRESHOLD_TO_TRIGGER_CORNER_AVOIDANCE_MECHANISM = 35
+AFTER_CENTERING_CORNER_AVOIDANCE_THRESHOLD = 70  # px or convert from meters if you prefer
 YAW_ALIGN_TOL = np.deg2rad(3.0)
 
-DISTANCE_TO_MOVE_BACK_ON_CORNER_DETECTED = 0.2   # meters
+DISTANCE_TO_MOVE_BACK_ON_CORNER_DETECTED = 5   # meters
 BACKUP_SPEED = 0.3                               # m/s (magnitude; command will be negative)
 BACKUP_TIMEOUT_S = 2.5                           # safety cap
 
@@ -466,47 +467,42 @@ class M_Controller(Node):
             self.get_logger().info("STOPPING BECAUSE IM INSIDE AN OBSTACLE")
             self.linx_angz_to_publish = (0.0, 0.0)
 
-        if (        (max_dist <= DISTANCE_THRESHOLD_TO_TRIGGER_CORNER_AVOIDANCE_MECHANISM and
+
+        elif (max_dist <= DISTANCE_THRESHOLD_TO_TRIGGER_CORNER_AVOIDANCE_MECHANISM and
             max_dist != -1 and self.lane_direction_theta1 is not None and
-            not precheck_ok)):
+            True): #not precheck_ok
+
             self.get_logger().info("Corner Avoidance Mechanism Triggered")
+            self.get_logger().info(f"Relative to the Bot: {self.lane_direction_theta1} | {self.lane_direction_theta2}")
+            self.get_logger().info(f"Absolute Bot: {self.absolute_theta1} | {self.absolute_theta2}")
 
+            # pick the closer lane direction (relative angles already)
+            if abs(self.lane_direction_theta1) < abs(self.lane_direction_theta2):
+                required_direction = self.lane_direction_theta1
+            else:
+                required_direction = self.lane_direction_theta2
 
-        # elif (max_dist <= DISTANCE_THRESHOLD_TO_TRIGGER_CORNER_AVOIDANCE_MECHANISM and
-        #     max_dist != -1 and self.lane_direction_theta1 is not None and
-        #     not precheck_ok):
+            # Sign of the centering correction (+CCW, -CW). If zero, bias to left for determinism.
+            if required_direction == 0:
+                raise RuntimeError ("Required DIRECTION is 0")
+            sign_correction = -1 if required_direction > 0 else 1
+            self.corner_required_sign = sign_correction
 
-        #     self.get_logger().info("Corner Avoidance Mechanism Triggered")
-        #     self.get_logger().info(f"Relative to the Bot: {self.lane_direction_theta1} | {self.lane_direction_theta2}")
-        #     self.get_logger().info(f"Absolute Bot: {self.absolute_theta1} | {self.absolute_theta2}")
+            # 1) Rotate to center (align yaw to lane direction)
+            self.corner_target_yaw = normalise_angle(self.yaw + required_direction)
+            self.corner_center_yaw = self.corner_target_yaw
 
-        #     # pick the closer lane direction (relative angles already)
-        #     if abs(self.lane_direction_theta1) < abs(self.lane_direction_theta2):
-        #         required_direction = self.lane_direction_theta1
-        #     else:
-        #         required_direction = self.lane_direction_theta2
+            # pre-compute the opposite side relative to the centered heading
+            self.corner_other_side_sign = -sign_correction   # opposite of the initial correction
 
-        #     # Sign of the centering correction (+CCW, -CW). If zero, bias to left for determinism.
-        #     if required_direction == 0:
-        #         raise RuntimeError ("Required DIRECTION is 0")
-        #     sign_correction = -1 if required_direction > 0 else 1
-        #     self.corner_required_sign = sign_correction
+            # === NEW: back up first ===
+            self.corner_backup_start = (getattr(self, "x", 0.0), getattr(self, "y", 0.0))
+            self.corner_backup_ticks = 0
+            self.corner_state = "backup_init"
+            self.corner_settle = 0
 
-        #     # 1) Rotate to center (align yaw to lane direction)
-        #     self.corner_target_yaw = normalise_angle(self.yaw + required_direction)
-        #     self.corner_center_yaw = self.corner_target_yaw
-
-        #     # pre-compute the opposite side relative to the centered heading
-        #     self.corner_other_side_sign = -sign_correction   # opposite of the initial correction
-
-        #     # === NEW: back up first ===
-        #     self.corner_backup_start = (getattr(self, "x", 0.0), getattr(self, "y", 0.0))
-        #     self.corner_backup_ticks = 0
-        #     self.corner_state = "backup_init"
-        #     self.corner_settle = 0
-
-        #     # Command immediate reverse this tick
-        #     self.linx_angz_to_publish = (-BACKUP_SPEED, 0.0)
+            # Command immediate reverse this tick
+            self.linx_angz_to_publish = (-BACKUP_SPEED, 0.0)
 
 
 
