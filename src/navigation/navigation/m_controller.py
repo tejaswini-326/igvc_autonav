@@ -159,7 +159,7 @@ class M_Controller(Node):
         self.create_subscription(Float64MultiArray, '/igvc/next_waypoint', self.next_waypoint_cb, 10)
         self.create_subscription(OccupancyGrid, '/costmap', self.costmap_cb, 10)
         self.create_subscription(Float64MultiArray, '/lane_directions_angles', self.lane_direction_angles_cb, 10)
-        self.cmd_vel_publisher = self.create_publisher(Twist, "cmd_vel_", 10)
+        self.cmd_vel_publisher = self.create_publisher(Twist, "cmd_vel", 10)
         
         if DEBUG:
             self.marker_publisher = self.create_publisher(Marker, "/debug/intersection/lane_marker", 10)

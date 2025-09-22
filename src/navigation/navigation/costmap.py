@@ -457,7 +457,7 @@ class CostmapNode(Node):
 
 		# 2) Distance transform on *free* space (invert mask for OpenCV)
 		#    Note: cv2.distanceTransform expects 8-bit single-channel image with 0=background, nonzero=foreground.
-		free_uchar = ((1 - occ) * 255).astype(np.uint8)   # 255 = free, 0 = obstacle
+		free_uchar = ((1 - occ) * 200).astype(np.uint8)   # 255 = free, 0 = obstacle
 		dist_cells = cv2.distanceTransform(free_uchar, cv2.DIST_L2, 5).astype(np.float32)
 
 		# 3) Convert to metres and find cells with clearance < robot_radius
