@@ -23,7 +23,7 @@ import cv2
 DEBUG = True
 
 # Movement Related
-LINEAR_SPEED                                    = 0.75                # m/s   (forward)
+LINEAR_SPEED                                    = 1                # m/s   (forward)
 MIN_LINEAR_SPEED_WHILE_TURNING                  = LINEAR_SPEED * 0.2
 LEFT_TURN_ANGULAR_SPEED                         = 0.5              # rad/s (+ve = CCW = left)
 
@@ -159,7 +159,7 @@ class M_Controller(Node):
         self.create_subscription(Float64MultiArray, '/igvc/next_waypoint', self.next_waypoint_cb, 10)
         self.create_subscription(OccupancyGrid, '/costmap', self.costmap_cb, 10)
         self.create_subscription(Float64MultiArray, '/lane_directions_angles', self.lane_direction_angles_cb, 10)
-        self.cmd_vel_publisher = self.create_publisher(Twist, "cmd_vel", 10)
+        self.cmd_vel_publisher = self.create_publisher(Twist, "cmd_vel_", 10)
         
         if DEBUG:
             self.marker_publisher = self.create_publisher(Marker, "/debug/intersection/lane_marker", 10)
@@ -470,32 +470,40 @@ class M_Controller(Node):
 
         elif (max_dist <= DISTANCE_THRESHOLD_TO_TRIGGER_CORNER_AVOIDANCE_MECHANISM and
             max_dist != -1 and self.lane_direction_theta1 is not None and
-            True): #not precheck_ok
+            True):
 
             self.get_logger().info("Corner Avoidance Mechanism Triggered")
             self.get_logger().info(f"Relative to the Bot: {self.lane_direction_theta1} | {self.lane_direction_theta2}")
             self.get_logger().info(f"Absolute Bot: {self.absolute_theta1} | {self.absolute_theta2}")
 
-            # pick the closer lane direction (relative angles already)
-            if abs(self.lane_direction_theta1) < abs(self.lane_direction_theta2):
-                required_direction = self.lane_direction_theta1
-            else:
-                required_direction = self.lane_direction_theta2
+            # --- NEW: prefer waypoint heading (relative to bot) when available ---
+            required_direction = None
+            if self.next_waypoint is not None:
+                if 'direction' in self.next_waypoint and self.next_waypoint['direction'] is not None:
+                    required_direction = float(self.next_waypoint['direction'])
 
-            # Sign of the centering correction (+CCW, -CW). If zero, bias to left for determinism.
+            # Fallback to the closer lane direction if waypoint heading isn't available
+            if required_direction is None:
+                if abs(self.lane_direction_theta1) < abs(self.lane_direction_theta2):
+                    required_direction = self.lane_direction_theta1
+                else:
+                    required_direction = self.lane_direction_theta2
+
+            # Sign of the centering correction (+CCW, -CW). If zero, stop (shouldn't happen normally).
             if required_direction == 0:
-                raise RuntimeError ("Required DIRECTION is 0")
+                raise RuntimeError("Required DIRECTION is 0")
+
             sign_correction = -1 if required_direction > 0 else 1
             self.corner_required_sign = sign_correction
 
-            # 1) Rotate to center (align yaw to lane direction)
+            # 1) Rotate to center (align yaw to chosen direction)
             self.corner_target_yaw = normalise_angle(self.yaw + required_direction)
             self.corner_center_yaw = self.corner_target_yaw
 
             # pre-compute the opposite side relative to the centered heading
-            self.corner_other_side_sign = -sign_correction   # opposite of the initial correction
+            self.corner_other_side_sign = -sign_correction
 
-            # === NEW: back up first ===
+            # === Back up first ===
             self.corner_backup_start = (getattr(self, "x", 0.0), getattr(self, "y", 0.0))
             self.corner_backup_ticks = 0
             self.corner_state = "backup_init"
@@ -738,6 +746,18 @@ class M_Controller(Node):
                 lane_arrow_len_px, (0, 255, 255),  # yellow
                 f"θ2 {np.degrees(self.absolute_theta2):.0f}°"
             )
+
+        # ---- Waypoint heading (relative), drawn as absolute from robot cell ----
+        if self.next_waypoint is not None and ('direction' in self.next_waypoint):
+            wp_rel = self.next_waypoint['direction']
+            if wp_rel is not None:
+                wp_abs = normalise_angle(self.yaw + float(wp_rel))
+                lane_arrow_len_px = int(30 / res)
+                draw_angle_arrow(
+                    viz, CX, CY, wp_abs,
+                    lane_arrow_len_px, (0, 165, 255),  # orange-ish for contrast
+                    f"WP {np.degrees(wp_abs):.0f}°"
+                )
 
         viz = cv2.rotate(viz, cv2.ROTATE_90_COUNTERCLOCKWISE)
         viz = cv2.flip(viz, 1)

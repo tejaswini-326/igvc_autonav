@@ -5,7 +5,6 @@ import numpy as np
 import cv2
 import sensor_msgs_py.point_cloud2 as pc2
 
-
 W_H_MIN, W_H_MAX = 0,   179
 W_S_MIN, W_S_MAX = 0,    25
 W_V_MIN, W_V_MAX = 110, 170
@@ -18,8 +17,28 @@ B_S_MAX = 70
 B_V_MAX = 70
 
 VOXEL_SIZE = 0.05
+GROUND_MIN = -100
+GROUND_MAX = +100
+MID_MIN = 0.1
+MID_MAX = 1
 
 LOG = False
+
+# Constant downward pitch (radians). Positive pitches points camera down about +Y (REP-103).
+PITCH_RADIAN = 0.38
+X_OFFSET = 0.4
+Z_OFFSET = 1.05
+
+_COS_P = np.cos(PITCH_RADIAN).astype(np.float32)
+_SIN_P = np.sin(PITCH_RADIAN).astype(np.float32)
+
+# Rotation matrix for pitch about +Y (right-handed, REP-103 base_link axes)
+# R_y(p) = [[ cos p, 0,  sin p],
+#           [   0  , 1,    0  ],
+#           [-sin p, 0,  cos p]]
+_R_PITCH_Y = np.array([[ _COS_P, 0.0,  _SIN_P],
+                       [ 0.0   , 1.0,  0.0   ],
+                       [-_SIN_P, 0.0,  _COS_P]], dtype=np.float32)
 
 
 def _voxel_downsample(xyz: np.ndarray, voxel: float) -> np.ndarray:
@@ -71,6 +90,13 @@ def fast_xyz_white_yellow(msg, log):
 
     # 2. unpack BGR → HSV (vectorised, one conversion)
     xs, ys, zs, rgbf = xs[finite], ys[finite], zs[finite], rgbf[finite]
+
+    # Convert to baselink manually because tf2 transforms are trash
+    P = np.column_stack((xs, ys, zs)).astype(np.float32)
+    P = P @ _R_PITCH_Y.T
+    P = P + np.array([X_OFFSET, 0.00, Z_OFFSET], dtype=np.float32)
+    xs, ys, zs = P[:, 0], P[:, 1], P[:, 2]
+
     rgb_u32 = rgbf.view(np.uint32)
     b = (rgb_u32 & 0xFF).astype(np.uint8)
     g = ((rgb_u32 >> 8)  & 0xFF).astype(np.uint8)
@@ -89,13 +115,13 @@ def fast_xyz_white_yellow(msg, log):
                                      zs[not_black_m])).astype(np.float32)
 
     # 4. mid‑slice for extra debug / algorithms
-    mid_m   = (zs > -1.2) & (zs < -0.7)
+    mid_m   = (MID_MIN < zs ) & (zs < MID_MAX)
     mid_xyz = np.column_stack((xs[mid_m],
                                ys[mid_m],
                                zs[mid_m])).astype(np.float32)
 
     # 5. ground slice for white / yellow
-    ground_m = (zs > -2.0) & (zs < -1.3)
+    ground_m = (GROUND_MIN < zs ) & (zs < GROUND_MAX)
     if not ground_m.any():
         # still return voxel‑filtered aux clouds
         return (np.empty((0, 3), np.float32),
@@ -159,17 +185,17 @@ class PointCloudDownscaler(Node):
         self.yellow_publisher = self.create_publisher(PointCloud2, "/igvc/yellow_points", 10)
         self.notblack_publisher = self.create_publisher(PointCloud2, "/igvc/notblack_points", 10)
         self.midz_publisher = self.create_publisher(PointCloud2, "/igvc/midz_points", 10)
-
         self.clouds = None
 
     def pointcloud_cb(self, msg: PointCloud2):
+        hdr = msg.header
+        hdr.frame_id = "base_link" 
+        
         white_xyz, yellow_xyz, not_black_xyz, midz_xyz = fast_xyz_white_yellow(msg, self.get_logger())
-        self.clouds = (pc2.create_cloud_xyz32(msg.header, white_xyz), pc2.create_cloud_xyz32(msg.header, yellow_xyz), 
-                        pc2.create_cloud_xyz32(msg.header, not_black_xyz), pc2.create_cloud_xyz32(msg.header, midz_xyz))
-        self.white_publisher.publish(self.clouds[0])
-        self.yellow_publisher.publish(self.clouds[1])
-        self.notblack_publisher.publish(self.clouds[2])
-        self.midz_publisher.publish(self.clouds[3])
+        self.white_publisher.publish(pc2.create_cloud_xyz32(hdr, white_xyz))
+        self.yellow_publisher.publish(pc2.create_cloud_xyz32(hdr, yellow_xyz))
+        self.notblack_publisher.publish(pc2.create_cloud_xyz32(hdr, not_black_xyz))
+        self.midz_publisher.publish(pc2.create_cloud_xyz32(hdr, midz_xyz))
 
 def main(args=None):
     rclpy.init(args=args)
@@ -186,6 +212,5 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
-
 
 

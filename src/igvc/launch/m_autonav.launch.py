@@ -18,8 +18,8 @@ if LAUNCH_TYPE == 0:
     x_init, y_init, yaw_init = '-24.580000', '26.260000', '-1.8'
 elif LAUNCH_TYPE == 1:
     world_file = 'concrete_overdose.world'
-    #x_init, y_init, yaw_init = "22.210000", "19.332100", "1.573740"
-    x_init, y_init, yaw_init = '-3.309640', '28.355800', '2.564250'  
+    x_init, y_init, yaw_init = "22.210000", "19.332100", "1.573740"
+    #x_init, y_init, yaw_init = '-3.309640', '28.355800', '2.564250'  
     #x_init, y_init, yaw_init = '-26.193200', '-25.706900', '-0.630470'
 
 

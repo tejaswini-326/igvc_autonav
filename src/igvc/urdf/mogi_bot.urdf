@@ -291,21 +291,21 @@
     <collision name='collision'>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <box size=".0625 .0625 .9" />
+        <box size=".0325 .0325 .8" />
       </geometry>
     </collision>
 
     <visual name='sensor_mount_visual'>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <box size=".0625 .0625 .9" />
+        <box size=".0325 .0325 .8" />
       </geometry>
     </visual>
   </link>
 
   <joint
     type="fixed" name="camera">
-    <origin xyz="0 0 .45" rpy="0 0 0" />
+    <origin xyz="0 0 .45" rpy="0 .38 0" />
     <child link="camera_link" />
     <parent link="stick" />
   </joint>
@@ -313,7 +313,7 @@
   <link name="camera_link">
     <inertial>
       <mass value="1.0" />
-      <origin xyz="0.0 0 0" rpy="0 .25 0" />
+      <origin xyz="0.0 0 0" rpy="0 0 0" />
       <inertia
         ixx="0.0625" ixy="0" ixz="0"
         iyy="0.2125" iyz="0"
@@ -329,7 +329,7 @@
     </collision>
 
     <visual name='cam_visual'>
-      <origin xyz="0 0 0" rpy="0 .25 0" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <box size=".075 .25 .075" />
       </geometry>

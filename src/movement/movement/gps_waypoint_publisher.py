@@ -10,6 +10,7 @@ from math import pi
 from visualization_msgs.msg import Marker       
 
 THRESHOLD_DISTANCE_FOR_DECLARING_THAT_WE_REACHED_A_WAYPOINT = 3
+FRAME_YAW_OFFSET_ENU_TO_ODOM = pi/2
 
 def normalise_angle(angle: float) -> float:
     """Wrap `angle` to the interval [-π, π]."""
@@ -51,10 +52,18 @@ class GPSNextWaypointPublisherNode(Node):
         self.next_waypoint_publisher = self.create_publisher(Float64MultiArray, '/igvc/next_waypoint', 10) # msg.data = [distance, heading_error, waypoint_index]
 
         # Static list of waypoints: [latitude, longitude]
+        # self.waypoints = [
+        #     [47.479212400754726, 19.057647695700997], # little ahead
+        #     [47.479195826331804, 19.05780796816609], # lot ahead
+        #     [47.47920115870989, 19.05801472707751], # lot ahead to the right in the open
+        # ]
+
         self.waypoints = [
-            [47.479212400754726, 19.057647695700997], # little ahead
-            [47.479195826331804, 19.05780796816609], # lot ahead
-            [47.47920115870989, 19.05801472707751], # lot ahead to the right in the open
+            (47.47920271024365,19.05795273492575),
+            (47.47920208415003,19.05763892418234),
+            (47.47916508349958,19.05741078242598),
+            (47.4786944007524,19.05749421231558),
+            (47.478695389266065,19.05803432255769)
         ]
 
         self.create_timer(0.05, self.publish_next_waypoint)
@@ -87,7 +96,7 @@ class GPSNextWaypointPublisherNode(Node):
         # This bearing re-adjustment converts the angle of the navsat systemt to our gazebo system
         # Might need to be changed for the real bot
         #bearing = normalise_angle(-bearing + pi)
-        heading_error = normalise_angle(bearing - self.yaw)
+        heading_error = normalise_angle(bearing - self.yaw - FRAME_YAW_OFFSET_ENU_TO_ODOM)
 
         msg = Float64MultiArray()
         msg.data = [float(distance), float(heading_error), float(idx)]
