@@ -1,4 +1,50 @@
-IGVC Sim
+# Intelligent Ground Vehicle Competition (IGVC) Software Stack
+
+An end-to-end autonomous navigation stack built on **ROS 2** and simulated in **Gazebo**. This repository contains the full autonomy pipeline for a differential drive robot designed to navigate outdoor track environments while avoiding obstacles and staying within designated lane boundaries.
+
+---
+
+## 📂 Repository Structure
+
+As shown in `image_e9c5a0.png`, the workspace is divided into modular ROS 2 packages within the `src` directory:
+
+* **`ekf/`**: Handles state estimation and sensor fusion.
+* **`igvc/`**: Contains the URDF robot model, Gazebo world configurations, and main configuration files.
+* **`movement/`**: Houses the path tracking controller and motion execution nodes.
+* **`navigation/`**: Implements global path planning algorithms.
+* **`object_detection/`**: Manages perception, including camera-based lane tracking and LiDAR-based obstacle isolation.
+* **`path_planning/`**: Responsible for costmap generation and fusing perception data into an actionable grid map.
+
+---
+
+## 🛠️ Architecture & Package Descriptions
+
+### 1. Robot & Simulation (`igvc`)
+* **Robot Configuration:** A differential drive robot modeled using URDF/XACRO, utilizing a standard two-wheel drive setup with caster wheels for stability.
+* **Environment Setup:** A simulated Gazebo environment recreating standard IGVC conditions, populated with white track lanes, construction barrels, and various obstacles.
+
+### 2. State Estimation (`ekf`)
+* **Sensor Fusion:** Utilizes an Extended Kalman Filter (EKF) to merge high-rate, noisy sensor feeds into a single robust odometry estimate.
+* **Fused Inputs:** Comprises wheel odometry (short-term odometry tracking), IMU data (high-frequency orientation/heading changes), GPS coordinates (global position absolute updates to eliminate drift), and LiDAR data.
+
+### 3. Perception (`object_detection`)
+* **Obstacle Isolation:** Combines a 2D YOLO object detection model with 3D LiDAR point cloud data. Bounding boxes from the camera are projected into the 3D space to isolate and extract the precise point clouds corresponding strictly to obstacles.
+* **Lane Detection:** A computer vision pipeline that isolates track boundaries using color thresholding (HSV filtering) and maps the layout utilizing polynomial curve fitting.
+
+### 4. Costmap Generation (`path_planning`)
+* **Data Fusion:** Merges the isolated obstacle point clouds from the perception layer with the detected lane markings.
+* **Grid Map:** Generates a unified 2D occupancy costmap that dynamically marks both physical obstacles (barrels) and virtual boundaries (lanes) as impassable obstacles, strictly bounding the searchable space.
+
+### 5. Path Planning (`navigation`)
+* **A\* Global Planner:** Implements a custom A* search algorithm operating directly over the generated 2D costmap.
+* **Path Optimization:** Computes the shortest, most efficient collision-free path toward global target coordinates while treating lanes as hard walls.
+
+### 6. Controller (`movement`)
+* **Modified Pure Pursuit:** A variation of the classic geometric path-tracking algorithm designed to compute steering and velocity commands based on a look-ahead distance.
+* **Dynamic Damping:** Features custom damping logic that automatically dials back linear speed and stabilizes angular velocity when navigating tightly curved paths or approaching obstacles.
+
+
+###instructions for running the model
 
 add this to your bashrc:
 
