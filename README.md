@@ -4,9 +4,7 @@ An end-to-end autonomous navigation stack built on **ROS 2** and simulated in **
 
 ---
 
-## 📂 Repository Structure
-
-As shown in `image_e9c5a0.png`, the workspace is divided into modular ROS 2 packages within the `src` directory:
+## What's in this repository:
 
 * **`ekf/`**: Handles state estimation and sensor fusion.
 * **`igvc/`**: Contains the URDF robot model, Gazebo world configurations, and main configuration files.
@@ -17,7 +15,7 @@ As shown in `image_e9c5a0.png`, the workspace is divided into modular ROS 2 pack
 
 ---
 
-## 🛠️ Architecture & Package Descriptions
+## Architecture & Package Descriptions
 
 ### 1. Robot & Simulation (`igvc`)
 * **Robot Configuration:** A differential drive robot modeled using URDF/XACRO, utilizing a standard two-wheel drive setup with caster wheels for stability.
