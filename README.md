@@ -87,8 +87,9 @@ source ~/yolo_env/bin/activate
 
 note: SOURCE THE install/setup.bash OF THE WS HERE BEFORE LAUNCHING
 
+```
 ros2 run object_detection object_data_node.py //make sure to include the .py at the end 
-
+````
 6 - once done kill the node and run this to deactivate the venv
 
 ```
